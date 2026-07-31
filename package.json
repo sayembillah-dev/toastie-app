@@ -1,0 +1,24 @@
+{
+  "name": "toastly",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.17.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "concurrently -n api,web -c magenta,cyan -k \"pnpm --filter @toastly/api dev\" \"pnpm --filter @toastly/web dev\"",
+    "dev:web": "pnpm --filter @toastly/web dev",
+    "dev:api": "pnpm --filter @toastly/api dev",
+    "build": "pnpm --filter @toastly/api build && pnpm --filter @toastly/web build",
+    "start": "concurrently -n api,web -c magenta,cyan -k \"pnpm --filter @toastly/api start\" \"pnpm --filter @toastly/web start\"",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "clean": "pnpm -r exec rimraf dist .next node_modules && rimraf node_modules"
+  },
+  "devDependencies": {
+    "concurrently": "10.0.4",
+    "rimraf": "6.1.3",
+    "typescript": "5.9.3"
+  }
+}

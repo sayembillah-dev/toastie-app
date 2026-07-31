@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+/*
+ * Tailwind v4 puts its reset in `@layer base`, while Ant Design injects its
+ * styles unlayered at runtime — unlayered rules always beat layered ones, so
+ * antd components keep their own look and preflight only touches plain markup.
+ */
+
+@theme {
+  /* Surfaces: the sidebar sits a shade below the content area. */
+  --color-canvas: #ffffff;
+  --color-sidebar: #fafafa;
+
+  /* Fills for hover states and inset controls like the search box. */
+  --color-fill: #f2f2f2;
+  --color-fill-strong: #ebebeb;
+
+  /* Hairlines. `line-strong` is for controls, `line` for structural edges. */
+  --color-line: #ededed;
+  --color-line-strong: #e0e0e0;
+
+  /* Text ramp, from headings down to counters and placeholders. */
+  --color-ink: #1c1c1c;
+  --color-ink-soft: #5c5c5c;
+  --color-ink-muted: #8a8a8a;
+}
+
+:root {
+  /* Matches the sidebar tone so overscroll never flashes white. */
+  --background: #fafafa;
+  --foreground: #1c1c1c;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
