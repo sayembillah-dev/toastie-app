@@ -99,6 +99,9 @@ interface AppShellProps {
   notificationCount?: number;
   /** Signed-in account, rendered at the foot of the sidebar when present. */
   account?: { name: string; avatarUrl?: string };
+  /** Overrides the label on the last breadcrumb crumb. Useful when the URL
+   * carries an id (e.g. `/education/m-01`) and the human title lives in data. */
+  breadcrumbLabel?: string;
 }
 
 export function AppShell({
@@ -106,12 +109,18 @@ export function AppShell({
   actions,
   notificationCount = 0,
   account,
+  breadcrumbLabel,
 }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
 
-  const trail = buildTrail(pathname);
+  const rawTrail = buildTrail(pathname);
+  const trail = breadcrumbLabel
+    ? rawTrail.map((crumb, index) =>
+        index === rawTrail.length - 1 ? { ...crumb, title: breadcrumbLabel } : crumb,
+      )
+    : rawTrail;
 
   return (
     <Layout className="h-screen">

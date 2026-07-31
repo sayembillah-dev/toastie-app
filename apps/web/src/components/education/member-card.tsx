@@ -1,4 +1,5 @@
 import { DotsThree } from '@phosphor-icons/react/dist/ssr';
+import Link from 'next/link';
 
 import type { Member } from '@/lib/education/members';
 import { getInitials } from '@/lib/education/members';
@@ -41,7 +42,11 @@ export function MemberCard({ member }: MemberCardProps) {
   const swatch = AVATAR_PALETTE[hashString(member.id) % AVATAR_PALETTE.length];
 
   return (
-    <article className="group relative overflow-hidden rounded-xl border border-line bg-canvas">
+    <Link
+      href={`/education/${member.id}`}
+      aria-label={`Open profile for ${fullName}`}
+      className="group relative block overflow-hidden rounded-xl border border-line bg-canvas transition-all duration-200 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
+    >
       <div className="h-16 bg-slate-700 px-3 pt-2.5">
         <div className="flex items-start justify-end text-white">
           <DotsThree size={16} weight="bold" aria-hidden />
@@ -83,6 +88,6 @@ export function MemberCard({ member }: MemberCardProps) {
           <p className="mt-0.5 text-xs text-ink-muted">{member.role}</p>
         </div>
       </div>
-    </article>
+    </Link>
   );
 }
