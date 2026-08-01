@@ -10,9 +10,7 @@ export const metadata: Metadata = {
   description: 'Next.js + NestJS monorepo with Tailwind CSS and Ant Design',
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
       <body className="min-h-screen antialiased">

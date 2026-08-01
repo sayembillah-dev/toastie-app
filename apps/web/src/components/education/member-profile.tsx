@@ -1,7 +1,7 @@
 'use client';
 
-import { skipToken } from '@reduxjs/toolkit/query';
 import { ArrowLeft, GraduationCap, Path, WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import { skipToken } from '@reduxjs/toolkit/query';
 import { Button, Tabs } from 'antd';
 import Link from 'next/link';
 import { notFound, useParams } from 'next/navigation';
@@ -40,13 +40,7 @@ function hashString(input: string): number {
   return Math.abs(hash);
 }
 
-function ProfileHeader({
-  member,
-  onStartPathway,
-}: {
-  member: Member;
-  onStartPathway: () => void;
-}) {
+function ProfileHeader({ member, onStartPathway }: { member: Member; onStartPathway: () => void }) {
   const fullName = `${member.firstName} ${member.lastName}`;
   const initials = getInitials(member);
   const swatch = AVATAR_PALETTE[hashString(member.id) % AVATAR_PALETTE.length];
@@ -122,9 +116,7 @@ function ProfileContent({ member }: { member: Member }) {
           {
             key: 'progress',
             label: 'Progress',
-            children: (
-              <ProgressTab member={member} onStartPathway={() => setModalOpen(true)} />
-            ),
+            children: <ProgressTab member={member} onStartPathway={() => setModalOpen(true)} />,
           },
           {
             key: 'history',
@@ -134,11 +126,7 @@ function ProfileContent({ member }: { member: Member }) {
         ]}
       />
 
-      <StartPathwayModal
-        open={modalOpen}
-        member={member}
-        onClose={() => setModalOpen(false)}
-      />
+      <StartPathwayModal open={modalOpen} member={member} onClose={() => setModalOpen(false)} />
     </div>
   );
 }

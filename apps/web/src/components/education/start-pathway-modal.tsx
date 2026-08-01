@@ -1,6 +1,12 @@
 'use client';
 
-import { CheckCircle, Compass, GraduationCap, Path, WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import {
+  CheckCircle,
+  Compass,
+  GraduationCap,
+  Path,
+  WarningCircle,
+} from '@phosphor-icons/react/dist/ssr';
 import { App, Modal, Select } from 'antd';
 import { useMemo, useState } from 'react';
 
@@ -27,9 +33,7 @@ function LevelPill({ level }: { level: Level | null }) {
   return (
     <div
       className={`flex items-center justify-between rounded-xl border p-3 transition-colors ${
-        level
-          ? 'border-line-strong bg-fill'
-          : 'border-dashed border-line-strong bg-sidebar'
+        level ? 'border-line-strong bg-fill' : 'border-dashed border-line-strong bg-sidebar'
       }`}
     >
       <div className="flex items-center gap-3">
@@ -45,11 +49,7 @@ function LevelPill({ level }: { level: Level | null }) {
           <div className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">
             Starting level
           </div>
-          <div
-            className={`mt-0.5 text-sm font-semibold ${
-              level ? 'text-ink' : 'text-ink-muted'
-            }`}
-          >
+          <div className={`mt-0.5 text-sm font-semibold ${level ? 'text-ink' : 'text-ink-muted'}`}>
             {level ? `Level ${level}` : 'Pick a project to set the level'}
           </div>
         </div>
@@ -152,8 +152,8 @@ export function StartPathwayModal({ open, member, onClose }: StartPathwayModalPr
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-ink">Start a Pathway</h2>
             <p className="mt-0.5 text-xs text-ink-soft">
-              Set {member.firstName}&apos;s learning path. Their history and progress on
-              Toastly begin from the level of the project you select.
+              Set {member.firstName}&apos;s learning path. Their history and progress on Toastly
+              begin from the level of the project you select.
             </p>
           </div>
         </header>
@@ -174,9 +174,7 @@ export function StartPathwayModal({ open, member, onClose }: StartPathwayModalPr
               className="w-full"
               placeholder="Select a Toastmasters pathway"
               value={form.pathway ?? undefined}
-              onChange={(value: Pathway) =>
-                setForm({ pathway: value, project: null })
-              }
+              onChange={(value: Pathway) => setForm({ pathway: value, project: null })}
               options={PATHWAYS.map((pathway) => ({ value: pathway, label: pathway }))}
               showSearch
               optionFilterProp="label"
@@ -197,22 +195,18 @@ export function StartPathwayModal({ open, member, onClose }: StartPathwayModalPr
               size="large"
               className="w-full"
               placeholder={
-                form.pathway
-                  ? 'Which project are they on now?'
-                  : 'Choose a pathway first'
+                form.pathway ? 'Which project are they on now?' : 'Choose a pathway first'
               }
               value={form.project ?? undefined}
-              onChange={(value: string) =>
-                setForm((prev) => ({ ...prev, project: value }))
-              }
+              onChange={(value: string) => setForm((prev) => ({ ...prev, project: value }))}
               options={projectOptions}
               disabled={!form.pathway}
               showSearch
               optionFilterProp="label"
             />
             <p className="mt-1.5 text-[11px] text-ink-muted">
-              Members migrating in mid-pathway can pick their real starting project — the
-              level below adjusts automatically.
+              Members migrating in mid-pathway can pick their real starting project — the level
+              below adjusts automatically.
             </p>
           </div>
 

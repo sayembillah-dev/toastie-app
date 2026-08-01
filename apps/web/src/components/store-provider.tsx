@@ -5,8 +5,8 @@ import { useEffect, useState } from 'react';
 import { Provider } from 'react-redux';
 
 import { DB_KEY_LIST } from '@/lib/local-db/db';
-import { toastlyApi } from '@/store/api';
 import { makeStore } from '@/store';
+import { toastlyApi } from '@/store/api';
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   /* Lazy state initialiser rather than a module singleton: the store must be

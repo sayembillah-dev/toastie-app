@@ -137,7 +137,8 @@ function renderEvent(event: HistoryEvent): EventContent {
             <span className="font-medium text-ink">Meeting #{event.meetingNumber}</span>
             {event.projectName ? (
               <>
-                {' '}for the <span className="font-medium text-ink">{event.projectName}</span> project.
+                {' '}
+                for the <span className="font-medium text-ink">{event.projectName}</span> project.
               </>
             ) : (
               '.'
@@ -165,7 +166,11 @@ function renderEvent(event: HistoryEvent): EventContent {
             Completed <span className="text-ink">{event.projectName}</span>
           </>
         ),
-        description: <>Level {event.level} project on the {event.pathway} pathway.</>,
+        description: (
+          <>
+            Level {event.level} project on the {event.pathway} pathway.
+          </>
+        ),
       };
     case 'role-taken':
       return {
@@ -196,10 +201,7 @@ function TimelineNode({ event, isLast }: TimelineNodeProps) {
   return (
     <li className="relative flex gap-4 pb-6 last:pb-0">
       {!isLast ? (
-        <span
-          aria-hidden
-          className="absolute left-[19px] top-11 bottom-0 w-px bg-line-strong"
-        />
+        <span aria-hidden className="absolute left-[19px] top-11 bottom-0 w-px bg-line-strong" />
       ) : null}
 
       <span
@@ -218,11 +220,7 @@ function TimelineNode({ event, isLast }: TimelineNodeProps) {
           >
             {style.label}
           </span>
-          <time
-            dateTime={event.date}
-            className="text-xs font-medium text-ink-muted"
-            aria-label={formatFullDate(event.date)}
-          >
+          <time dateTime={event.date} className="text-xs font-medium text-ink-muted">
             {formatFullDate(event.date)}
           </time>
         </div>
@@ -239,6 +237,7 @@ function TimelineSkeleton() {
   return (
     <div className="mx-auto max-w-3xl" aria-hidden>
       {Array.from({ length: 4 }, (_, index) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length skeleton, never reorders
         <div key={index} className="flex gap-4 pb-6">
           <span className="size-10 shrink-0 animate-pulse rounded-full bg-fill-strong" />
           <div className="h-20 flex-1 animate-pulse rounded-xl border border-line bg-fill" />
@@ -300,10 +299,7 @@ export function HistoryTab({ member }: HistoryTabProps) {
         {groups.map((group, groupIndex) => (
           <Fragment key={group.monthKey}>
             <li className="relative mb-4 flex items-center gap-3">
-              <span
-                aria-hidden
-                className="flex size-10 shrink-0 items-center justify-center"
-              >
+              <span aria-hidden className="flex size-10 shrink-0 items-center justify-center">
                 <span className="size-2 rounded-full bg-line-strong" />
               </span>
               <span className="text-xs font-semibold uppercase tracking-wider text-ink-muted">

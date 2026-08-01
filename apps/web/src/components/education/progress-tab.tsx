@@ -1,6 +1,5 @@
 'use client';
 
-import { skipToken } from '@reduxjs/toolkit/query';
 import {
   BookOpen,
   Calendar,
@@ -13,6 +12,7 @@ import {
   Trophy,
   WarningCircle,
 } from '@phosphor-icons/react/dist/ssr';
+import { skipToken } from '@reduxjs/toolkit/query';
 import { Button } from 'antd';
 
 import type { Member } from '@/lib/education/members';
@@ -55,9 +55,7 @@ function StatTile({ label, value, sublabel, Icon, tint }: StatTileProps) {
           <Icon size={18} weight="bold" />
         </span>
         <div className="min-w-0">
-          <div className="text-xs font-medium uppercase tracking-wide text-ink-muted">
-            {label}
-          </div>
+          <div className="text-xs font-medium uppercase tracking-wide text-ink-muted">{label}</div>
           <div className="mt-0.5 text-lg font-semibold leading-none text-ink">{value}</div>
           {sublabel ? (
             <div className="mt-1 truncate text-[11px] text-ink-muted">{sublabel}</div>
@@ -74,6 +72,7 @@ function StatTile({ label, value, sublabel, Icon, tint }: StatTileProps) {
 function LevelBar({ level, startingLevel = 1 }: { level: number; startingLevel?: number }) {
   return (
     <div
+      role="img"
       className="flex gap-1.5"
       aria-label={`Level ${level} of 5${
         startingLevel > 1 ? `, started from level ${startingLevel}` : ''
@@ -86,11 +85,7 @@ function LevelBar({ level, startingLevel = 1 }: { level: number; startingLevel?:
           <div
             key={segment}
             className={`h-2 flex-1 rounded-full transition-colors ${
-              isBeforePlatform
-                ? 'bg-ink/20'
-                : isFilled
-                  ? 'bg-ink'
-                  : 'bg-fill-strong'
+              isBeforePlatform ? 'bg-ink/20' : isFilled ? 'bg-ink' : 'bg-fill-strong'
             }`}
           />
         );
@@ -110,8 +105,8 @@ function EmptyPathway({ onStartPathway }: { onStartPathway: () => void }) {
       </span>
       <h2 className="text-base font-semibold text-ink">No pathway yet</h2>
       <p className="mx-auto mt-1.5 max-w-md text-sm text-ink-soft">
-        Start a pathway to unlock progress tracking. Speeches, projects, and level
-        milestones will show up here as soon as the journey begins.
+        Start a pathway to unlock progress tracking. Speeches, projects, and level milestones will
+        show up here as soon as the journey begins.
       </p>
       <Button
         type="primary"
@@ -137,6 +132,7 @@ function ProgressSkeleton() {
       <div className="flex flex-col gap-3">
         {Array.from({ length: 5 }, (_, index) => (
           <div
+            // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length skeleton, never reorders
             key={index}
             className="h-18.5 animate-pulse rounded-xl border border-line bg-fill"
           />
@@ -193,7 +189,8 @@ export function ProgressTab({ member, onStartPathway }: ProgressTabProps) {
               </div>
               <h2 className="mt-1.5 text-xl font-semibold text-ink">{member.pathway}</h2>
               <p className="mt-1 text-sm text-ink-soft">
-                Level {currentLevel} of 5 — {levelsRemaining > 0
+                Level {currentLevel} of 5 —{' '}
+                {levelsRemaining > 0
                   ? `${levelsRemaining} level${levelsRemaining === 1 ? '' : 's'} to go`
                   : 'complete'}
               </p>
@@ -223,9 +220,7 @@ export function ProgressTab({ member, onStartPathway }: ProgressTabProps) {
           </div>
           {stats.currentProject ? (
             <>
-              <h3 className="mt-1.5 text-lg font-semibold text-ink">
-                {stats.currentProject.name}
-              </h3>
+              <h3 className="mt-1.5 text-lg font-semibold text-ink">{stats.currentProject.name}</h3>
               <p className="mt-1 text-sm text-ink-soft">
                 {stats.currentProject.pathway} · Level {stats.currentProject.level}
               </p>
@@ -285,11 +280,7 @@ export function ProgressTab({ member, onStartPathway }: ProgressTabProps) {
         <StatTile
           label="Meeting roles"
           value={stats.rolesTaken}
-          sublabel={
-            stats.favouriteRole
-              ? `Most often: ${stats.favouriteRole.role}`
-              : undefined
-          }
+          sublabel={stats.favouriteRole ? `Most often: ${stats.favouriteRole.role}` : undefined}
           Icon={MicrophoneStage}
           tint={{ bg: '#CFFAFE', fg: '#155E75' }}
         />
@@ -304,9 +295,7 @@ export function ProgressTab({ member, onStartPathway }: ProgressTabProps) {
             <BookOpen size={14} weight="bold" />
             Member since
           </div>
-          <div className="mt-1 text-sm font-semibold text-ink">
-            {formatDate(stats.joinedAt)}
-          </div>
+          <div className="mt-1 text-sm font-semibold text-ink">{formatDate(stats.joinedAt)}</div>
         </div>
       </aside>
     </div>

@@ -165,7 +165,10 @@ function toSegments(path: string): string[] {
   return path.split('?')[0].split('/').filter(Boolean);
 }
 
-function matchRoute(method: HttpMethod, url: string): { route: Route; params: Record<string, string> } | null {
+function matchRoute(
+  method: HttpMethod,
+  url: string,
+): { route: Route; params: Record<string, string> } | null {
   const segments = toSegments(url);
 
   for (const candidate of ROUTES) {

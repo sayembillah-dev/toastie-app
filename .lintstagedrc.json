@@ -1,0 +1,5 @@
+{
+  "*.{js,jsx,mjs,cjs,ts,tsx,json,jsonc,css}": "biome check --write --no-errors-on-unmatched --files-ignore-unknown=true",
+  "apps/web/**/*.{ts,tsx}": "pnpm --filter @toastly/web exec eslint --cache --cache-location node_modules/.cache/eslint/ --cache-strategy content --no-warn-ignored --max-warnings 0",
+  "*.{md,mdx,yml,yaml}": "prettier --write --cache --cache-location node_modules/.cache/prettier/"
+}

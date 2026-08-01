@@ -12,9 +12,7 @@ const SERVER_API_URL = process.env.API_URL ?? 'http://localhost:4000';
 
 function endpoint(path: string) {
   const suffix = path.startsWith('/') ? path : `/${path}`;
-  return typeof window === 'undefined'
-    ? `${SERVER_API_URL}/api${suffix}`
-    : `/api${suffix}`;
+  return typeof window === 'undefined' ? `${SERVER_API_URL}/api${suffix}` : `/api${suffix}`;
 }
 
 export async function apiFetch<T>(path = ''): Promise<T> {
