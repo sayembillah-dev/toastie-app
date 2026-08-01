@@ -24,6 +24,9 @@ export function getApiErrorMessage(error: unknown, fallback = 'Something went wr
 /** True when the request failed because the record does not exist. */
 export function isNotFoundError(error: unknown): boolean {
   return (
-    typeof error === 'object' && error !== null && 'status' in error && (error as { status: unknown }).status === 404
+    typeof error === 'object' &&
+    error !== null &&
+    'status' in error &&
+    (error as { status: unknown }).status === 404
   );
 }

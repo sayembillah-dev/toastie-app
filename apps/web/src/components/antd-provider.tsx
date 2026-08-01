@@ -29,8 +29,7 @@ export function AntdProvider({ children }: { children: React.ReactNode }) {
             colorFillTertiary: '#f2f2f2',
             borderRadius: 8,
             controlHeight: 36,
-            fontFamily:
-              'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+            fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
           },
           components: {
             Layout: {

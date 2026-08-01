@@ -1,0 +1,4 @@
+# Biome and Prettier both write LF; pin the repo to LF so Windows checkouts
+# don't produce a whole-file diff the moment the formatter touches something.
+* text=auto eol=lf
+pnpm-lock.yaml linguist-generated=true -diff

@@ -1,0 +1,8 @@
+# Nothing to check on a CI checkout — the pipeline lints the full tree anyway.
+[ -n "$CI" ] && exit 0
+
+# `--concurrent false` is deliberate: Biome rewrites the staged files and ESLint
+# then reads them back, so running the two in parallel would race on the same
+# paths. The serial cost is negligible — Biome and Prettier are both sub-100ms,
+# and ESLint (the only slow step) runs against a warm cache.
+pnpm exec lint-staged --concurrent false

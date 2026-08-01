@@ -1,0 +1,17 @@
+# Prettier only handles what Biome cannot: Markdown and YAML.
+# Everything else — JS/TS/JSX/JSON/CSS — is Biome's, so keep Prettier off it
+# to avoid two formatters fighting over the same files.
+*.js
+*.jsx
+*.ts
+*.tsx
+*.mjs
+*.cjs
+*.json
+*.jsonc
+*.css
+
+node_modules/
+.next/
+dist/
+pnpm-lock.yaml

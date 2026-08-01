@@ -12,12 +12,20 @@
     "dev:api": "pnpm --filter @toastly/api dev",
     "build": "pnpm --filter @toastly/api build && pnpm --filter @toastly/web build",
     "start": "concurrently -n api,web -c magenta,cyan -k \"pnpm --filter @toastly/api start\" \"pnpm --filter @toastly/web start\"",
-    "lint": "pnpm -r lint",
+    "lint": "biome check . && pnpm --filter @toastly/web lint",
+    "lint:fix": "biome check --write . && pnpm --filter @toastly/web lint --fix",
+    "format": "biome format --write . && prettier --write .",
+    "format:check": "biome format . && prettier --check .",
     "typecheck": "pnpm -r typecheck",
-    "clean": "pnpm -r exec rimraf dist .next node_modules && rimraf node_modules"
+    "clean": "pnpm -r exec rimraf dist .next node_modules && rimraf node_modules",
+    "prepare": "husky"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.6",
     "concurrently": "10.0.4",
+    "husky": "9.1.7",
+    "lint-staged": "17.3.0",
+    "prettier": "3.9.6",
     "rimraf": "6.1.3",
     "typescript": "5.9.3"
   }

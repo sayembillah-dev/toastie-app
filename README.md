@@ -4,10 +4,10 @@ A pnpm-workspace monorepo running a Next.js frontend and a NestJS backend from a
 
 ## Stack
 
-| App           | Package        | Port | Stack                                            |
-| ------------- | -------------- | ---- | ------------------------------------------------ |
-| `apps/web`    | `@toastly/web` | 3000 | Next.js 16 (App Router), Tailwind CSS 4, Ant Design 6 |
-| `apps/api`    | `@toastly/api` | 4000 | NestJS 11, Express                               |
+| App        | Package        | Port | Stack                                                 |
+| ---------- | -------------- | ---- | ----------------------------------------------------- |
+| `apps/web` | `@toastly/web` | 3000 | Next.js 16 (App Router), Tailwind CSS 4, Ant Design 6 |
+| `apps/api` | `@toastly/api` | 4000 | NestJS 11, Express                                    |
 
 TypeScript is pinned to 5.9.3 across the workspace — the NestJS 11 CLI is built
 against it, so this stays off TypeScript 7 for now.
@@ -50,16 +50,16 @@ cp apps/web/.env.example apps/web/.env.local
 
 Run from the repo root:
 
-| Script           | What it does                                          |
-| ---------------- | ----------------------------------------------------- |
-| `pnpm dev`       | Both apps in watch mode                               |
-| `pnpm dev:web`   | Frontend only                                         |
-| `pnpm dev:api`   | Backend only                                          |
-| `pnpm build`     | Builds the API, then the frontend                     |
-| `pnpm start`     | Runs both production builds                           |
-| `pnpm lint`      | Lints every package that defines a `lint` script      |
-| `pnpm typecheck` | `tsc --noEmit` across the workspace                   |
-| `pnpm clean`     | Removes `dist`, `.next`, and all `node_modules`       |
+| Script           | What it does                                     |
+| ---------------- | ------------------------------------------------ |
+| `pnpm dev`       | Both apps in watch mode                          |
+| `pnpm dev:web`   | Frontend only                                    |
+| `pnpm dev:api`   | Backend only                                     |
+| `pnpm build`     | Builds the API, then the frontend                |
+| `pnpm start`     | Runs both production builds                      |
+| `pnpm lint`      | Lints every package that defines a `lint` script |
+| `pnpm typecheck` | `tsc --noEmit` across the workspace              |
+| `pnpm clean`     | Removes `dist`, `.next`, and all `node_modules`  |
 
 Target one app with `pnpm --filter @toastly/web <script>`.
 

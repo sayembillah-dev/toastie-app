@@ -187,9 +187,7 @@ export function AppShell({
               label: (
                 <Link href={entry.href} className="flex items-center justify-between gap-2">
                   <span className="truncate">{entry.title}</span>
-                  {entry.meta ? (
-                    <span className="text-xs text-ink-muted">{entry.meta}</span>
-                  ) : null}
+                  {entry.meta ? <span className="text-xs text-ink-muted">{entry.meta}</span> : null}
                 </Link>
               ),
             }))}
@@ -203,9 +201,7 @@ export function AppShell({
               label="Notifications"
               collapsed={collapsed}
               trailing={
-                notificationCount > 0 ? (
-                  <Badge count={notificationCount} size="small" />
-                ) : null
+                notificationCount > 0 ? <Badge count={notificationCount} size="small" /> : null
               }
             />
             {account ? (

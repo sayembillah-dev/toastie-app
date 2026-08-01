@@ -28,3 +28,7 @@ Thumbs.db
 # misc
 *.tsbuildinfo
 coverage/
+
+# lint/format caches
+.cache/
+*/.eslintcache

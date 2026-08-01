@@ -15,7 +15,8 @@ const GRID_CLASSES =
   'grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
 
 function matchesQuery(member: Member, needle: string): boolean {
-  const haystack = `${member.firstName} ${member.lastName} ${member.role} ${member.pathway ?? ''}`.toLowerCase();
+  const haystack =
+    `${member.firstName} ${member.lastName} ${member.role} ${member.pathway ?? ''}`.toLowerCase();
   return haystack.includes(needle);
 }
 
@@ -26,6 +27,7 @@ function DirectorySkeleton() {
     <div className={GRID_CLASSES} aria-hidden>
       {Array.from({ length: 10 }, (_, index) => (
         <div
+          // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length skeleton, never reorders
           key={index}
           className="relative overflow-hidden rounded-xl border border-line bg-canvas"
         >
