@@ -69,16 +69,24 @@ export function MemberCard({ member }: MemberCardProps) {
             <div className="text-[10px] font-medium uppercase tracking-wide text-ink-muted">
               Level
             </div>
-            <div className="mt-0.5 text-lg font-semibold leading-none text-ink">
-              {member.level}
+            <div
+              className={`mt-0.5 text-lg font-semibold leading-none ${
+                member.level ? 'text-ink' : 'text-ink-muted'
+              }`}
+            >
+              {member.level ?? '—'}
             </div>
           </div>
           <div className="min-w-0 text-right">
             <div className="text-[10px] font-medium uppercase tracking-wide text-ink-muted">
               Pathway
             </div>
-            <div className="mt-0.5 text-xs font-semibold leading-snug text-ink">
-              {member.pathway}
+            <div
+              className={`mt-0.5 text-xs font-semibold leading-snug ${
+                member.pathway ? 'text-ink' : 'italic text-ink-muted'
+              }`}
+            >
+              {member.pathway ?? 'Not started'}
             </div>
           </div>
         </div>

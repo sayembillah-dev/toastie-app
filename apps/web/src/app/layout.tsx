@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
 import { AntdProvider } from '@/components/antd-provider';
+import { StoreProvider } from '@/components/store-provider';
 
 import './globals.css';
 
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen antialiased">
-        <AntdProvider>{children}</AntdProvider>
+        <StoreProvider>
+          <AntdProvider>{children}</AntdProvider>
+        </StoreProvider>
       </body>
     </html>
   );

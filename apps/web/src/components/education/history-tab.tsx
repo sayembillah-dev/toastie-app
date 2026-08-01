@@ -1,3 +1,5 @@
+'use client';
+
 import {
   CheckCircle,
   Confetti,
@@ -6,12 +8,14 @@ import {
   MicrophoneStage,
   Rocket,
   Trophy,
+  WarningCircle,
 } from '@phosphor-icons/react/dist/ssr';
 import { Fragment } from 'react';
 
 import type { HistoryEvent, HistoryEventKind } from '@/lib/education/history';
-import { getMemberHistory } from '@/lib/education/history';
 import type { Member } from '@/lib/education/members';
+import { useGetMemberHistoryQuery } from '@/store/api';
+import { getApiErrorMessage } from '@/store/api-error';
 
 interface HistoryTabProps {
   member: Member;
@@ -231,8 +235,37 @@ function TimelineNode({ event, isLast }: TimelineNodeProps) {
   );
 }
 
+function TimelineSkeleton() {
+  return (
+    <div className="mx-auto max-w-3xl" aria-hidden>
+      {Array.from({ length: 4 }, (_, index) => (
+        <div key={index} className="flex gap-4 pb-6">
+          <span className="size-10 shrink-0 animate-pulse rounded-full bg-fill-strong" />
+          <div className="h-20 flex-1 animate-pulse rounded-xl border border-line bg-fill" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function HistoryTab({ member }: HistoryTabProps) {
-  const events = getMemberHistory(member);
+  /* The API returns the stream already sorted latest-first, so grouping below
+   * can walk it in one pass. */
+  const { data: events, isError, error } = useGetMemberHistoryQuery(member.id);
+
+  if (isError) {
+    return (
+      <div className="rounded-xl border border-dashed border-line-strong px-6 py-16 text-center">
+        <div className="mx-auto flex size-10 items-center justify-center rounded-full bg-fill">
+          <WarningCircle size={18} className="text-ink-muted" />
+        </div>
+        <p className="mt-3 text-sm font-medium text-ink">Could not load the timeline</p>
+        <p className="mt-1 text-xs text-ink-muted">{getApiErrorMessage(error)}</p>
+      </div>
+    );
+  }
+
+  if (!events) return <TimelineSkeleton />;
 
   if (events.length === 0) {
     return (
