@@ -26,6 +26,9 @@ const eslintConfig = [
       '@typescript-eslint/prefer-as-const': 'off',
       '@typescript-eslint/ban-ts-comment': 'off',
       'no-unused-vars': 'off',
+      // App-router-only project: this pages-router rule filesystem-scans for a
+      // `pages/` directory on every run and can never fire.
+      '@next/next/no-html-link-for-pages': 'off',
       // Covered by Biome's a11y group and JSX correctness rules.
       'react/jsx-key': 'off',
       'react/jsx-no-duplicate-props': 'off',

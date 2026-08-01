@@ -1,8 +1,13 @@
 # Nothing to check on a CI checkout — the pipeline lints the full tree anyway.
-[ -n "$CI" ] && exit 0
+# Written as an `if` rather than `[ … ] && exit 0` so the hook is still safe if
+# it ever runs under a shell with `set -e`.
+if [ -n "$CI" ]; then
+  exit 0
+fi
 
 # `--concurrent false` is deliberate: Biome rewrites the staged files and ESLint
 # then reads them back, so running the two in parallel would race on the same
-# paths. The serial cost is negligible — Biome and Prettier are both sub-100ms,
-# and ESLint (the only slow step) runs against a warm cache.
+# paths. The serial cost is negligible — Biome is ~30ms for the whole repo and
+# Prettier only ever sees Markdown/YAML; ESLint's startup is the only real cost,
+# and it is skipped entirely unless a web `.ts`/`.tsx` file is staged.
 pnpm exec lint-staged --concurrent false
