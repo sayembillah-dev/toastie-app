@@ -34,11 +34,19 @@ export interface Member {
   firstName: string;
   lastName: string;
   role: OfficerRole;
-  level: Level;
-  pathway: Pathway;
+  /** Undefined until the member starts a pathway from their profile. */
+  pathway?: Pathway;
+  /** Current level. Undefined while `pathway` is undefined. */
+  level?: Level;
+  /** Level the member's journey begins at on this platform. Members migrated in
+   * from an older tracker can start at level 3 or higher, and the progress view
+   * anchors to this value rather than pretending they began at level 1. */
+  startingLevel?: Level;
+  /** Project chosen when the pathway was started. */
+  startedProject?: string;
+  /** ISO date the pathway was started on this platform. */
+  pathwayStartedAt?: string;
 }
-
-export const MEMBERS_STORAGE_KEY = 'toastly.education.members.v1';
 
 export const SEED_MEMBERS: Member[] = [
   { id: 'm-01', firstName: 'Aisha', lastName: 'Patel', role: 'President', level: 4, pathway: 'Presentation Mastery' },
@@ -55,58 +63,16 @@ export const SEED_MEMBERS: Member[] = [
   { id: 'm-12', firstName: 'Kenji', lastName: 'Watanabe', role: 'Member', level: 1, pathway: 'Presentation Mastery' },
   { id: 'm-13', firstName: 'Zara', lastName: 'Ahmed', role: 'Member', level: 4, pathway: 'Dynamic Leadership' },
   { id: 'm-14', firstName: 'Ethan', lastName: 'Kowalski', role: 'Member', level: 2, pathway: 'Effective Coaching' },
+  { id: 'm-15', firstName: 'Riley', lastName: 'Novak', role: 'Member' },
 ];
 
 export function getInitials(member: Pick<Member, 'firstName' | 'lastName'>): string {
   return `${member.firstName.charAt(0)}${member.lastName.charAt(0)}`.toUpperCase();
 }
 
-/* The members list lives in localStorage. `useSyncExternalStore` needs a
- * subscribe/snapshot pair with referentially stable snapshots, so we cache the
- * last-read raw string and only rebuild the parsed array when it changes. */
-
-let cachedRaw: string | null = null;
-let cachedMembers: Member[] = SEED_MEMBERS;
-
-function writeSeed(): Member[] {
-  const seedRaw = JSON.stringify(SEED_MEMBERS);
-  window.localStorage.setItem(MEMBERS_STORAGE_KEY, seedRaw);
-  cachedRaw = seedRaw;
-  cachedMembers = SEED_MEMBERS;
-  return SEED_MEMBERS;
+/** Request body for `POST /members/:memberId/pathway`. */
+export interface StartPathwayInput {
+  pathway: Pathway;
+  project: string;
+  level: Level;
 }
-
-function readMembersSnapshot(): Member[] {
-  if (typeof window === 'undefined') return SEED_MEMBERS;
-  const raw = window.localStorage.getItem(MEMBERS_STORAGE_KEY);
-  if (raw === null) return writeSeed();
-  if (raw === cachedRaw) return cachedMembers;
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) throw new Error('members payload is not an array');
-    cachedRaw = raw;
-    cachedMembers = parsed as Member[];
-    return cachedMembers;
-  } catch {
-    return writeSeed();
-  }
-}
-
-function readMembersServerSnapshot(): Member[] {
-  return SEED_MEMBERS;
-}
-
-function subscribeMembers(callback: () => void): () => void {
-  if (typeof window === 'undefined') return () => {};
-  const handler = (event: StorageEvent) => {
-    if (event.key === MEMBERS_STORAGE_KEY) callback();
-  };
-  window.addEventListener('storage', handler);
-  return () => window.removeEventListener('storage', handler);
-}
-
-export const membersStore = {
-  subscribe: subscribeMembers,
-  getSnapshot: readMembersSnapshot,
-  getServerSnapshot: readMembersServerSnapshot,
-};

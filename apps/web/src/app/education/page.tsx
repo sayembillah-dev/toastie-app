@@ -1,10 +1,10 @@
 import { AppShell } from '@/components/app-shell';
-import { MembersDirectory } from '@/components/education/directory';
+import { EducationTabs } from '@/components/education/education-tabs';
 
 export default function EducationPage() {
   return (
     <AppShell>
-      <MembersDirectory />
+      <EducationTabs />
     </AppShell>
   );
 }

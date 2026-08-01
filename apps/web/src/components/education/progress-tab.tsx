@@ -1,19 +1,27 @@
+'use client';
+
+import { skipToken } from '@reduxjs/toolkit/query';
 import {
   BookOpen,
   Calendar,
   CheckCircle,
   Compass,
+  Flag,
   Microphone,
   MicrophoneStage,
   Path,
   Trophy,
+  WarningCircle,
 } from '@phosphor-icons/react/dist/ssr';
+import { Button } from 'antd';
 
 import type { Member } from '@/lib/education/members';
-import { getMemberStats } from '@/lib/education/history';
+import { useGetMemberStatsQuery } from '@/store/api';
+import { getApiErrorMessage } from '@/store/api-error';
 
 interface ProgressTabProps {
   member: Member;
+  onStartPathway: () => void;
 }
 
 /** Consistently render an ISO date the way the whole timeline expects it —
@@ -60,18 +68,29 @@ function StatTile({ label, value, sublabel, Icon, tint }: StatTileProps) {
   );
 }
 
-/** Five-segment bar that fills up to `level`. Rounded end-caps keep it looking
- * like one bar rather than a strip of pills. */
-function LevelBar({ level }: { level: number }) {
+/** Five-segment bar that fills up to `level`. Segments earned before the
+ * member joined this platform (below `startingLevel`) are rendered in a lighter
+ * ink so the platform journey stays visually distinct from prior progress. */
+function LevelBar({ level, startingLevel = 1 }: { level: number; startingLevel?: number }) {
   return (
-    <div className="flex gap-1.5" aria-label={`Level ${level} of 5`}>
+    <div
+      className="flex gap-1.5"
+      aria-label={`Level ${level} of 5${
+        startingLevel > 1 ? `, started from level ${startingLevel}` : ''
+      }`}
+    >
       {[1, 2, 3, 4, 5].map((segment) => {
-        const filled = segment <= level;
+        const isBeforePlatform = segment < startingLevel;
+        const isFilled = segment <= level && !isBeforePlatform;
         return (
           <div
             key={segment}
             className={`h-2 flex-1 rounded-full transition-colors ${
-              filled ? 'bg-ink' : 'bg-fill-strong'
+              isBeforePlatform
+                ? 'bg-ink/20'
+                : isFilled
+                  ? 'bg-ink'
+                  : 'bg-fill-strong'
             }`}
           />
         );
@@ -80,8 +99,87 @@ function LevelBar({ level }: { level: number }) {
   );
 }
 
-export function ProgressTab({ member }: ProgressTabProps) {
-  const stats = getMemberStats(member);
+function EmptyPathway({ onStartPathway }: { onStartPathway: () => void }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-line-strong bg-canvas px-6 py-12 text-center">
+      <span
+        aria-hidden
+        className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-fill text-ink-soft"
+      >
+        <Flag size={22} weight="bold" />
+      </span>
+      <h2 className="text-base font-semibold text-ink">No pathway yet</h2>
+      <p className="mx-auto mt-1.5 max-w-md text-sm text-ink-soft">
+        Start a pathway to unlock progress tracking. Speeches, projects, and level
+        milestones will show up here as soon as the journey begins.
+      </p>
+      <Button
+        type="primary"
+        size="middle"
+        className="mt-5"
+        icon={<Path size={14} weight="bold" />}
+        onClick={onStartPathway}
+      >
+        Start Pathway
+      </Button>
+    </div>
+  );
+}
+
+function ProgressSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3" aria-hidden>
+      <div className="flex flex-col gap-4 lg:col-span-2">
+        <div className="h-40 animate-pulse rounded-xl border border-line bg-fill" />
+        <div className="h-32 animate-pulse rounded-xl border border-line bg-fill" />
+        <div className="h-28 animate-pulse rounded-xl border border-line bg-fill" />
+      </div>
+      <div className="flex flex-col gap-3">
+        {Array.from({ length: 5 }, (_, index) => (
+          <div
+            key={index}
+            className="h-18.5 animate-pulse rounded-xl border border-line bg-fill"
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function ProgressTab({ member, onStartPathway }: ProgressTabProps) {
+  /* The roll-up is computed by the API layer, not during render — the same call
+   * shape a `GET /members/:id/stats` endpoint will answer. Members without a
+   * pathway have nothing to roll up, so the request is skipped entirely. */
+  const {
+    data: stats,
+    isError,
+    error,
+  } = useGetMemberStatsQuery(member.pathway && member.level ? member.id : skipToken);
+
+  if (!member.pathway || !member.level) {
+    return <EmptyPathway onStartPathway={onStartPathway} />;
+  }
+
+  if (isError) {
+    return (
+      <div className="rounded-2xl border border-dashed border-line-strong px-6 py-16 text-center">
+        <span
+          aria-hidden
+          className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-fill text-ink-soft"
+        >
+          <WarningCircle size={18} weight="bold" />
+        </span>
+        <p className="text-sm font-medium text-ink">Could not load progress</p>
+        <p className="mt-1 text-xs text-ink-muted">{getApiErrorMessage(error)}</p>
+      </div>
+    );
+  }
+
+  if (!stats) return <ProgressSkeleton />;
+
+  const currentLevel = member.level;
+  const startingLevel = member.startingLevel ?? 1;
+  const levelsRemaining = 5 - currentLevel;
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -95,20 +193,26 @@ export function ProgressTab({ member }: ProgressTabProps) {
               </div>
               <h2 className="mt-1.5 text-xl font-semibold text-ink">{member.pathway}</h2>
               <p className="mt-1 text-sm text-ink-soft">
-                Level {member.level} of 5 — {5 - member.level > 0
-                  ? `${5 - member.level} level${5 - member.level === 1 ? '' : 's'} to go`
+                Level {currentLevel} of 5 — {levelsRemaining > 0
+                  ? `${levelsRemaining} level${levelsRemaining === 1 ? '' : 's'} to go`
                   : 'complete'}
               </p>
+              {startingLevel > 1 ? (
+                <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-fill px-2.5 py-1 text-[11px] font-medium text-ink-soft">
+                  <Flag size={11} weight="bold" />
+                  Journey on Toastly started at Level {startingLevel}
+                </div>
+              ) : null}
             </div>
             <span
               aria-hidden
               className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white"
             >
-              <span className="text-sm font-semibold">L{member.level}</span>
+              <span className="text-sm font-semibold">L{currentLevel}</span>
             </span>
           </div>
           <div className="mt-4">
-            <LevelBar level={member.level} />
+            <LevelBar level={currentLevel} startingLevel={startingLevel} />
           </div>
         </article>
 
@@ -191,7 +295,7 @@ export function ProgressTab({ member }: ProgressTabProps) {
         />
         <StatTile
           label="Current level"
-          value={`Level ${member.level}`}
+          value={`Level ${currentLevel}`}
           Icon={Trophy}
           tint={{ bg: '#FFE4E6', fg: '#9F1239' }}
         />

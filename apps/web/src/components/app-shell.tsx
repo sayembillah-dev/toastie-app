@@ -17,7 +17,10 @@ import {
 import { Avatar, Badge, Button, Input, Layout, Menu } from 'antd';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Fragment, useState } from 'react';
+import { Fragment } from 'react';
+
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { selectSidebarCollapsed, sidebarToggled } from '@/store/ui-slice';
 
 /* Only Sider comes from antd — the header and content live inside the content
  * panel below, so antd's Header/Content wrappers would only fight the layout. */
@@ -113,7 +116,10 @@ export function AppShell({
 }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const [collapsed, setCollapsed] = useState(false);
+  /* Held in the store rather than local state so the sidebar keeps its width
+   * across route changes — every page mounts its own AppShell. */
+  const collapsed = useAppSelector(selectSidebarCollapsed);
+  const dispatch = useAppDispatch();
 
   const rawTrail = buildTrail(pathname);
   const trail = breadcrumbLabel
@@ -153,7 +159,7 @@ export function AppShell({
               size="small"
               className={collapsed ? '' : 'ml-auto'}
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              onClick={() => setCollapsed((value) => !value)}
+              onClick={() => dispatch(sidebarToggled())}
               icon={<SidebarSimple size={18} className="text-ink-muted" />}
             />
           </div>

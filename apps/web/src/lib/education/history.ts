@@ -76,7 +76,7 @@ export interface MemberProfileExtras {
   meetingsAttended: number;
 }
 
-const DEFAULT_EXTRAS: MemberProfileExtras = {
+export const DEFAULT_EXTRAS: MemberProfileExtras = {
   joinedAt: '2025-01-15',
   meetingsAttended: 12,
 };
@@ -84,7 +84,7 @@ const DEFAULT_EXTRAS: MemberProfileExtras = {
 /* Deep, story-shaped histories for the first two members and thinner seeds for
  * the rest — enough variety to exercise every event card without turning the
  * seed file into a novel. */
-const HISTORY_SEED: Record<string, HistoryEvent[]> = {
+export const HISTORY_SEED: Record<string, HistoryEvent[]> = {
   'm-01': [
     { id: 'm-01-e1', memberId: 'm-01', type: 'joined', date: '2024-02-10' },
     {
@@ -488,49 +488,47 @@ const HISTORY_SEED: Record<string, HistoryEvent[]> = {
   ],
 };
 
-const EXTRAS_SEED: Record<string, MemberProfileExtras> = {
+export const EXTRAS_SEED: Record<string, MemberProfileExtras> = {
   'm-01': { joinedAt: '2024-02-10', meetingsAttended: 38 },
   'm-02': { joinedAt: '2023-06-04', meetingsAttended: 52 },
   'm-08': { joinedAt: '2026-05-02', meetingsAttended: 4 },
 };
 
 /** Latest-first, tie-broken by id so ordering is deterministic for React keys. */
-function sortEvents(events: HistoryEvent[]): HistoryEvent[] {
+export function sortEvents(events: HistoryEvent[]): HistoryEvent[] {
   return [...events].sort((a, b) => {
     if (a.date !== b.date) return a.date < b.date ? 1 : -1;
     return a.id < b.id ? 1 : -1;
   });
 }
 
-/** Fallback used when a member has no seeded history. Generates a "joined"
- * and a first-speech pair so the timeline never renders empty. */
-function synthesiseHistory(member: Member): HistoryEvent[] {
+/** Fallback used when a member has no seeded history. Reads what the member
+ * has volunteered so far — a fresh join returns just the join event; a member
+ * who has run the Start Pathway flow gets a matching `project-started`. */
+export function synthesiseHistory(member: Member): HistoryEvent[] {
+  const extras = EXTRAS_SEED[member.id] ?? DEFAULT_EXTRAS;
+  const joinedAt = member.pathwayStartedAt ?? extras.joinedAt;
+  const joined: HistoryEvent = {
+    id: `${member.id}-joined`,
+    memberId: member.id,
+    type: 'joined',
+    date: joinedAt,
+  };
+  if (!member.pathway || !member.startedProject || !member.startingLevel) {
+    return [joined];
+  }
   return [
-    {
-      id: `${member.id}-joined`,
-      memberId: member.id,
-      type: 'joined',
-      date: DEFAULT_EXTRAS.joinedAt,
-    },
+    joined,
     {
       id: `${member.id}-first-project`,
       memberId: member.id,
       type: 'project-started',
-      date: '2025-02-01',
-      projectName: 'Ice Breaker',
-      level: 1,
+      date: member.pathwayStartedAt ?? joinedAt,
+      projectName: member.startedProject,
+      level: member.startingLevel,
       pathway: member.pathway,
     },
   ];
-}
-
-export function getMemberHistory(member: Member): HistoryEvent[] {
-  const seeded = HISTORY_SEED[member.id];
-  return sortEvents(seeded ?? synthesiseHistory(member));
-}
-
-export function getMemberExtras(member: Member): MemberProfileExtras {
-  return EXTRAS_SEED[member.id] ?? DEFAULT_EXTRAS;
 }
 
 export interface MemberStats {
@@ -558,9 +556,14 @@ export interface MemberStats {
   } | null;
 }
 
-export function getMemberStats(member: Member): MemberStats {
-  const events = getMemberHistory(member);
-  const extras = getMemberExtras(member);
+/** Rolls a member's event stream up into the numbers the Progress tab shows.
+ * Pure over its inputs so the same code can run here today and inside the Nest
+ * service later — the local API layer is its only caller. */
+export function computeMemberStats(
+  rawEvents: HistoryEvent[],
+  extras: MemberProfileExtras,
+): MemberStats {
+  const events = sortEvents(rawEvents);
 
   const completedProjects = new Set<string>();
   for (const event of events) {

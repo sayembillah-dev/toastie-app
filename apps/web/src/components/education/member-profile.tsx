@@ -1,16 +1,20 @@
 'use client';
 
-import { ArrowLeft, GraduationCap, Path } from '@phosphor-icons/react/dist/ssr';
+import { skipToken } from '@reduxjs/toolkit/query';
+import { ArrowLeft, GraduationCap, Path, WarningCircle } from '@phosphor-icons/react/dist/ssr';
 import { Button, Tabs } from 'antd';
 import Link from 'next/link';
 import { notFound, useParams } from 'next/navigation';
-import { useSyncExternalStore } from 'react';
+import { useState } from 'react';
 
 import { AppShell } from '@/components/app-shell';
 import { HistoryTab } from '@/components/education/history-tab';
 import { ProgressTab } from '@/components/education/progress-tab';
+import { StartPathwayModal } from '@/components/education/start-pathway-modal';
 import type { Member } from '@/lib/education/members';
-import { getInitials, membersStore } from '@/lib/education/members';
+import { getInitials } from '@/lib/education/members';
+import { useGetMemberQuery } from '@/store/api';
+import { getApiErrorMessage, isNotFoundError } from '@/store/api-error';
 
 /** Same palette as the directory card so the avatar keeps its identity between
  * the two views. Duplicated on purpose — the card file owns its private copy
@@ -36,10 +40,17 @@ function hashString(input: string): number {
   return Math.abs(hash);
 }
 
-function ProfileHeader({ member }: { member: Member }) {
+function ProfileHeader({
+  member,
+  onStartPathway,
+}: {
+  member: Member;
+  onStartPathway: () => void;
+}) {
   const fullName = `${member.firstName} ${member.lastName}`;
   const initials = getInitials(member);
   const swatch = AVATAR_PALETTE[hashString(member.id) % AVATAR_PALETTE.length];
+  const hasPathway = Boolean(member.pathway && member.level);
 
   return (
     <header className="relative overflow-hidden rounded-2xl border border-line bg-canvas">
@@ -57,16 +68,28 @@ function ProfileHeader({ member }: { member: Member }) {
             <h1 className="text-2xl font-semibold text-ink">{fullName}</h1>
             <p className="mt-1 text-sm text-ink-soft">{member.role}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-fill px-3 py-1 text-xs font-medium text-ink-soft">
-              <Path size={12} weight="bold" />
-              {member.pathway}
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-fill px-3 py-1 text-xs font-medium text-ink-soft">
-              <GraduationCap size={12} weight="bold" />
-              Level {member.level}
-            </span>
-          </div>
+          {hasPathway ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-fill px-3 py-1 text-xs font-medium text-ink-soft">
+                <Path size={12} weight="bold" />
+                {member.pathway}
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-fill px-3 py-1 text-xs font-medium text-ink-soft">
+                <GraduationCap size={12} weight="bold" />
+                Level {member.level}
+              </span>
+            </div>
+          ) : (
+            <Button
+              type="primary"
+              size="middle"
+              onClick={onStartPathway}
+              icon={<Path size={14} weight="bold" />}
+              className="w-full sm:w-auto"
+            >
+              Start Pathway
+            </Button>
+          )}
         </div>
       </div>
     </header>
@@ -74,6 +97,8 @@ function ProfileHeader({ member }: { member: Member }) {
 }
 
 function ProfileContent({ member }: { member: Member }) {
+  const [modalOpen, setModalOpen] = useState(false);
+
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <div>
@@ -88,7 +113,7 @@ function ProfileContent({ member }: { member: Member }) {
         </Link>
       </div>
 
-      <ProfileHeader member={member} />
+      <ProfileHeader member={member} onStartPathway={() => setModalOpen(true)} />
 
       <Tabs
         defaultActiveKey="progress"
@@ -97,7 +122,9 @@ function ProfileContent({ member }: { member: Member }) {
           {
             key: 'progress',
             label: 'Progress',
-            children: <ProgressTab member={member} />,
+            children: (
+              <ProgressTab member={member} onStartPathway={() => setModalOpen(true)} />
+            ),
           },
           {
             key: 'history',
@@ -106,23 +133,69 @@ function ProfileContent({ member }: { member: Member }) {
           },
         ]}
       />
+
+      <StartPathwayModal
+        open={modalOpen}
+        member={member}
+        onClose={() => setModalOpen(false)}
+      />
+    </div>
+  );
+}
+
+function ProfileSkeleton() {
+  return (
+    <div className="mx-auto flex max-w-6xl flex-col gap-6" aria-hidden>
+      <div className="h-7 w-32 animate-pulse rounded bg-fill-strong" />
+      <div className="overflow-hidden rounded-2xl border border-line bg-canvas">
+        <div className="h-24 animate-pulse bg-fill-strong" />
+        <div className="flex flex-col gap-3 px-6 pb-5 pt-14">
+          <div className="h-6 w-56 animate-pulse rounded bg-fill-strong" />
+          <div className="h-4 w-24 animate-pulse rounded bg-fill-strong" />
+        </div>
+      </div>
+      <div className="h-64 animate-pulse rounded-xl border border-line bg-fill" />
     </div>
   );
 }
 
 /** Top-level client screen: resolves the member from the URL, hands the name
- * to the shell for the breadcrumb, and renders the profile in the main area. */
+ * to the shell for the breadcrumb, and renders the profile in the main area.
+ * The record is fetched rather than read synchronously, so the first paint is a
+ * skeleton — exactly what it will be once the API is remote. */
 export function MemberProfileScreen() {
   const params = useParams<{ memberId: string }>();
   const memberId = params?.memberId;
-  const members = useSyncExternalStore(
-    membersStore.subscribe,
-    membersStore.getSnapshot,
-    membersStore.getServerSnapshot,
-  );
+  const { data: member, isError, error } = useGetMemberQuery(memberId ?? skipToken);
 
-  const member = members.find((entry) => entry.id === memberId);
-  if (!member) notFound();
+  if (isError) {
+    // A missing id is a real 404 for the route; anything else is a fetch failure
+    // the member can retry, so it stays inside the shell.
+    if (isNotFoundError(error)) notFound();
+
+    return (
+      <AppShell>
+        <div className="mx-auto max-w-md rounded-xl border border-dashed border-line-strong px-6 py-16 text-center">
+          <span
+            aria-hidden
+            className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-fill text-ink-soft"
+          >
+            <WarningCircle size={18} weight="bold" />
+          </span>
+          <p className="text-sm font-medium text-ink">Could not load this member</p>
+          <p className="mt-1 text-xs text-ink-muted">{getApiErrorMessage(error)}</p>
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (!member) {
+    return (
+      <AppShell>
+        <ProfileSkeleton />
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell breadcrumbLabel={`${member.firstName} ${member.lastName}`}>
