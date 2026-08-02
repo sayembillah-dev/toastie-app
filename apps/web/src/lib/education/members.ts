@@ -162,6 +162,11 @@ export const SEED_MEMBERS: Member[] = [
     pathway: 'Effective Coaching',
   },
   { id: 'm-15', firstName: 'Riley', lastName: 'Novak', role: 'Member' },
+  { id: 'm-16', firstName: 'Amelia', lastName: 'Fischer', role: 'Member' },
+  { id: 'm-17', firstName: 'Tomas', lastName: 'Rivera', role: 'Member' },
+  { id: 'm-18', firstName: 'Nadia', lastName: 'Haddad', role: 'Member' },
+  { id: 'm-19', firstName: 'Oliver', lastName: 'Bennett', role: 'Member' },
+  { id: 'm-20', firstName: 'Chloe', lastName: 'Dubois', role: 'Member' },
 ];
 
 export function getInitials(member: Pick<Member, 'firstName' | 'lastName'>): string {
