@@ -16,6 +16,7 @@ import { Tabs } from 'antd';
 import { notFound, useParams } from 'next/navigation';
 
 import { AppShell } from '@/components/app-shell';
+import { MeetingActions } from '@/components/meetings/meeting-actions';
 import { AhCounterTab } from '@/components/meetings/tabs/ah-counter-tab';
 import { AttendanceTab } from '@/components/meetings/tabs/attendance-tab';
 import { ChecklistTab } from '@/components/meetings/tabs/checklist-tab';
@@ -27,7 +28,8 @@ import { TableTopicsTab } from '@/components/meetings/tabs/table-topics-tab';
 import { ThemeTab } from '@/components/meetings/tabs/theme-tab';
 import { TimerTab } from '@/components/meetings/tabs/timer-tab';
 import type { Meeting } from '@/lib/meetings/meetings';
-import { getMeetingById } from '@/lib/meetings/meetings';
+import { useGetMeetingQuery } from '@/store/api';
+import { getApiErrorMessage, isNotFoundError } from '@/store/api-error';
 
 interface TabDef {
   key: string;
@@ -110,6 +112,8 @@ function DetailContent({ meeting }: { meeting: Meeting }) {
 
   return (
     <div className="mx-auto max-w-6xl">
+      <MeetingActions meeting={meeting} />
+
       {/* antd Tabs already scrolls horizontally with arrow controls when the
        * label row overflows — no extra wiring needed for the mobile case. */}
       <Tabs
@@ -130,14 +134,55 @@ function DetailContent({ meeting }: { meeting: Meeting }) {
   );
 }
 
+/* Holds the tab row and one panel's worth of height so the fetch doesn't
+ * collapse the page and then push it back open. */
+function DetailSkeleton() {
+  return (
+    <div className="mx-auto max-w-6xl" aria-hidden>
+      <div className="mb-4 h-9 animate-pulse rounded-lg bg-fill" />
+      <div className="h-96 animate-pulse rounded-2xl border border-line bg-fill" />
+    </div>
+  );
+}
+
 /** Top-level client screen for the meeting detail route. Resolves the meeting
- * from the URL, hands off to `notFound()` for unknown ids, and renders the
- * shell with a breadcrumb crumb that reads as "#41" rather than the raw id. */
+ * through the API — meetings created from the hub only exist there — hands off
+ * to `notFound()` for unknown ids, and renders the shell with a breadcrumb that
+ * reads as "#41" rather than the raw id. */
 export function MeetingDetailScreen() {
   const params = useParams<{ meetingId: string }>();
-  const meeting = params?.meetingId ? getMeetingById(params.meetingId) : null;
+  const meetingId = params?.meetingId ?? '';
+  const {
+    data: meeting,
+    error,
+    isLoading,
+  } = useGetMeetingQuery(meetingId, { skip: meetingId === '' });
 
-  if (!meeting) notFound();
+  if (meetingId === '' || isNotFoundError(error)) notFound();
+
+  if (isLoading || (!meeting && !error)) {
+    return (
+      <AppShell breadcrumbLabel="Meeting">
+        <DetailSkeleton />
+      </AppShell>
+    );
+  }
+
+  if (!meeting) {
+    return (
+      <AppShell breadcrumbLabel="Meeting">
+        <div
+          role="alert"
+          className="mx-auto max-w-6xl rounded-xl border border-dashed border-line-strong px-6 py-16 text-center"
+        >
+          <p className="text-sm font-medium text-ink">Could not load this meeting</p>
+          <p className="mt-1 text-xs text-ink-muted">
+            {getApiErrorMessage(error, 'Please try again in a moment.')}
+          </p>
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell breadcrumbLabel={`Meeting #${meeting.meetingNumber}`}>

@@ -5,9 +5,29 @@ import type { Member } from '@/lib/education/members';
  * badge and, later, let the back-end resolve member IDs vs. free-text names. */
 export type Assignee = { kind: 'member'; memberId: string } | { kind: 'guest'; name: string };
 
+/** The row fields that hold a person. Named as a type so the grid and the
+ * create dialog can both drive their column lists off one list of keys. */
+export type AssigneeField =
+  | 'tmod'
+  | 'ttm'
+  | 'ttEvaluator'
+  | 'speaker1'
+  | 'evaluator1'
+  | 'speaker2'
+  | 'evaluator2'
+  | 'speaker3'
+  | 'evaluator3'
+  | 'generalEvaluator'
+  | 'timer'
+  | 'ahCounter'
+  | 'grammarian';
+
 export interface PlannerRow {
   id: string;
-  meetingNumber: number;
+  /** Typed in by the VPE, not derived: clubs number meetings on their own
+   * scheme, and a planner row often sits in the calendar long before anyone
+   * knows which number it lands on. `null` until they fill it in. */
+  meetingNumber: number | null;
   /** Value from an <input type="datetime-local"> — "YYYY-MM-DDTHH:mm" or null. */
   dateTime: string | null;
   tmod: Assignee | null;
@@ -27,7 +47,7 @@ export interface PlannerRow {
   notes: string;
 }
 
-export function createEmptyRow(id: string, meetingNumber: number): PlannerRow {
+export function createEmptyRow(id: string, meetingNumber: number | null = null): PlannerRow {
   return {
     id,
     meetingNumber,
@@ -48,6 +68,12 @@ export function createEmptyRow(id: string, meetingNumber: number): PlannerRow {
     theme: '',
     notes: '',
   };
+}
+
+/** How a row refers to itself in aria labels and dialog titles before it has a
+ * number of its own. */
+export function plannerRowLabel(row: PlannerRow): string {
+  return row.meetingNumber === null ? 'this planned meeting' : `meeting #${row.meetingNumber}`;
 }
 
 export function assigneeLabel(assignee: Assignee | null, members: Member[]): string {

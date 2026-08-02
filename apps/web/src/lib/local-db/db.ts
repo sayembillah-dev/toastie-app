@@ -7,6 +7,8 @@ import {
 } from '@/lib/education/history';
 import type { Member } from '@/lib/education/members';
 import { SEED_MEMBERS } from '@/lib/education/members';
+import type { Meeting } from '@/lib/meetings/meetings';
+import { SEED_MEETINGS } from '@/lib/meetings/meetings';
 
 /**
  * The stand-in persistence layer. Until the Nest API exists, every write the UI
@@ -26,6 +28,7 @@ export const DB_KEYS = {
   members: `toastly.db.${SCHEMA_VERSION}.members`,
   historyEvents: `toastly.db.${SCHEMA_VERSION}.history-events`,
   memberExtras: `toastly.db.${SCHEMA_VERSION}.member-extras`,
+  meetings: `toastly.db.${SCHEMA_VERSION}.meetings`,
 } as const;
 
 /** Used by the cross-tab sync listener to tell our writes apart from any other
@@ -45,6 +48,10 @@ function seedMembers(): Member[] {
  * synthesised join event so every member has a timeline from day one. */
 function seedHistoryEvents(): HistoryEvent[] {
   return SEED_MEMBERS.flatMap((member) => HISTORY_SEED[member.id] ?? synthesiseHistory(member));
+}
+
+function seedMeetings(): Meeting[] {
+  return SEED_MEETINGS;
 }
 
 function seedMemberExtras(): MemberExtrasTable {
@@ -94,6 +101,14 @@ export function readHistoryEvents(): HistoryEvent[] {
 
 export function writeHistoryEvents(events: HistoryEvent[]): void {
   writeTable(DB_KEYS.historyEvents, events);
+}
+
+export function readMeetings(): Meeting[] {
+  return readTable(DB_KEYS.meetings, seedMeetings);
+}
+
+export function writeMeetings(meetings: Meeting[]): void {
+  writeTable(DB_KEYS.meetings, meetings);
 }
 
 export function readMemberExtras(): MemberExtrasTable {

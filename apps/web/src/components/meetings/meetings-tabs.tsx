@@ -7,11 +7,14 @@ import {
   Plus,
 } from '@phosphor-icons/react/dist/ssr';
 import { Button, Tabs } from 'antd';
-import { useMemo, useSyncExternalStore } from 'react';
+import { useRouter } from 'next/navigation';
+import { useMemo, useState, useSyncExternalStore } from 'react';
 
 import { MeetingCard } from '@/components/meetings/meeting-card';
+import { NewMeetingModal } from '@/components/meetings/new-meeting-modal';
 import type { Meeting } from '@/lib/meetings/meetings';
-import { partitionMeetings, SEED_MEETINGS } from '@/lib/meetings/meetings';
+import { nextMeetingNumber, partitionMeetings } from '@/lib/meetings/meetings';
+import { useGetMeetingsQuery } from '@/store/api';
 
 /* `useSyncExternalStore` compares snapshots with `Object.is` — a fresh
  * `Date.now()` each call would look like a new value every commit and loop
@@ -157,22 +160,32 @@ export function MeetingsTabs() {
    * once we're mounted — that keeps the initial HTML deterministic and lets us
    * defer the actual partition until the clock is trustworthy. */
   const now = useClientNow();
+  const { data: meetings } = useGetMeetingsQuery();
+  const [isCreateOpen, setCreateOpen] = useState(false);
+  const router = useRouter();
 
   const partitioned = useMemo(() => {
-    if (now === null) {
+    if (now === null || !meetings) {
       return { past: [] as Meeting[], current: null as Meeting | null, upcoming: [] as Meeting[] };
     }
-    return partitionMeetings(SEED_MEETINGS, now);
-  }, [now]);
+    return partitionMeetings(meetings, now);
+  }, [meetings, now]);
 
   const { past, current, upcoming } = partitioned;
-  const isReady = now !== null;
+  /* Both the roster and the clock have to have landed: the partition is
+   * meaningless without either, and the skeletons cover the gap. */
+  const isReady = now !== null && meetings !== undefined;
 
-  /* Placeholder — the user will wire this to whatever opens the create flow
-   * (modal, side sheet, or dedicated route). Kept in one spot so the header
-   * button and the mobile FAB always fire the same action. */
+  /* One entry point for the header button and the mobile FAB, so the two can
+   * never drift apart. */
   function handleCreateMeeting() {
-    // TODO: hook up to the create-meeting flow.
+    setCreateOpen(true);
+  }
+
+  /* Straight to the new meeting's page — a meeting is created in order to be
+   * planned, and every tab that does the planning lives there. */
+  function handleCreated(meeting: Meeting) {
+    router.push(`/meetings/${meeting.id}`);
   }
 
   return (
@@ -213,7 +226,7 @@ export function MeetingsTabs() {
                 Current
               </span>
             ),
-            children: <CurrentPanel meeting={current} now={now} />,
+            children: <CurrentPanel meeting={current} now={isReady ? now : null} />,
           },
           {
             key: 'upcoming',
@@ -277,6 +290,13 @@ export function MeetingsTabs() {
           className="!size-14 shadow-lg"
         />
       </div>
+
+      <NewMeetingModal
+        open={isCreateOpen}
+        nextNumber={nextMeetingNumber(meetings ?? [])}
+        onClose={() => setCreateOpen(false)}
+        onCreated={handleCreated}
+      />
     </div>
   );
 }
