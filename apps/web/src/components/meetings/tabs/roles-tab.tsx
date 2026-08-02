@@ -2,37 +2,13 @@
 
 import { UserCircle } from '@phosphor-icons/react/dist/ssr';
 import { Select } from 'antd';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 import type { Meeting } from '@/lib/meetings/meetings';
+import { buildRoles } from '@/lib/meetings/roles';
 import { useGetMembersQuery } from '@/store/api';
-
-/** Toastmasters convention: meetings at or after 5 PM are Evening events, and
- * everything earlier reads as "of the Day". A single cutoff keeps the label
- * decision testable without a config knob. */
-function getToastmasterLabel(dateTime: string): string {
-  const hour = new Date(dateTime).getHours();
-  return hour >= 17 ? 'Toast Master of the Evening' : 'Toast Master of the Day';
-}
-
-interface RoleDef {
-  key: string;
-  label: string;
-}
-
-function buildRoles(meeting: Meeting): RoleDef[] {
-  return [
-    { key: 'president', label: 'President' },
-    { key: 'sergeant-at-arms', label: 'Sergeant at Arms' },
-    { key: 'toastmaster', label: getToastmasterLabel(meeting.dateTime) },
-    { key: 'general-evaluator', label: 'General Evaluator' },
-    { key: 'table-topic-master', label: 'Table Topic Master' },
-    { key: 'table-topic-evaluator', label: 'Table Topic Evaluator' },
-    { key: 'ah-counter', label: 'Ah Counter' },
-    { key: 'timer', label: 'Timer' },
-    { key: 'grammarian', label: 'Grammarian' },
-  ];
-}
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { roleAssigned, selectMeetingDraft } from '@/store/meeting-draft-slice';
 
 interface RolesTabProps {
   meeting: Meeting;
@@ -40,10 +16,12 @@ interface RolesTabProps {
 
 /** Roles tab — a two-column grid of member pickers, one per meeting role. The
  * Toastmaster label switches between Day and Evening based on the meeting's
- * scheduled time. Assignments live in local state for now. */
+ * scheduled time. Assignments land in the meeting draft, so the Overview →
+ * Agenda sheet names the same people. */
 export function RolesTab({ meeting }: RolesTabProps) {
   const { data: members, isLoading } = useGetMembersQuery();
-  const [assignments, setAssignments] = useState<Record<string, string | undefined>>({});
+  const dispatch = useAppDispatch();
+  const assignments = useAppSelector((state) => selectMeetingDraft(state, meeting.id)).roles;
 
   const roles = useMemo(() => buildRoles(meeting), [meeting]);
 
@@ -59,7 +37,7 @@ export function RolesTab({ meeting }: RolesTabProps) {
   );
 
   function handleAssign(roleKey: string, memberId: string | undefined) {
-    setAssignments((prev) => ({ ...prev, [roleKey]: memberId }));
+    dispatch(roleAssigned({ meetingId: meeting.id, roleKey, memberId }));
   }
 
   return (

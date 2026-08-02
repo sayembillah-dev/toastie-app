@@ -1,0 +1,477 @@
+'use client';
+
+import {
+  CalendarBlank,
+  CheckCircle,
+  Clock,
+  Hourglass,
+  MicrophoneStage,
+  Quotes,
+  TextAa,
+  UsersThree,
+  Warning,
+} from '@phosphor-icons/react/dist/ssr';
+import { Progress } from 'antd';
+import { useMemo } from 'react';
+
+import { buildAgenda } from '@/lib/meetings/agenda';
+import type { DraftSpeaker, MeetingDraft } from '@/lib/meetings/draft';
+import type { Meeting, MeetingStatus } from '@/lib/meetings/meetings';
+import { buildRoles } from '@/lib/meetings/roles';
+import { useAppSelector } from '@/store/hooks';
+import { selectMeetingDraft } from '@/store/meeting-draft-slice';
+
+import { useNameOf } from './use-name-of';
+
+/** Two prepared speeches is the club's normal slate — the readiness meter reads
+ * anything at or above it as a full house. */
+const TARGET_SPEAKERS = 2;
+
+const DATE_FMT = new Intl.DateTimeFormat('en-GB', {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+});
+
+/** Matches the agenda sheet's clock format so both views read the same. */
+const CLOCK_FMT = new Intl.DateTimeFormat('en-US', {
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+});
+
+/* Kept in sync with meeting-card so the same status reads the same everywhere. */
+const STATUS_STYLES: Record<MeetingStatus, { label: string; bg: string; fg: string }> = {
+  draft: { label: 'Draft', bg: '#FEF3C7', fg: '#78350F' },
+  published: { label: 'Published', bg: '#D1FAE5', fg: '#065F46' },
+};
+
+function initialsOf(name: string): string {
+  const parts = name.split(' ').filter(Boolean);
+  if (parts.length === 0) return '?';
+  return `${parts[0][0]}${parts.length > 1 ? parts[parts.length - 1][0] : ''}`.toUpperCase();
+}
+
+interface ReadinessCheck {
+  key: string;
+  label: string;
+  done: number;
+  total: number;
+}
+
+interface Readiness {
+  checks: ReadinessCheck[];
+  /** Mean of the checks' ratios, so adding a speaker can't tank the score the
+   * way a single done/total fraction over a growing denominator would. */
+  percent: number;
+  gaps: string[];
+}
+
+function isSpeakerComplete(speaker: DraftSpeaker): boolean {
+  return Boolean(speaker.memberId && speaker.title.trim() && speaker.evaluatorId);
+}
+
+function buildReadiness(meeting: Meeting, draft: MeetingDraft): Readiness {
+  const roles = buildRoles(meeting);
+  const unassigned = roles.filter((role) => !draft.roles[role.key]);
+  const themeParts = [draft.theme.trim() || meeting.theme, draft.word.word, draft.word.meaning];
+  const themeDone = themeParts.filter((part) => part.trim()).length;
+  const speakersComplete = draft.speakers.filter(isSpeakerComplete).length;
+
+  const checks: ReadinessCheck[] = [
+    {
+      key: 'roles',
+      label: 'Roles assigned',
+      done: roles.length - unassigned.length,
+      total: roles.length,
+    },
+    { key: 'theme', label: 'Theme & word of the day', done: themeDone, total: themeParts.length },
+    {
+      key: 'speakers',
+      label: 'Speakers booked',
+      done: Math.min(draft.speakers.length, TARGET_SPEAKERS),
+      total: TARGET_SPEAKERS,
+    },
+    {
+      key: 'details',
+      label: 'Speech details filled',
+      done: speakersComplete,
+      /* Never divide by zero — with no speakers this check simply reads 0/1. */
+      total: Math.max(draft.speakers.length, 1),
+    },
+  ];
+
+  const percent = Math.round(
+    (checks.reduce((sum, check) => sum + check.done / check.total, 0) / checks.length) * 100,
+  );
+
+  /* Ordered by how early in planning each gap normally gets closed, so the top
+   * of the list is always the next thing worth doing. */
+  const gaps: string[] = [];
+  if (!draft.word.word.trim()) gaps.push('Word of the day is not set');
+  else if (!draft.word.meaning.trim()) gaps.push('Word of the day has no meaning yet');
+  if (draft.speakers.length < TARGET_SPEAKERS) {
+    const missing = TARGET_SPEAKERS - draft.speakers.length;
+    gaps.push(`Book ${missing} more prepared speaker${missing > 1 ? 's' : ''}`);
+  }
+  draft.speakers.forEach((speaker, index) => {
+    if (!speaker.memberId) gaps.push(`Speech ${index + 1} has no speaker`);
+    if (!speaker.title.trim()) gaps.push(`Speech ${index + 1} has no title`);
+    if (!speaker.evaluatorId) gaps.push(`Speech ${index + 1} has no evaluator`);
+  });
+  for (const role of unassigned) gaps.push(`${role.label} is unassigned`);
+
+  return { checks, percent, gaps };
+}
+
+function Card({
+  title,
+  Icon,
+  trailing,
+  children,
+}: {
+  title: string;
+  Icon: React.ComponentType<{ size?: number; weight?: 'bold'; className?: string }>;
+  trailing?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border border-line bg-canvas p-4 sm:p-5">
+      <header className="mb-3 flex items-center gap-2">
+        <Icon size={14} weight="bold" className="text-ink-muted" />
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-muted">{title}</h3>
+        {trailing ? <div className="ml-auto">{trailing}</div> : null}
+      </header>
+      {children}
+    </section>
+  );
+}
+
+function CountPill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded-full bg-fill px-2.5 py-1 text-[11px] font-semibold text-ink-soft">
+      {children}
+    </span>
+  );
+}
+
+/** Headline card: which meeting this is, and the window it occupies. */
+function Hero({
+  meeting,
+  theme,
+  startsAt,
+  endsAt,
+  runtime,
+}: {
+  meeting: Meeting;
+  theme: string;
+  startsAt: Date;
+  endsAt: Date;
+  runtime: number;
+}) {
+  const status = STATUS_STYLES[meeting.status];
+
+  return (
+    <section className="overflow-hidden rounded-2xl bg-linear-to-br from-slate-800 via-slate-700 to-slate-900 px-5 py-5 text-white sm:px-6">
+      <div className="flex items-start justify-between gap-3">
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-300">
+          Meeting #{meeting.meetingNumber}
+        </span>
+        <span
+          className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+          style={{ backgroundColor: status.bg, color: status.fg }}
+        >
+          {status.label}
+        </span>
+      </div>
+
+      <h2 className="mt-2 text-2xl font-semibold leading-tight sm:text-3xl">{theme}</h2>
+
+      <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-200">
+        <span className="inline-flex items-center gap-1.5">
+          <CalendarBlank size={14} weight="bold" className="text-slate-400" />
+          <time dateTime={meeting.dateTime}>{DATE_FMT.format(startsAt)}</time>
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <Clock size={14} weight="bold" className="text-slate-400" />
+          {CLOCK_FMT.format(startsAt)} → {CLOCK_FMT.format(endsAt)}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <Hourglass size={14} weight="bold" className="text-slate-400" />
+          {runtime} min run time
+        </span>
+      </div>
+    </section>
+  );
+}
+
+/** Readiness meter plus the shortlist of what is still open. */
+function ReadinessCard({ readiness }: { readiness: Readiness }) {
+  const { checks, percent, gaps } = readiness;
+  const shown = gaps.slice(0, 5);
+
+  return (
+    <Card title="Meeting readiness" Icon={CheckCircle}>
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+        <div className="shrink-0 self-center">
+          <Progress
+            type="circle"
+            percent={percent}
+            size={96}
+            strokeColor={percent === 100 ? '#059669' : '#334155'}
+            trailColor="#f2f2f2"
+          />
+        </div>
+
+        <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+          {checks.map((check) => {
+            const ratio = Math.round((check.done / check.total) * 100);
+            return (
+              <div key={check.key}>
+                <div className="mb-1 flex items-baseline justify-between gap-2 text-xs">
+                  <span className="text-ink-soft">{check.label}</span>
+                  <span className="font-medium text-ink">
+                    {check.done}/{check.total}
+                  </span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-fill">
+                  <div
+                    className={`h-full rounded-full ${ratio === 100 ? 'bg-emerald-600' : 'bg-slate-700'}`}
+                    style={{ width: `${ratio}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-4 border-t border-line pt-3">
+        {gaps.length === 0 ? (
+          <p className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700">
+            <CheckCircle size={14} weight="fill" />
+            Everything is set — this agenda is ready to publish.
+          </p>
+        ) : (
+          <>
+            <p className="mb-2 inline-flex items-center gap-1.5 text-xs font-medium text-ink">
+              <Warning size={14} weight="bold" className="text-amber-600" />
+              Next up ({gaps.length} open)
+            </p>
+            <ul className="flex flex-col gap-1">
+              {shown.map((gap) => (
+                <li key={gap} className="flex items-start gap-2 text-xs text-ink-soft">
+                  <span aria-hidden className="mt-1.5 size-1 shrink-0 rounded-full bg-amber-500" />
+                  {gap}
+                </li>
+              ))}
+              {gaps.length > shown.length ? (
+                <li className="pl-3 text-xs text-ink-muted">
+                  +{gaps.length - shown.length} more to sort out
+                </li>
+              ) : null}
+            </ul>
+          </>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/** Every meeting role with the member holding it, unassigned ones called out. */
+function RolesCard({
+  meeting,
+  draft,
+  nameOf,
+}: {
+  meeting: Meeting;
+  draft: MeetingDraft;
+  nameOf: (memberId: string | undefined) => string;
+}) {
+  const roles = buildRoles(meeting);
+  const filled = roles.filter((role) => draft.roles[role.key]).length;
+
+  return (
+    <Card
+      title="Who's running it"
+      Icon={UsersThree}
+      trailing={
+        <CountPill>
+          {filled}/{roles.length}
+        </CountPill>
+      }
+    >
+      <ul className="flex flex-col gap-2">
+        {roles.map((role) => {
+          const name = nameOf(draft.roles[role.key]);
+          return (
+            <li key={role.key} className="flex items-center gap-2.5">
+              <span
+                aria-hidden
+                className={`flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
+                  name ? 'bg-slate-700 text-white' : 'bg-fill text-ink-muted'
+                }`}
+              >
+                {name ? initialsOf(name) : '—'}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-xs text-ink-soft">{role.label}</span>
+              <span
+                className={`shrink-0 text-xs ${name ? 'font-medium text-ink' : 'text-ink-muted'}`}
+              >
+                {name || 'Unassigned'}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
+  );
+}
+
+/** The prepared-speech slate, with the pathway context each speech carries. */
+function SpeakersCard({
+  draft,
+  nameOf,
+}: {
+  draft: MeetingDraft;
+  nameOf: (memberId: string | undefined) => string;
+}) {
+  return (
+    <Card
+      title="Speech lineup"
+      Icon={MicrophoneStage}
+      trailing={<CountPill>{draft.speakers.length} booked</CountPill>}
+    >
+      {draft.speakers.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-line-strong px-4 py-6 text-center text-xs text-ink-muted">
+          No prepared speakers yet — add them on the Prepared Speakers tab and they will appear here
+          and on the agenda.
+        </p>
+      ) : (
+        <ol className="flex flex-col gap-2.5">
+          {draft.speakers.map((speaker, index) => {
+            const speakerName = nameOf(speaker.memberId);
+            const evaluator = nameOf(speaker.evaluatorId);
+            const context = [speaker.pathway, speaker.project].filter(Boolean).join(' · ');
+
+            return (
+              <li key={speaker.id} className="rounded-xl border border-line bg-sidebar p-3">
+                <div className="flex items-start gap-2.5">
+                  <span
+                    aria-hidden
+                    className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-fill text-[11px] font-semibold text-ink-soft"
+                  >
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-ink">
+                      {speaker.title.trim() || 'Untitled speech'}
+                    </p>
+                    <p className="mt-0.5 truncate text-xs text-ink-soft">
+                      {speakerName || 'Speaker to be confirmed'}
+                      {evaluator ? ` · evaluated by ${evaluator}` : ''}
+                    </p>
+                    {context ? (
+                      <p className="mt-0.5 truncate text-[11px] text-ink-muted">{context}</p>
+                    ) : null}
+                  </div>
+                  {speaker.duration ? (
+                    <span className="shrink-0 text-xs font-medium text-ink-soft">
+                      {speaker.duration} min
+                    </span>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </Card>
+  );
+}
+
+/** The grammarian's word, laid out the way it is read to the room. */
+function WordCard({ draft }: { draft: MeetingDraft }) {
+  const { word } = draft;
+
+  if (!word.word.trim()) {
+    return (
+      <Card title="Word of the day" Icon={TextAa}>
+        <p className="rounded-xl border border-dashed border-line-strong px-4 py-6 text-center text-xs text-ink-muted">
+          Not set yet — the Theme tab feeds this card and the agenda sheet.
+        </p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card title="Word of the day" Icon={TextAa}>
+      <p className="text-2xl font-semibold text-ink">{word.word}</p>
+      {word.partOfSpeech ? (
+        <p className="mt-0.5 text-xs italic text-ink-muted">({word.partOfSpeech})</p>
+      ) : null}
+      {word.meaning ? <p className="mt-3 text-sm text-ink-soft">{word.meaning}</p> : null}
+      {word.example ? (
+        <p className="mt-3 flex gap-2 border-t border-line pt-3 text-xs italic text-ink-soft">
+          <Quotes size={14} weight="fill" className="mt-0.5 shrink-0 text-ink-muted" />
+          {word.example}
+        </p>
+      ) : null}
+    </Card>
+  );
+}
+
+interface AtAGlanceProps {
+  meeting: Meeting;
+}
+
+/**
+ * The meeting's control panel: what it is, how close it is to being ready, who
+ * is holding each role, what is being spoken, and the word of the day. Every
+ * number here is derived from the same meeting draft the Agenda sheet prints,
+ * so the two can never disagree.
+ */
+export function AtAGlance({ meeting }: AtAGlanceProps) {
+  const draft = useAppSelector((state) => selectMeetingDraft(state, meeting.id));
+  const nameOf = useNameOf();
+
+  /* Reuses the agenda builder rather than re-deriving timings: the run-of-show
+   * is the only thing that knows how long the meeting actually takes. */
+  const { startsAt, endsAt, runtime } = useMemo(() => {
+    const rows = buildAgenda(meeting, draft, nameOf);
+    const start = new Date(meeting.dateTime);
+    const end = rows[rows.length - 1].startsAt;
+    return {
+      startsAt: start,
+      endsAt: end,
+      runtime: Math.round((end.getTime() - start.getTime()) / 60_000),
+    };
+  }, [meeting, draft, nameOf]);
+
+  const readiness = useMemo(() => buildReadiness(meeting, draft), [meeting, draft]);
+
+  return (
+    <div className="mx-auto flex max-w-5xl flex-col gap-4">
+      <Hero
+        meeting={meeting}
+        theme={draft.theme.trim() || meeting.theme}
+        startsAt={startsAt}
+        endsAt={endsAt}
+        runtime={runtime}
+      />
+
+      <ReadinessCard readiness={readiness} />
+
+      {/* Roles is the tallest card, so it takes the left column and the two
+       * shorter cards stack beside it on wide screens. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <RolesCard meeting={meeting} draft={draft} nameOf={nameOf} />
+        <div className="flex flex-col gap-4">
+          <SpeakersCard draft={draft} nameOf={nameOf} />
+          <WordCard draft={draft} />
+        </div>
+      </div>
+    </div>
+  );
+}

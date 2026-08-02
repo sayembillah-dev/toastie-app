@@ -1,6 +1,7 @@
 import { configureStore } from '@reduxjs/toolkit';
 
 import { toastlyApi } from './api';
+import { meetingDraftSlice } from './meeting-draft-slice';
 import { uiSlice } from './ui-slice';
 
 /**
@@ -13,6 +14,7 @@ export function makeStore() {
     reducer: {
       [toastlyApi.reducerPath]: toastlyApi.reducer,
       [uiSlice.reducerPath]: uiSlice.reducer,
+      [meetingDraftSlice.reducerPath]: meetingDraftSlice.reducer,
     },
     middleware: (getDefaultMiddleware) => getDefaultMiddleware().concat(toastlyApi.middleware),
   });

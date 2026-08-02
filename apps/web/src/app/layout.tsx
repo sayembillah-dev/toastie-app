@@ -4,6 +4,7 @@ import { AntdProvider } from '@/components/antd-provider';
 import { StoreProvider } from '@/components/store-provider';
 
 import './globals.css';
+import './print.css';
 
 export const metadata: Metadata = {
   title: 'Toastly',

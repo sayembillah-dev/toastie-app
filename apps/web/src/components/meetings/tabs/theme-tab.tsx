@@ -3,6 +3,10 @@
 import { BookOpen, ChatCircleText, Palette, Quotes, TextAa } from '@phosphor-icons/react/dist/ssr';
 import { Input, Select } from 'antd';
 
+import type { Meeting } from '@/lib/meetings/meetings';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { selectMeetingDraft, themeChanged, wordChanged } from '@/store/meeting-draft-slice';
+
 /* The classic English parts of speech. Ordered roughly by usage frequency so
  * the top options in the dropdown match what a Grammarian is most likely to
  * pick. */
@@ -45,10 +49,18 @@ function Field({ id, label, helper, Icon, children }: FieldProps) {
   );
 }
 
+interface ThemeTabProps {
+  meeting: Meeting;
+}
+
 /** Theme tab body — the meeting's theme, word of the day, and grammarian's
- * word-of-the-day breakdown. Inputs are uncontrolled for now; wiring to a
- * real store lands with the rest of the meeting-detail data layer. */
-export function ThemeTab() {
+ * word-of-the-day breakdown. Everything here feeds the meeting draft, which is
+ * what the Overview → Agenda sheet prints from. */
+export function ThemeTab({ meeting }: ThemeTabProps) {
+  const dispatch = useAppDispatch();
+  const draft = useAppSelector((state) => selectMeetingDraft(state, meeting.id));
+  const { word } = draft;
+
   return (
     <section className="mx-auto max-w-2xl rounded-2xl border border-line bg-canvas p-5 sm:p-6">
       <div className="mb-5">
@@ -64,7 +76,13 @@ export function ThemeTab() {
           <Input
             id="theme-of-the-day"
             size="large"
-            placeholder="e.g. Bridges & Breakthroughs"
+            /* The seeded theme is the placeholder rather than the value — the
+             * agenda falls back to it until someone types a replacement. */
+            placeholder={meeting.theme}
+            value={draft.theme}
+            onChange={(event) =>
+              dispatch(themeChanged({ meetingId: meeting.id, theme: event.target.value }))
+            }
             maxLength={80}
             showCount
           />
@@ -75,7 +93,18 @@ export function ThemeTab() {
          * the word rather than beneath it. */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto]">
           <Field id="word-of-the-day" label="Word of the day" Icon={TextAa}>
-            <Input id="word-of-the-day" size="large" placeholder="e.g. Ephemeral" maxLength={40} />
+            <Input
+              id="word-of-the-day"
+              size="large"
+              placeholder="e.g. Ephemeral"
+              value={word.word}
+              onChange={(event) =>
+                dispatch(
+                  wordChanged({ meetingId: meeting.id, patch: { word: event.target.value } }),
+                )
+              }
+              maxLength={40}
+            />
           </Field>
 
           <Field id="part-of-speech" label="Part of speech" Icon={BookOpen}>
@@ -85,6 +114,10 @@ export function ThemeTab() {
               className="w-full sm:w-44"
               placeholder="Select"
               options={PARTS_OF_SPEECH.map((part) => ({ value: part, label: part }))}
+              value={word.partOfSpeech}
+              onChange={(value) =>
+                dispatch(wordChanged({ meetingId: meeting.id, patch: { partOfSpeech: value } }))
+              }
               allowClear
             />
           </Field>
@@ -100,6 +133,12 @@ export function ThemeTab() {
             id="word-meaning"
             size="large"
             placeholder="A concise definition of the word."
+            value={word.meaning}
+            onChange={(event) =>
+              dispatch(
+                wordChanged({ meetingId: meeting.id, patch: { meaning: event.target.value } }),
+              )
+            }
             autoSize={{ minRows: 2, maxRows: 4 }}
             maxLength={240}
             showCount
@@ -116,6 +155,12 @@ export function ThemeTab() {
             id="word-example"
             size="large"
             placeholder="Show the word in context."
+            value={word.example}
+            onChange={(event) =>
+              dispatch(
+                wordChanged({ meetingId: meeting.id, patch: { example: event.target.value } }),
+              )
+            }
             autoSize={{ minRows: 2, maxRows: 4 }}
             maxLength={240}
             showCount

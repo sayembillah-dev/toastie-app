@@ -18,6 +18,7 @@ import { AppShell } from '@/components/app-shell';
 import { AhCounterTab } from '@/components/meetings/tabs/ah-counter-tab';
 import { AttendanceTab } from '@/components/meetings/tabs/attendance-tab';
 import { GrammarianTab } from '@/components/meetings/tabs/grammarian-tab';
+import { OverviewTab } from '@/components/meetings/tabs/overview-tab';
 import { PreparedSpeakersTab } from '@/components/meetings/tabs/prepared-speakers-tab';
 import { RolesTab } from '@/components/meetings/tabs/roles-tab';
 import { TableTopicsTab } from '@/components/meetings/tabs/table-topics-tab';
@@ -25,17 +26,6 @@ import { ThemeTab } from '@/components/meetings/tabs/theme-tab';
 import { TimerTab } from '@/components/meetings/tabs/timer-tab';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { getMeetingById } from '@/lib/meetings/meetings';
-
-/** Placeholder body for tabs that haven't been built out yet. Swapped for the
- * real section as each one lands. */
-function TabPlaceholder({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="rounded-xl border border-dashed border-line-strong px-6 py-16 text-center">
-      <p className="text-sm font-medium text-ink">{title}</p>
-      <p className="mx-auto mt-1 max-w-md text-xs text-ink-muted">{body}</p>
-    </div>
-  );
-}
 
 interface TabDef {
   key: string;
@@ -54,18 +44,13 @@ function buildTabs(meeting: Meeting): TabDef[] {
       key: 'overview',
       label: 'Overview',
       Icon: Info,
-      content: (
-        <TabPlaceholder
-          title="Overview"
-          body="High-level snapshot of the meeting will live here."
-        />
-      ),
+      content: <OverviewTab meeting={meeting} />,
     },
     {
       key: 'theme',
       label: 'Theme',
       Icon: Palette,
-      content: <ThemeTab />,
+      content: <ThemeTab meeting={meeting} />,
     },
     {
       key: 'roles',
@@ -77,7 +62,7 @@ function buildTabs(meeting: Meeting): TabDef[] {
       key: 'prepared-speakers',
       label: 'Prepared Speakers',
       Icon: MicrophoneStage,
-      content: <PreparedSpeakersTab />,
+      content: <PreparedSpeakersTab meeting={meeting} />,
     },
     {
       key: 'table-topics',
