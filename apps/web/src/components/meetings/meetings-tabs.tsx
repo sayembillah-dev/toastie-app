@@ -1,7 +1,12 @@
 'use client';
 
-import { CalendarCheck, CalendarDots, ClockCounterClockwise } from '@phosphor-icons/react/dist/ssr';
-import { Tabs } from 'antd';
+import {
+  CalendarCheck,
+  CalendarDots,
+  ClockCounterClockwise,
+  Plus,
+} from '@phosphor-icons/react/dist/ssr';
+import { Button, Tabs } from 'antd';
 import { useMemo, useSyncExternalStore } from 'react';
 
 import { MeetingCard } from '@/components/meetings/meeting-card';
@@ -163,14 +168,37 @@ export function MeetingsTabs() {
   const { past, current, upcoming } = partitioned;
   const isReady = now !== null;
 
+  /* Placeholder — the user will wire this to whatever opens the create flow
+   * (modal, side sheet, or dedicated route). Kept in one spot so the header
+   * button and the mobile FAB always fire the same action. */
+  function handleCreateMeeting() {
+    // TODO: hook up to the create-meeting flow.
+  }
+
   return (
     <div className="mx-auto max-w-7xl">
-      <header className="mb-4">
-        <h1 className="text-2xl font-semibold text-ink">Meetings</h1>
-        <p className="mt-1 text-sm text-ink-soft">
-          Every meeting on one timeline — see what&apos;s next, what&apos;s scheduled, and what the
-          club has already shipped.
-        </p>
+      <header className="mb-4 flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold text-ink">Meetings</h1>
+          <p className="mt-1 text-sm text-ink-soft">
+            Every meeting on one timeline — see what&apos;s next, what&apos;s scheduled, and what
+            the club has already shipped.
+          </p>
+        </div>
+        {/* Hidden on phones — the FAB below takes over so the primary action
+         * stays reachable without stealing the header row's tight space.
+         * Wrapper carries the breakpoint because antd's Button CSS is
+         * unlayered and would beat Tailwind's `hidden`. */}
+        <span className="hidden shrink-0 sm:inline-flex">
+          <Button
+            type="primary"
+            size="middle"
+            onClick={handleCreateMeeting}
+            icon={<Plus size={16} weight="bold" />}
+          >
+            New meeting
+          </Button>
+        </span>
       </header>
 
       <Tabs
@@ -227,6 +255,28 @@ export function MeetingsTabs() {
           },
         ]}
       />
+
+      {/* Mobile-only FAB. The wrapper carries both the viewport-fixed position
+       * and the breakpoint gate — antd's Button CSS is unlayered and would
+       * beat Tailwind's `hidden`, and putting `fixed` on the wrapper keeps the
+       * button unambiguously anchored to the viewport corner rather than any
+       * scrolling ancestor. `env(safe-area-inset-*)` clears the iOS home bar. */}
+      <div
+        className="fixed z-40 sm:hidden"
+        style={{
+          right: 'calc(1rem + env(safe-area-inset-right))',
+          bottom: 'calc(1rem + env(safe-area-inset-bottom))',
+        }}
+      >
+        <Button
+          type="primary"
+          shape="circle"
+          onClick={handleCreateMeeting}
+          aria-label="Create new meeting"
+          icon={<Plus size={22} weight="bold" />}
+          className="!size-14 shadow-lg"
+        />
+      </div>
     </div>
   );
 }
