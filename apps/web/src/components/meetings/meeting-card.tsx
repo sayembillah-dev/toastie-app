@@ -1,4 +1,5 @@
 import { CalendarBlank, Circle, Clock, PenNib } from '@phosphor-icons/react/dist/ssr';
+import Link from 'next/link';
 
 import type { Meeting, MeetingStatus } from '@/lib/meetings/meetings';
 
@@ -68,8 +69,10 @@ export function MeetingCard({ meeting, variant = 'default' }: MeetingCardProps) 
   const isFeatured = variant === 'featured';
 
   return (
-    <article
-      className={`group relative flex flex-col overflow-hidden rounded-2xl border border-line bg-canvas transition-all duration-200 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-sm ${
+    <Link
+      href={`/meetings/${meeting.id}`}
+      aria-label={`Meeting #${meeting.meetingNumber} — ${meeting.theme}`}
+      className={`group relative flex flex-col overflow-hidden rounded-2xl border border-line bg-canvas text-left no-underline transition-all duration-200 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas ${
         isFeatured ? 'shadow-sm' : ''
       }`}
     >
@@ -128,6 +131,6 @@ export function MeetingCard({ meeting, variant = 'default' }: MeetingCardProps) 
           </span>
         </div>
       </div>
-    </article>
+    </Link>
   );
 }
