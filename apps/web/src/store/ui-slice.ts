@@ -9,6 +9,10 @@ import { createSlice } from '@reduxjs/toolkit';
  */
 export interface UiState {
   sidebarCollapsed: boolean;
+  /** Whether the mobile nav drawer is open. Separate from `sidebarCollapsed`:
+   * below the `md` breakpoint the sider is hidden outright and the same nav is
+   * served from a drawer, so the two never describe the same widget. */
+  mobileNavOpen: boolean;
   /** Filter text for the members directory. Lives here so a future saved-view or
    * command-palette can drive the same grid. */
   memberSearchQuery: string;
@@ -16,6 +20,7 @@ export interface UiState {
 
 const initialState: UiState = {
   sidebarCollapsed: false,
+  mobileNavOpen: false,
   memberSearchQuery: '',
 };
 
@@ -29,15 +34,29 @@ export const uiSlice = createSlice({
     sidebarCollapsedSet(state, action: PayloadAction<boolean>) {
       state.sidebarCollapsed = action.payload;
     },
+    mobileNavOpened(state) {
+      state.mobileNavOpen = true;
+    },
+    mobileNavClosed(state) {
+      state.mobileNavOpen = false;
+    },
     memberSearchQueryChanged(state, action: PayloadAction<string>) {
       state.memberSearchQuery = action.payload;
     },
   },
   selectors: {
     selectSidebarCollapsed: (state) => state.sidebarCollapsed,
+    selectMobileNavOpen: (state) => state.mobileNavOpen,
     selectMemberSearchQuery: (state) => state.memberSearchQuery,
   },
 });
 
-export const { sidebarToggled, sidebarCollapsedSet, memberSearchQueryChanged } = uiSlice.actions;
-export const { selectSidebarCollapsed, selectMemberSearchQuery } = uiSlice.selectors;
+export const {
+  sidebarToggled,
+  sidebarCollapsedSet,
+  mobileNavOpened,
+  mobileNavClosed,
+  memberSearchQueryChanged,
+} = uiSlice.actions;
+export const { selectSidebarCollapsed, selectMobileNavOpen, selectMemberSearchQuery } =
+  uiSlice.selectors;
