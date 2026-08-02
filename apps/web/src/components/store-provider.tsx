@@ -22,7 +22,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
      * `event.key` is null when a tab calls `localStorage.clear()`. */
     const handleStorage = (event: StorageEvent) => {
       if (event.key !== null && !DB_KEY_LIST.includes(event.key)) return;
-      store.dispatch(toastlyApi.util.invalidateTags(['Member', 'History']));
+      store.dispatch(toastlyApi.util.invalidateTags(['Member', 'History', 'Meeting']));
     };
 
     window.addEventListener('storage', handleStorage);

@@ -3,6 +3,7 @@ import { createSlice, nanoid } from '@reduxjs/toolkit';
 
 import type { DraftSpeaker, MeetingDraft, WordOfTheDay } from '@/lib/meetings/draft';
 import { EMPTY_DRAFT } from '@/lib/meetings/draft';
+import type { MeetingSeed } from '@/lib/meetings/from-planner';
 
 /**
  * Working state for the meeting detail screen. Every tab writes here instead of
@@ -40,6 +41,34 @@ export const meetingDraftSlice = createSlice({
   name: 'meetingDraft',
   initialState,
   reducers: {
+    /** Fills a brand-new meeting's draft from the planner row it was created
+     * from. An outright replace rather than a merge: the only caller is the
+     * create flow, and the meeting cannot have been edited yet. */
+    draftSeeded: {
+      reducer(state, action: PayloadAction<MeetingScoped & { draft: MeetingDraft }>) {
+        state.byMeetingId[action.payload.meetingId] = action.payload.draft;
+      },
+      /* Speaker ids are minted here so the reducer stays pure and replayable —
+       * the same split `speakerAdded` uses. */
+      prepare(meetingId: string, seed: MeetingSeed) {
+        const draft: MeetingDraft = {
+          ...structuredClone(EMPTY_DRAFT),
+          roles: { ...seed.roles },
+          speakers: seed.speakers.map((speaker) => ({
+            id: nanoid(),
+            status: 'requested' as const,
+            title: '',
+            memberId: speaker.memberId,
+            evaluatorId: speaker.evaluatorId,
+            /* Carried over rather than typed here, so the cards start clean and
+             * collapsed — the titles are what still need chasing. */
+            dirty: false,
+            expanded: false,
+          })),
+        };
+        return { payload: { meetingId, draft } };
+      },
+    },
     themeChanged(state, action: PayloadAction<MeetingScoped & { theme: string }>) {
       ensureDraft(state, action.payload.meetingId).theme = action.payload.theme;
     },
@@ -106,6 +135,7 @@ export const meetingDraftSlice = createSlice({
 });
 
 export const {
+  draftSeeded,
   themeChanged,
   wordChanged,
   roleAssigned,

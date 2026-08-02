@@ -3,12 +3,16 @@ import { computeMemberStats, sortEvents } from '@/lib/education/history';
 import type { Member, StartPathwayInput } from '@/lib/education/members';
 import { PATHWAYS } from '@/lib/education/members';
 import { findProject } from '@/lib/education/pathways';
+import type { CreateMeetingInput, Meeting, UpdateMeetingInput } from '@/lib/meetings/meetings';
+import { MEETING_STATUSES } from '@/lib/meetings/meetings';
 
 import {
   readExtrasFor,
   readHistoryEvents,
+  readMeetings,
   readMembers,
   writeHistoryEvents,
+  writeMeetings,
   writeMembers,
 } from './db';
 
@@ -89,6 +93,52 @@ function parseStartPathwayBody(body: unknown): StartPathwayInput {
   return { pathway, project: definition.name, level: definition.level };
 }
 
+/** The create-meeting equivalent of the ValidationPipe above. The 409 on a
+ * duplicate number is the one rule the form cannot enforce on its own — two
+ * tabs open on the roster would both offer the same "next" number. */
+function parseCreateMeetingBody(body: unknown): CreateMeetingInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected a create-meeting body');
+  }
+
+  const { meetingNumber, dateTime, theme } = body as Partial<CreateMeetingInput>;
+
+  if (typeof meetingNumber !== 'number' || !Number.isInteger(meetingNumber) || meetingNumber < 1) {
+    throw new LocalApiError(400, 'The meeting number must be a whole number above zero');
+  }
+  if (readMeetings().some((meeting) => meeting.meetingNumber === meetingNumber)) {
+    throw new LocalApiError(409, `Meeting #${meetingNumber} already exists`);
+  }
+  if (typeof dateTime !== 'string' || Number.isNaN(new Date(dateTime).getTime())) {
+    throw new LocalApiError(400, 'A valid meeting date and time is required');
+  }
+  if (typeof theme !== 'string' || theme.trim() === '') {
+    throw new LocalApiError(400, 'A theme is required');
+  }
+
+  return { meetingNumber, dateTime, theme: theme.trim() };
+}
+
+/** Validates a Save as Draft / Publish commit. `theme` is optional because the
+ * meeting page only sends it once the Theme tab has been filled in — an absent
+ * field leaves the stored theme alone rather than blanking it. */
+function parseUpdateMeetingBody(body: unknown): UpdateMeetingInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected an update-meeting body');
+  }
+
+  const { status, theme } = body as Partial<UpdateMeetingInput>;
+
+  if (!status || !MEETING_STATUSES.includes(status)) {
+    throw new LocalApiError(400, `"${String(status)}" is not a meeting status`);
+  }
+  if (theme !== undefined && (typeof theme !== 'string' || theme.trim() === '')) {
+    throw new LocalApiError(400, 'A theme cannot be blank');
+  }
+
+  return theme === undefined ? { status } : { status, theme: theme.trim() };
+}
+
 /* ---------------------------------------------------------------- routes -- */
 
 function listMembers(): Member[] {
@@ -142,6 +192,40 @@ function startPathway({ params, body }: RouteContext): Member {
   return updated;
 }
 
+function listMeetings(): Meeting[] {
+  return readMeetings();
+}
+
+function getMeeting({ params }: RouteContext): Meeting {
+  const meeting = readMeetings().find((entry) => entry.id === params.meetingId);
+  if (!meeting) throw new LocalApiError(404, `No meeting with id "${params.meetingId}"`);
+  return meeting;
+}
+
+/** Ids are minted here rather than in the form so they stay the server's
+ * business — the same call the Nest controller will make. */
+function createMeetingId(): string {
+  return `mtg-${Date.now().toString(36)}`;
+}
+
+/** A new meeting is always a draft: the roster slot exists, but nothing about
+ * the run of show does yet. Publishing is a separate call from its own page. */
+function createMeeting({ body }: RouteContext): Meeting {
+  const input = parseCreateMeetingBody(body);
+  const meeting: Meeting = { id: createMeetingId(), ...input, status: 'draft' };
+  writeMeetings([...readMeetings(), meeting]);
+  return meeting;
+}
+
+/** Save as Draft and Publish are the same write with a different `status` —
+ * the split lives in the meeting page's two buttons, not in two routes. */
+function updateMeeting({ params, body }: RouteContext): Meeting {
+  const existing = getMeeting({ params, body });
+  const updated: Meeting = { ...existing, ...parseUpdateMeetingBody(body) };
+  writeMeetings(readMeetings().map((entry) => (entry.id === existing.id ? updated : entry)));
+  return updated;
+}
+
 interface Route {
   method: HttpMethod;
   /** Path split on `/`; a `:name` segment captures into `params`. */
@@ -159,6 +243,10 @@ const ROUTES: Route[] = [
   route('GET', '/members/:memberId/history', getMemberHistory),
   route('GET', '/members/:memberId/stats', getMemberStats),
   route('POST', '/members/:memberId/pathway', startPathway),
+  route('GET', '/meetings', listMeetings),
+  route('GET', '/meetings/:meetingId', getMeeting),
+  route('POST', '/meetings', createMeeting),
+  route('PATCH', '/meetings/:meetingId', updateMeeting),
 ];
 
 function toSegments(path: string): string[] {

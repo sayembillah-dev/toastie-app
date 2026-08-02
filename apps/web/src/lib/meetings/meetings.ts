@@ -123,10 +123,32 @@ export const SEED_MEETINGS: Meeting[] = [
   },
 ];
 
-/** Resolve a meeting by its id. Returns `null` when the id is unknown so the
- * detail route can render its own 404. */
-export function getMeetingById(id: string): Meeting | null {
-  return SEED_MEETINGS.find((meeting) => meeting.id === id) ?? null;
+/** Everything the create form collects. The id is minted by the API, not the
+ * client, so it is deliberately absent here — and so is `status`: a meeting is
+ * born a draft and only leaves that state from the Publish action on its own
+ * page. */
+export interface CreateMeetingInput {
+  meetingNumber: number;
+  dateTime: string;
+  theme: string;
+}
+
+/** What the meeting page's Save as Draft / Publish buttons commit: the status
+ * they set, plus the fields the working draft owns on the meeting record. */
+export interface UpdateMeetingInput {
+  status: MeetingStatus;
+  theme?: string;
+}
+
+/** The club meets in the evening, so the create form starts here and lets the
+ * user override rather than making them type the same time every week. */
+export const DEFAULT_START_TIME = '19:00';
+
+/** One past the highest number on the roster — what the create form pre-fills.
+ * Derived rather than stored so a deleted meeting never leaves a gap that the
+ * next create silently reuses. */
+export function nextMeetingNumber(meetings: Meeting[]): number {
+  return meetings.reduce((highest, meeting) => Math.max(highest, meeting.meetingNumber), 0) + 1;
 }
 
 /** Split a roster into past / current-next / upcoming buckets. `now` is passed

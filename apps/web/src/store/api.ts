@@ -2,6 +2,7 @@ import { createApi } from '@reduxjs/toolkit/query/react';
 
 import type { HistoryEvent, MemberStats } from '@/lib/education/history';
 import type { Member, StartPathwayInput } from '@/lib/education/members';
+import type { CreateMeetingInput, Meeting, UpdateMeetingInput } from '@/lib/meetings/meetings';
 
 import { localBaseQuery } from './local-base-query';
 
@@ -13,7 +14,7 @@ import { localBaseQuery } from './local-base-query';
 export const toastlyApi = createApi({
   reducerPath: 'toastlyApi',
   baseQuery: localBaseQuery,
-  tagTypes: ['Member', 'History'],
+  tagTypes: ['Member', 'History', 'Meeting'],
   endpoints: (build) => ({
     getMembers: build.query<Member[], void>({
       query: () => ({ url: '/members', method: 'GET' }),
@@ -56,6 +57,41 @@ export const toastlyApi = createApi({
         { type: 'History', id: memberId },
       ],
     }),
+
+    getMeetings: build.query<Meeting[], void>({
+      query: () => ({ url: '/meetings', method: 'GET' }),
+      providesTags: (meetings) => [
+        { type: 'Meeting', id: 'LIST' },
+        ...(meetings ?? []).map((meeting) => ({ type: 'Meeting' as const, id: meeting.id })),
+      ],
+    }),
+
+    getMeeting: build.query<Meeting, string>({
+      query: (meetingId) => ({ url: `/meetings/${meetingId}`, method: 'GET' }),
+      providesTags: (_meeting, _error, meetingId) => [{ type: 'Meeting', id: meetingId }],
+    }),
+
+    /* Only the roster changes — a brand-new meeting has no detail cache entry
+     * to invalidate, and the response seeds one on the way to its page. */
+    createMeeting: build.mutation<Meeting, CreateMeetingInput>({
+      query: (body) => ({ url: '/meetings', method: 'POST', body }),
+      invalidatesTags: [{ type: 'Meeting', id: 'LIST' }],
+    }),
+
+    /* Backs both Save as Draft and Publish. The roster card carries the status
+     * badge and the theme, so the list entry has to refresh alongside the
+     * meeting's own cache entry. */
+    updateMeeting: build.mutation<Meeting, { meetingId: string } & UpdateMeetingInput>({
+      query: ({ meetingId, ...body }) => ({
+        url: `/meetings/${meetingId}`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: (_meeting, _error, { meetingId }) => [
+        { type: 'Meeting', id: meetingId },
+        { type: 'Meeting', id: 'LIST' },
+      ],
+    }),
   }),
 });
 
@@ -65,4 +101,8 @@ export const {
   useGetMemberHistoryQuery,
   useGetMemberStatsQuery,
   useStartPathwayMutation,
+  useGetMeetingsQuery,
+  useGetMeetingQuery,
+  useCreateMeetingMutation,
+  useUpdateMeetingMutation,
 } = toastlyApi;
