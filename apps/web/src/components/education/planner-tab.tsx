@@ -1,8 +1,13 @@
 'use client';
 
-import { DotsThreeOutline, Plus, WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import {
+  CalendarBlank,
+  DotsThreeOutline,
+  Plus,
+  WarningCircle,
+} from '@phosphor-icons/react/dist/ssr';
 import { Button, Input } from 'antd';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 
 import { AssigneeSelect } from '@/components/education/assignee-select';
 import type { Assignee, PlannerRow } from '@/lib/education/planner';
@@ -61,33 +66,8 @@ const GROUPED_ASSIGNEE_COLUMNS: AssigneeCol[] = [
 
 const ALL_ASSIGNEE_COLUMNS: AssigneeCol[] = [TMOD_COLUMN, ...GROUPED_ASSIGNEE_COLUMNS];
 
-const GROUP_HEADERS: Array<{ label: string; colSpan: number; tint: Tint }> = [
-  { label: 'Table Topics', colSpan: 2, tint: 'amber' },
-  { label: 'Prepared 1', colSpan: 2, tint: 'blue' },
-  { label: 'Prepared 2', colSpan: 2, tint: 'violet' },
-  { label: 'Prepared 3', colSpan: 2, tint: 'teal' },
-  { label: 'Roles', colSpan: 4, tint: 'slate' },
-];
-
 /* Tailwind can't read dynamic class names, so every colour used gets a literal
  * class string here — the tree-shaker keeps them in the CSS. */
-function headerGroupClass(tint: Tint): string {
-  switch (tint) {
-    case 'amber':
-      return 'bg-amber-50 text-amber-800 border-t-2 border-t-amber-300';
-    case 'blue':
-      return 'bg-blue-50 text-blue-800 border-t-2 border-t-blue-300';
-    case 'violet':
-      return 'bg-violet-50 text-violet-800 border-t-2 border-t-violet-300';
-    case 'teal':
-      return 'bg-teal-50 text-teal-800 border-t-2 border-t-teal-300';
-    case 'slate':
-      return 'bg-slate-50 text-slate-700 border-t-2 border-t-slate-300';
-    default:
-      return 'bg-sidebar text-ink';
-  }
-}
-
 function subHeaderGroupClass(tint: Tint): string {
   switch (tint) {
     case 'amber':
@@ -111,6 +91,27 @@ function subHeaderGroupClass(tint: Tint): string {
  * start assigning without clicking Add first. Rows are ephemeral until the
  * back-end lands; wiring will move to RTK Query later.
  * -------------------------------------------------------------------------- */
+
+/* -----------------------------------------------------------------------------
+ * Month grouping
+ * A divider row is inserted whenever a row's month differs from the previous
+ * row's — rows with no date don't trigger a divider and just flow inline.
+ * -------------------------------------------------------------------------- */
+
+function monthKey(dateTime: string | null): string | null {
+  // datetime-local strings are "YYYY-MM-DDTHH:mm" — the first 7 chars are the
+  // month key we compare against neighbours.
+  return dateTime ? dateTime.slice(0, 7) : null;
+}
+
+const MONTH_LABEL_FMT = new Intl.DateTimeFormat(undefined, {
+  month: 'long',
+  year: 'numeric',
+});
+
+function monthLabel(dateTime: string): string {
+  return MONTH_LABEL_FMT.format(new Date(dateTime));
+}
 
 function seedRows(): PlannerRow[] {
   const rid = () =>
@@ -162,16 +163,14 @@ export function PlannerTab() {
     );
   }
 
-  /* Sticky-left offsets are hard-coded to the widths of columns 1 and 2 —
-   * change the min-width here and update the `left-[…]` below in lockstep. */
   const MEETING_MIN_W = 64;
-  const DATE_MIN_W = 170;
+  const DATE_MIN_W = 140;
 
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-ink-soft">
-        Draft the meeting agenda — assign members, invite guests, and note the theme. Meeting number
-        and date stay pinned on the left as you scroll through the roles.
+        Draft the meeting agenda — assign members, invite guests, and note the theme. The meeting
+        number stays pinned on the left as you scroll through the roles.
       </p>
 
       <div className="rounded-2xl border border-line bg-canvas shadow-sm">
@@ -182,41 +181,37 @@ export function PlannerTab() {
             <thead>
               <tr>
                 <th
-                  rowSpan={2}
                   scope="col"
-                  className="sticky left-0 top-0 z-40 h-9 border-b border-r border-line bg-sidebar px-3 text-left align-middle text-xs font-medium text-ink"
+                  className="sticky left-0 top-0 z-40 h-9 border-b border-r border-line-strong bg-sidebar px-3 text-left align-middle text-xs font-medium text-ink"
                   style={{ minWidth: MEETING_MIN_W }}
                 >
                   Meeting No.
                 </th>
                 <th
-                  rowSpan={2}
                   scope="col"
-                  className="sticky top-0 z-40 h-9 border-b border-r border-line-strong bg-sidebar px-3 text-left align-middle text-xs font-medium text-ink"
-                  style={{ left: MEETING_MIN_W, minWidth: DATE_MIN_W }}
+                  className="sticky top-0 z-30 h-9 border-b border-line bg-sidebar px-3 text-left align-middle text-xs font-medium text-ink"
+                  style={{ minWidth: DATE_MIN_W }}
                 >
                   Date &amp; Time
                 </th>
                 <th
-                  rowSpan={2}
                   scope="col"
                   className="sticky top-0 z-30 h-9 border-b border-line bg-sidebar px-3 text-left align-middle text-xs font-medium text-ink"
                   style={{ minWidth: TMOD_COLUMN.minWidth }}
                 >
                   TMOD
                 </th>
-                {GROUP_HEADERS.map((group) => (
+                {GROUPED_ASSIGNEE_COLUMNS.map((col) => (
                   <th
-                    key={group.label}
-                    colSpan={group.colSpan}
-                    scope="colgroup"
-                    className={`sticky top-0 z-30 h-9 border-b border-line px-3 text-left align-middle text-[10px] font-semibold uppercase tracking-wider ${headerGroupClass(group.tint)}`}
+                    key={col.field}
+                    scope="col"
+                    className={`sticky top-0 z-30 h-9 border-b border-line px-3 text-left align-middle text-xs font-medium ${subHeaderGroupClass(col.tint)}`}
+                    style={{ minWidth: col.minWidth }}
                   >
-                    {group.label}
+                    {col.label}
                   </th>
                 ))}
                 <th
-                  rowSpan={2}
                   scope="col"
                   className="sticky top-0 z-30 h-9 border-b border-line bg-sidebar px-3 text-left align-middle text-xs font-medium text-ink"
                   style={{ minWidth: 220 }}
@@ -224,7 +219,6 @@ export function PlannerTab() {
                   Theme
                 </th>
                 <th
-                  rowSpan={2}
                   scope="col"
                   className="sticky top-0 z-30 h-9 border-b border-line bg-sidebar px-3 text-left align-middle text-xs font-medium text-ink"
                   style={{ minWidth: 240 }}
@@ -232,27 +226,12 @@ export function PlannerTab() {
                   Notes
                 </th>
                 <th
-                  rowSpan={2}
                   scope="col"
                   className="sticky top-0 z-30 h-9 border-b border-line bg-sidebar px-3 text-center align-middle text-xs font-medium text-ink"
                   style={{ minWidth: 72 }}
                 >
                   Action
                 </th>
-              </tr>
-              <tr>
-                {GROUPED_ASSIGNEE_COLUMNS.map((col) => (
-                  <th
-                    key={col.field}
-                    scope="col"
-                    /* top-9 lines this row up flush with the 36px row above so
-                     * both stay pinned as the tbody scrolls under them. */
-                    className={`sticky top-9 z-30 h-9 border-b border-line px-3 text-left align-middle text-xs font-medium ${subHeaderGroupClass(col.tint)}`}
-                    style={{ minWidth: col.minWidth }}
-                  >
-                    {col.label}
-                  </th>
-                ))}
               </tr>
             </thead>
 
@@ -268,86 +247,106 @@ export function PlannerTab() {
                 </tr>
               ) : null}
 
-              {rows.map((row) => (
-                <tr key={row.id} className="group">
-                  <td
-                    className="sticky left-0 z-20 border-b border-r border-line bg-sidebar px-3 py-1.5 align-middle text-sm font-medium text-ink group-hover:bg-fill/70"
-                    style={{ minWidth: MEETING_MIN_W }}
-                  >
-                    #{row.meetingNumber}
-                  </td>
-                  <td
-                    className="sticky z-20 border-b border-r border-line-strong bg-sidebar px-1.5 py-1 align-middle group-hover:bg-fill/70"
-                    style={{ left: MEETING_MIN_W, minWidth: DATE_MIN_W }}
-                  >
-                    <input
-                      type="datetime-local"
-                      className="w-full rounded bg-transparent px-1.5 py-1 text-xs text-ink outline-none transition-colors focus:bg-canvas"
-                      value={row.dateTime ?? ''}
-                      onChange={(event) =>
-                        updateRow(row.id, { dateTime: event.target.value || null })
-                      }
-                      aria-label={`Date and time for meeting #${row.meetingNumber}`}
-                    />
-                  </td>
+              {rows.map((row, idx) => {
+                const currMonth = monthKey(row.dateTime);
+                const prevMonth = idx > 0 ? monthKey(rows[idx - 1].dateTime) : null;
+                const showMonthDivider = currMonth !== null && currMonth !== prevMonth;
+                return (
+                  <Fragment key={row.id}>
+                    {showMonthDivider ? (
+                      <tr>
+                        <td
+                          colSpan={ALL_ASSIGNEE_COLUMNS.length + 5}
+                          className="border-b border-line bg-sidebar p-0"
+                        >
+                          <div className="sticky left-0 flex w-fit items-center gap-2 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-soft">
+                            <CalendarBlank size={12} weight="bold" />
+                            {monthLabel(row.dateTime as string)}
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                    <tr className="group">
+                      <td
+                        className="sticky left-0 z-20 border-b border-r border-line-strong bg-sidebar px-3 py-1.5 align-middle text-sm font-medium text-ink group-hover:bg-fill/70"
+                        style={{ minWidth: MEETING_MIN_W }}
+                      >
+                        #{row.meetingNumber}
+                      </td>
+                      <td
+                        className="border-b border-line bg-canvas px-1.5 py-1 align-middle group-hover:bg-fill/30"
+                        style={{ minWidth: DATE_MIN_W }}
+                      >
+                        <input
+                          type="datetime-local"
+                          className="w-full rounded bg-transparent px-1.5 py-1 text-xs text-ink outline-none transition-colors focus:bg-canvas"
+                          value={row.dateTime ?? ''}
+                          onChange={(event) =>
+                            updateRow(row.id, { dateTime: event.target.value || null })
+                          }
+                          aria-label={`Date and time for meeting #${row.meetingNumber}`}
+                        />
+                      </td>
 
-                  {ALL_ASSIGNEE_COLUMNS.map((col) => (
-                    <td
-                      key={col.field}
-                      className="border-b border-line bg-canvas px-1.5 py-1 align-middle group-hover:bg-fill/30"
-                      style={{ minWidth: col.minWidth }}
-                    >
-                      <AssigneeSelect
-                        value={row[col.field] as Assignee | null}
-                        onChange={(next) => updateAssignee(row.id, col.field, next)}
-                        members={members}
-                        placeholder={col.label}
-                        ariaLabel={`${col.label} for meeting #${row.meetingNumber}`}
-                      />
-                    </td>
-                  ))}
+                      {ALL_ASSIGNEE_COLUMNS.map((col) => (
+                        <td
+                          key={col.field}
+                          className="border-b border-line bg-canvas px-1.5 py-1 align-middle group-hover:bg-fill/30"
+                          style={{ minWidth: col.minWidth }}
+                        >
+                          <AssigneeSelect
+                            value={row[col.field] as Assignee | null}
+                            onChange={(next) => updateAssignee(row.id, col.field, next)}
+                            members={members}
+                            placeholder={col.label}
+                            ariaLabel={`${col.label} for meeting #${row.meetingNumber}`}
+                          />
+                        </td>
+                      ))}
 
-                  <td
-                    className="border-b border-line bg-canvas px-1.5 py-1 align-middle group-hover:bg-fill/30"
-                    style={{ minWidth: 220 }}
-                  >
-                    <Input
-                      variant="borderless"
-                      size="small"
-                      placeholder="Meeting theme…"
-                      value={row.theme}
-                      onChange={(event) => updateRow(row.id, { theme: event.target.value })}
-                      aria-label={`Theme for meeting #${row.meetingNumber}`}
-                    />
-                  </td>
-                  <td
-                    className="border-b border-line bg-canvas px-1.5 py-1 align-middle group-hover:bg-fill/30"
-                    style={{ minWidth: 240 }}
-                  >
-                    <Input
-                      variant="borderless"
-                      size="small"
-                      placeholder="Anything to remember…"
-                      value={row.notes}
-                      onChange={(event) => updateRow(row.id, { notes: event.target.value })}
-                      aria-label={`Notes for meeting #${row.meetingNumber}`}
-                    />
-                  </td>
-                  <td
-                    className="border-b border-line bg-canvas px-1 py-1 text-center align-middle group-hover:bg-fill/30"
-                    style={{ minWidth: 72 }}
-                  >
-                    <Button
-                      type="text"
-                      size="small"
-                      shape="circle"
-                      disabled
-                      aria-label="Row actions — coming soon"
-                      icon={<DotsThreeOutline size={16} className="text-ink-muted" />}
-                    />
-                  </td>
-                </tr>
-              ))}
+                      <td
+                        className="border-b border-line bg-canvas px-1.5 py-1 align-middle group-hover:bg-fill/30"
+                        style={{ minWidth: 220 }}
+                      >
+                        <Input
+                          variant="borderless"
+                          size="small"
+                          placeholder="Meeting theme…"
+                          value={row.theme}
+                          onChange={(event) => updateRow(row.id, { theme: event.target.value })}
+                          aria-label={`Theme for meeting #${row.meetingNumber}`}
+                        />
+                      </td>
+                      <td
+                        className="border-b border-line bg-canvas px-1.5 py-1 align-middle group-hover:bg-fill/30"
+                        style={{ minWidth: 240 }}
+                      >
+                        <Input
+                          variant="borderless"
+                          size="small"
+                          placeholder="Anything to remember…"
+                          value={row.notes}
+                          onChange={(event) => updateRow(row.id, { notes: event.target.value })}
+                          aria-label={`Notes for meeting #${row.meetingNumber}`}
+                        />
+                      </td>
+                      <td
+                        className="border-b border-line bg-canvas px-1 py-1 text-center align-middle group-hover:bg-fill/30"
+                        style={{ minWidth: 72 }}
+                      >
+                        <Button
+                          type="text"
+                          size="small"
+                          shape="circle"
+                          disabled
+                          aria-label="Row actions — coming soon"
+                          icon={<DotsThreeOutline size={16} className="text-ink-muted" />}
+                        />
+                      </td>
+                    </tr>
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
