@@ -2,12 +2,23 @@
 
 import { CaretDown, Plus, TrashSimple } from '@phosphor-icons/react/dist/ssr';
 import { Button, Input, InputNumber, Select } from 'antd';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import type { Pathway } from '@/lib/education/members';
 import { PATHWAYS } from '@/lib/education/members';
 import type { ProjectDefinition } from '@/lib/education/pathways';
 import { findProject, getProjectDuration, getProjectsForPathway } from '@/lib/education/pathways';
+import type { DraftSpeaker, SpeakerStatus } from '@/lib/meetings/draft';
+import type { Meeting } from '@/lib/meetings/meetings';
 import { useGetMembersQuery } from '@/store/api';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import {
+  selectMeetingDraft,
+  speakerAdded,
+  speakerChanged,
+  speakerRemoved,
+  speakerSaved,
+  speakerToggled,
+} from '@/store/meeting-draft-slice';
 
 const MAX_SPEAKERS = 3;
 
@@ -27,39 +38,11 @@ const PATHWAY_ABBREV: Record<Pathway, string> = {
   'Visionary Communication': 'VC',
 };
 
-type SpeakerStatus = 'requested' | 'confirmed' | 'delivered';
-
-interface Speaker {
-  id: string;
-  status: SpeakerStatus;
-  memberId?: string;
-  duration?: number;
-  title: string;
-  evaluatorId?: string;
-  pathway?: Pathway;
-  project?: string;
-  notes?: string;
-  /** Un-saved edits since the last Save — controls the primary CTA state. */
-  dirty: boolean;
-  /** Accordion state — new cards open expanded so the form is ready to fill. */
-  expanded: boolean;
-}
-
 const STATUS_STYLES: Record<SpeakerStatus, { label: string; bg: string; fg: string }> = {
   requested: { label: 'Requested', bg: '#F5F5F5', fg: '#525252' },
   confirmed: { label: 'Confirmed', bg: '#D1FAE5', fg: '#065F46' },
   delivered: { label: 'Delivered', bg: '#DBEAFE', fg: '#1E3A8A' },
 };
-
-function createSpeaker(): Speaker {
-  return {
-    id: crypto.randomUUID(),
-    status: 'requested',
-    title: '',
-    dirty: true,
-    expanded: true,
-  };
-}
 
 interface MemberOption {
   value: string;
@@ -98,10 +81,10 @@ function FieldWrap({
 
 interface SpeakerCardProps {
   index: number;
-  speaker: Speaker;
+  speaker: DraftSpeaker;
   memberOptions: MemberOption[];
   membersLoading: boolean;
-  onChange: (patch: Partial<Speaker>) => void;
+  onChange: (patch: Partial<DraftSpeaker>) => void;
   onDelete: () => void;
   onSave: () => void;
   onToggle: () => void;
@@ -324,13 +307,18 @@ function SpeakerCard({
   );
 }
 
+interface PreparedSpeakersTabProps {
+  meeting: Meeting;
+}
+
 /** Prepared Speakers tab — an inline editor per speaker with a member picker,
  * pathway/project cascade (which drives the level and duration bounds), and a
- * quick-add row at the bottom capped at MAX_SPEAKERS. Speakers persist to local
- * state for now. */
-export function PreparedSpeakersTab() {
+ * quick-add row at the bottom capped at MAX_SPEAKERS. Speakers live in the
+ * meeting draft, which is what the Overview → Agenda sheet prints from. */
+export function PreparedSpeakersTab({ meeting }: PreparedSpeakersTabProps) {
   const { data: members, isLoading: membersLoading } = useGetMembersQuery();
-  const [speakers, setSpeakers] = useState<Speaker[]>([]);
+  const dispatch = useAppDispatch();
+  const speakers = useAppSelector((state) => selectMeetingDraft(state, meeting.id)).speakers;
 
   const canAdd = speakers.length < MAX_SPEAKERS;
 
@@ -347,31 +335,23 @@ export function PreparedSpeakersTab() {
 
   function handleAdd() {
     if (!canAdd) return;
-    setSpeakers((prev) => [...prev, createSpeaker()]);
+    dispatch(speakerAdded(meeting.id));
   }
 
-  function handleChange(id: string, patch: Partial<Speaker>) {
-    setSpeakers((prev) =>
-      prev.map((speaker) => (speaker.id === id ? { ...speaker, ...patch, dirty: true } : speaker)),
-    );
+  function handleChange(speakerId: string, patch: Partial<DraftSpeaker>) {
+    dispatch(speakerChanged({ meetingId: meeting.id, speakerId, patch }));
   }
 
-  function handleDelete(id: string) {
-    setSpeakers((prev) => prev.filter((speaker) => speaker.id !== id));
+  function handleDelete(speakerId: string) {
+    dispatch(speakerRemoved({ meetingId: meeting.id, speakerId }));
   }
 
-  function handleSave(id: string) {
-    setSpeakers((prev) =>
-      prev.map((speaker) => (speaker.id === id ? { ...speaker, dirty: false } : speaker)),
-    );
+  function handleSave(speakerId: string) {
+    dispatch(speakerSaved({ meetingId: meeting.id, speakerId }));
   }
 
-  function handleToggle(id: string) {
-    setSpeakers((prev) =>
-      prev.map((speaker) =>
-        speaker.id === id ? { ...speaker, expanded: !speaker.expanded } : speaker,
-      ),
-    );
+  function handleToggle(speakerId: string) {
+    dispatch(speakerToggled({ meetingId: meeting.id, speakerId }));
   }
 
   return (

@@ -302,8 +302,10 @@ export function AppShell({
 
       {/* The sidebar bleeds into the page background; the only border in the
        * shell is the one wrapping this panel. */}
-      <div className="flex min-w-0 flex-1 flex-col p-2">
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-canvas">
+      {/* The `app-shell-*` classes are print hooks — globals.css unwraps both
+       * when a page prints so only the printed content reaches the paper. */}
+      <div className="app-shell-frame flex min-w-0 flex-1 flex-col p-2">
+        <div className="app-shell-panel flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-canvas">
           <header className="flex h-15 shrink-0 items-center gap-1 border-b border-line px-3 md:px-4">
             {/* antd's `display` rule is unlayered and would beat Tailwind's
              * `hidden`, so the breakpoint lives on a wrapper, not the Button. */}

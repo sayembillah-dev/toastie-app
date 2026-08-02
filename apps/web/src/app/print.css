@@ -1,0 +1,84 @@
+/* biome-ignore-all lint/complexity/noImportantStyles: print rules have to beat the app shell's utility classes and antd's unlayered styles, and only apply inside @media print */
+
+/*
+ * The agenda print sheet. On screen the page keeps a full A4 height so the
+ * preview reads as paper; when printed, the app shell is stripped away so the
+ * sheet is the only thing on the page and lands 1:1 on A4.
+ */
+
+@media screen {
+  .agenda-page {
+    min-height: 277mm;
+  }
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 5mm;
+  }
+
+  html,
+  body {
+    margin: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  /* App chrome: sidebar, top bar, breadcrumbs, and both rows of tabs. */
+  aside,
+  header,
+  nav,
+  .ant-tabs-nav,
+  .print-hidden {
+    display: none !important;
+  }
+
+  /* Release the shell's viewport-height / overflow constraints so the agenda can
+   * run onto as many sheets as it needs. */
+  .h-screen {
+    height: auto !important;
+  }
+
+  .overflow-hidden,
+  .overflow-y-auto,
+  .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  main {
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .app-shell-frame {
+    padding: 0 !important;
+  }
+
+  .app-shell-panel {
+    border: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  /* Strip the grey screen-only wrappers around the sheet. */
+  .agenda-print-root {
+    min-height: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    padding: 0 !important;
+  }
+
+  .agenda-print-wrap {
+    padding: 0 !important;
+  }
+
+  .agenda-page {
+    width: 100% !important;
+    margin: 0 !important;
+    min-height: 0 !important;
+    box-shadow: none !important;
+  }
+}
