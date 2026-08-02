@@ -39,3 +39,11 @@ export function getProjectsForPathway(_pathway: Pathway): ProjectDefinition[] {
 export function findProject(name: string): ProjectDefinition | undefined {
   return PATHWAY_PROJECTS.find((project) => project.name === name);
 }
+
+/** Standard Pathways speech length in minutes. Ice Breaker runs 4–6, every
+ * other project runs 5–7 by default — the real range for individual projects
+ * varies a touch but this covers the common case. */
+export function getProjectDuration(name: string | undefined): { min: number; max: number } {
+  if (name === 'Ice Breaker') return { min: 4, max: 6 };
+  return { min: 5, max: 7 };
+}

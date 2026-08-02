@@ -123,6 +123,12 @@ export const SEED_MEETINGS: Meeting[] = [
   },
 ];
 
+/** Resolve a meeting by its id. Returns `null` when the id is unknown so the
+ * detail route can render its own 404. */
+export function getMeetingById(id: string): Meeting | null {
+  return SEED_MEETINGS.find((meeting) => meeting.id === id) ?? null;
+}
+
 /** Split a roster into past / current-next / upcoming buckets. `now` is passed
  * in so the caller controls the clock — components read `Date.now()` once and
  * feed the same instant through, keeping the split stable across a render. */
