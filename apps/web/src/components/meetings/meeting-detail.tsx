@@ -15,10 +15,14 @@ import { Tabs } from 'antd';
 import { notFound, useParams } from 'next/navigation';
 
 import { AppShell } from '@/components/app-shell';
+import { AhCounterTab } from '@/components/meetings/tabs/ah-counter-tab';
+import { AttendanceTab } from '@/components/meetings/tabs/attendance-tab';
 import { GrammarianTab } from '@/components/meetings/tabs/grammarian-tab';
 import { PreparedSpeakersTab } from '@/components/meetings/tabs/prepared-speakers-tab';
 import { RolesTab } from '@/components/meetings/tabs/roles-tab';
+import { TableTopicsTab } from '@/components/meetings/tabs/table-topics-tab';
 import { ThemeTab } from '@/components/meetings/tabs/theme-tab';
+import { TimerTab } from '@/components/meetings/tabs/timer-tab';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { getMeetingById } from '@/lib/meetings/meetings';
 
@@ -79,31 +83,19 @@ function buildTabs(meeting: Meeting): TabDef[] {
       key: 'table-topics',
       label: 'Table Topics',
       Icon: Lightbulb,
-      content: (
-        <TabPlaceholder
-          title="Table Topics"
-          body="Table Topics master, question bank, and speakers will live here."
-        />
-      ),
+      content: <TableTopicsTab />,
     },
     {
       key: 'ah-counter',
       label: 'Ah Counter',
       Icon: SpeakerHigh,
-      content: (
-        <TabPlaceholder
-          title="Ah Counter"
-          body="Ah-counter report and per-speaker tally will live here."
-        />
-      ),
+      content: <AhCounterTab />,
     },
     {
       key: 'timer',
       label: 'Timer',
       Icon: Timer,
-      content: (
-        <TabPlaceholder title="Timer" body="Timing report for each segment will live here." />
-      ),
+      content: <TimerTab />,
     },
     {
       key: 'grammarian',
@@ -115,12 +107,7 @@ function buildTabs(meeting: Meeting): TabDef[] {
       key: 'attendance',
       label: 'Attendance',
       Icon: ClipboardText,
-      content: (
-        <TabPlaceholder
-          title="Attendance"
-          body="Attendance list, guests, and apologies will live here."
-        />
-      ),
+      content: <AttendanceTab />,
     },
   ];
 }
