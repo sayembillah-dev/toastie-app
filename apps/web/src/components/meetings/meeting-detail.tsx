@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  CheckSquare,
   ClipboardText,
   Info,
   Lightbulb,
@@ -17,6 +18,7 @@ import { notFound, useParams } from 'next/navigation';
 import { AppShell } from '@/components/app-shell';
 import { AhCounterTab } from '@/components/meetings/tabs/ah-counter-tab';
 import { AttendanceTab } from '@/components/meetings/tabs/attendance-tab';
+import { ChecklistTab } from '@/components/meetings/tabs/checklist-tab';
 import { GrammarianTab } from '@/components/meetings/tabs/grammarian-tab';
 import { OverviewTab } from '@/components/meetings/tabs/overview-tab';
 import { PreparedSpeakersTab } from '@/components/meetings/tabs/prepared-speakers-tab';
@@ -45,6 +47,12 @@ function buildTabs(meeting: Meeting): TabDef[] {
       label: 'Overview',
       Icon: Info,
       content: <OverviewTab meeting={meeting} />,
+    },
+    {
+      key: 'checklist',
+      label: 'Checklist',
+      Icon: CheckSquare,
+      content: <ChecklistTab />,
     },
     {
       key: 'theme',
