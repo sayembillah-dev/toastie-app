@@ -279,7 +279,7 @@ export function AppShell({
         open={mobileNavOpen}
         onClose={closeMobileNav}
         closable={false}
-        width={MOBILE_NAV_WIDTH}
+        size={MOBILE_NAV_WIDTH}
         styles={{ body: { padding: 0, background: 'var(--color-sidebar)' } }}
       >
         <SidebarBody
