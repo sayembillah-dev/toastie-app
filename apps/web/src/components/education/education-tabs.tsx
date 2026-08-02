@@ -1,9 +1,10 @@
 'use client';
 
-import { Path, Users } from '@phosphor-icons/react/dist/ssr';
+import { Calendar, Path, Users } from '@phosphor-icons/react/dist/ssr';
 import { Tabs } from 'antd';
 
 import { MembersDirectory } from '@/components/education/directory';
+import { PlannerTab } from '@/components/education/planner-tab';
 
 /** Tabs live on the Education page so both sections share the same header,
  * breadcrumb and content padding. Each label pairs an icon with the text so
@@ -41,6 +42,16 @@ export function EducationTabs() {
               </span>
             ),
             children: null,
+          },
+          {
+            key: 'planner',
+            label: (
+              <span className="inline-flex items-center gap-1.5">
+                <Calendar size={14} weight="bold" />
+                Planner
+              </span>
+            ),
+            children: <PlannerTab />,
           },
         ]}
       />
