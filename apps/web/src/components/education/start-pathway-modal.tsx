@@ -130,7 +130,7 @@ export function StartPathwayModal({ open, member, onClose }: StartPathwayModalPr
         void handleSubmit();
       }}
       confirmLoading={isSubmitting}
-      maskClosable={!isSubmitting}
+      mask={{ closable: !isSubmitting }}
       okText="Start Pathway"
       cancelText="Cancel"
       okButtonProps={{ disabled: !canSubmit, size: 'middle' }}
