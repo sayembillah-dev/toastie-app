@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  AddressBook,
   ArrowLeft,
   Bell,
   Bread,
@@ -59,6 +60,7 @@ const primaryNav: NavEntry[] = [
   { href: '/', title: 'Dashboard', Icon: SquaresFour },
   { href: '/meetings', title: 'Meetings', Icon: Users },
   { href: '/education', title: 'Education', Icon: GraduationCap },
+  { href: '/people', title: 'People', Icon: AddressBook },
 ];
 
 /** Named routes win; anything deeper falls back to title-cased segments.

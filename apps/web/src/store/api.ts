@@ -3,6 +3,7 @@ import { createApi } from '@reduxjs/toolkit/query/react';
 import type { HistoryEvent, MemberStats } from '@/lib/education/history';
 import type { Member, StartPathwayInput } from '@/lib/education/members';
 import type { CreateMeetingInput, Meeting, UpdateMeetingInput } from '@/lib/meetings/meetings';
+import type { Guest } from '@/lib/people/guests';
 
 import { localBaseQuery } from './local-base-query';
 
@@ -14,7 +15,7 @@ import { localBaseQuery } from './local-base-query';
 export const toastlyApi = createApi({
   reducerPath: 'toastlyApi',
   baseQuery: localBaseQuery,
-  tagTypes: ['Member', 'History', 'Meeting'],
+  tagTypes: ['Member', 'History', 'Meeting', 'Guest'],
   endpoints: (build) => ({
     getMembers: build.query<Member[], void>({
       query: () => ({ url: '/members', method: 'GET' }),
@@ -92,6 +93,14 @@ export const toastlyApi = createApi({
         { type: 'Meeting', id: 'LIST' },
       ],
     }),
+
+    getGuests: build.query<Guest[], void>({
+      query: () => ({ url: '/guests', method: 'GET' }),
+      providesTags: (guests) => [
+        { type: 'Guest', id: 'LIST' },
+        ...(guests ?? []).map((guest) => ({ type: 'Guest' as const, id: guest.id })),
+      ],
+    }),
   }),
 });
 
@@ -105,4 +114,5 @@ export const {
   useGetMeetingQuery,
   useCreateMeetingMutation,
   useUpdateMeetingMutation,
+  useGetGuestsQuery,
 } = toastlyApi;

@@ -5,9 +5,11 @@ import { PATHWAYS } from '@/lib/education/members';
 import { findProject } from '@/lib/education/pathways';
 import type { CreateMeetingInput, Meeting, UpdateMeetingInput } from '@/lib/meetings/meetings';
 import { MEETING_STATUSES } from '@/lib/meetings/meetings';
+import type { Guest } from '@/lib/people/guests';
 
 import {
   readExtrasFor,
+  readGuests,
   readHistoryEvents,
   readMeetings,
   readMembers,
@@ -226,6 +228,10 @@ function updateMeeting({ params, body }: RouteContext): Meeting {
   return updated;
 }
 
+function listGuests(): Guest[] {
+  return readGuests();
+}
+
 interface Route {
   method: HttpMethod;
   /** Path split on `/`; a `:name` segment captures into `params`. */
@@ -247,6 +253,7 @@ const ROUTES: Route[] = [
   route('GET', '/meetings/:meetingId', getMeeting),
   route('POST', '/meetings', createMeeting),
   route('PATCH', '/meetings/:meetingId', updateMeeting),
+  route('GET', '/guests', listGuests),
 ];
 
 function toSegments(path: string): string[] {
