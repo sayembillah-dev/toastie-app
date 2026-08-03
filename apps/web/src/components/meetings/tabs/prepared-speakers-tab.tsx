@@ -111,8 +111,10 @@ function SpeakerCard({
     }));
   }, [speaker.pathway]);
 
-  const selectedProject = speaker.project ? findProject(speaker.project) : undefined;
-  const durationBounds = getProjectDuration(selectedProject?.name);
+  const selectedProject = speaker.project
+    ? findProject(speaker.project, speaker.pathway)
+    : undefined;
+  const durationBounds = getProjectDuration(selectedProject?.name, speaker.pathway);
   const status = STATUS_STYLES[speaker.status];
 
   /* Changing the pathway invalidates any previously selected project — level

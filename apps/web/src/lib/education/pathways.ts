@@ -1,49 +1,155 @@
+import rawCatalog from './data/pathway-catalog.json';
 import type { Level, Pathway } from './members';
 
+/**
+ * Canonical Toastmasters Pathways catalog. This is the source of truth for
+ * every pathway/level/project/speech-time shown anywhere in the app — the
+ * Education > Pathways tab renders it directly, and the start-pathway modal,
+ * prepared-speakers project picker, and the local API's validation all read
+ * through the helpers below rather than keeping their own copies.
+ */
+
+export interface CatalogProject {
+  name: string;
+  speechTime: string;
+  kind: 'required' | 'elective';
+}
+
+export interface CatalogLevel {
+  level: Level;
+  title: string;
+  requiredProjects: CatalogProject[];
+  electivesRequiredCount: number;
+  electives: CatalogProject[];
+}
+
+export interface PathwayCatalogEntry {
+  id: string;
+  name: Pathway;
+  description: string;
+  levels: CatalogLevel[];
+}
+
+export interface LevelStructureEntry {
+  level: Level;
+  title: string;
+}
+
+interface RawProject {
+  name: string;
+  speech_time: string;
+}
+
+interface RawLevel {
+  level: number;
+  title: string;
+  required_projects: RawProject[];
+  electives_required_count: number;
+  electives: RawProject[];
+}
+
+interface RawPathway {
+  id: string;
+  name: string;
+  description: string;
+  levels: RawLevel[];
+}
+
+interface RawCatalog {
+  program: string;
+  total_paths: number;
+  levels_structure: { level: number; title: string }[];
+  pathways: RawPathway[];
+}
+
+const raw = rawCatalog as RawCatalog;
+
+export const LEVEL_STRUCTURE: LevelStructureEntry[] = raw.levels_structure.map((entry) => ({
+  level: entry.level as Level,
+  title: entry.title,
+}));
+
+export const PATHWAY_CATALOG: PathwayCatalogEntry[] = raw.pathways.map((pathway) => ({
+  id: pathway.id,
+  name: pathway.name as Pathway,
+  description: pathway.description,
+  levels: pathway.levels.map((level) => ({
+    level: level.level as Level,
+    title: level.title,
+    requiredProjects: level.required_projects.map((project) => ({
+      name: project.name,
+      speechTime: project.speech_time,
+      kind: 'required' as const,
+    })),
+    electivesRequiredCount: level.electives_required_count,
+    electives: level.electives.map((project) => ({
+      name: project.name,
+      speechTime: project.speech_time,
+      kind: 'elective' as const,
+    })),
+  })),
+}));
+
+export function getPathwayCatalog(pathway: Pathway): PathwayCatalogEntry | undefined {
+  return PATHWAY_CATALOG.find((entry) => entry.name === pathway);
+}
+
+/** Flat, de-duplicated per-pathway project list — kept for callers that only
+ * need "what can this member work on" rather than the full level breakdown. */
 export interface ProjectDefinition {
   name: string;
   level: Level;
+  speechTime: string;
+  kind: 'required' | 'elective';
 }
 
-/** Toastmasters Pathways projects. The catalog is deliberately kept shared
- * across all pathways — the electives overlap heavily in real life and the
- * modal never asks the member to distinguish, so a single list is enough for
- * the start-pathway flow. */
-export const PATHWAY_PROJECTS: ProjectDefinition[] = [
-  { name: 'Ice Breaker', level: 1 },
-  { name: 'Evaluation and Feedback', level: 1 },
-  { name: 'Researching and Presenting', level: 1 },
-  { name: 'Understanding Your Communication Style', level: 2 },
-  { name: 'Understanding Your Leadership Style', level: 2 },
-  { name: 'Active Listening', level: 2 },
-  { name: 'Introduction to Toastmasters Mentoring', level: 2 },
-  { name: 'Connect with Storytelling', level: 3 },
-  { name: 'Effective Body Language', level: 3 },
-  { name: 'Understanding Vocal Variety', level: 3 },
-  { name: 'Building a Social Media Presence', level: 3 },
-  { name: 'Understanding Emotional Intelligence', level: 3 },
-  { name: 'Managing a Difficult Audience', level: 4 },
-  { name: 'Preparing to Speak Professionally', level: 4 },
-  { name: 'Coaching Others', level: 4 },
-  { name: 'Public Relations Strategies', level: 4 },
-  { name: 'Reflect on Your Path', level: 5 },
-  { name: 'Prepare for Success', level: 5 },
-  { name: 'Ethical Leadership', level: 5 },
-  { name: 'Lead in Any Situation', level: 5 },
-];
+export function getProjectsForPathway(pathway: Pathway): ProjectDefinition[] {
+  const entry = getPathwayCatalog(pathway);
+  if (!entry) return [];
 
-export function getProjectsForPathway(_pathway: Pathway): ProjectDefinition[] {
-  return PATHWAY_PROJECTS;
+  const seen = new Set<string>();
+  const projects: ProjectDefinition[] = [];
+  for (const level of entry.levels) {
+    for (const project of [...level.requiredProjects, ...level.electives]) {
+      if (seen.has(project.name)) continue;
+      seen.add(project.name);
+      projects.push({ ...project, level: level.level });
+    }
+  }
+  return projects;
 }
 
-export function findProject(name: string): ProjectDefinition | undefined {
-  return PATHWAY_PROJECTS.find((project) => project.name === name);
+/** Looks up a project by name. Pass `pathway` when it's known — the same
+ * project can sit at a different level on different pathways — otherwise
+ * every pathway is searched and the first match wins. */
+export function findProject(name: string, pathway?: Pathway): ProjectDefinition | undefined {
+  if (pathway) {
+    const match = getProjectsForPathway(pathway).find((project) => project.name === name);
+    if (match) return match;
+  }
+  for (const entry of PATHWAY_CATALOG) {
+    const match = getProjectsForPathway(entry.name).find((project) => project.name === name);
+    if (match) return match;
+  }
+  return undefined;
 }
 
-/** Standard Pathways speech length in minutes. Ice Breaker runs 4–6, every
- * other project runs 5–7 by default — the real range for individual projects
- * varies a touch but this covers the common case. */
-export function getProjectDuration(name: string | undefined): { min: number; max: number } {
-  if (name === 'Ice Breaker') return { min: 4, max: 6 };
+/** Parses the catalog's free-text `speechTime` (e.g. "5–7 minutes") into
+ * numeric minute bounds for the duration input. Entries that describe a role
+ * or format rather than a timed speech (e.g. "Serve as Topicsmaster during a
+ * meeting") fall back to the Pathways-standard 5–7 minutes. */
+export function getProjectDuration(
+  name: string | undefined,
+  pathway?: Pathway,
+): { min: number; max: number } {
+  const project = name ? findProject(name, pathway) : undefined;
+  if (!project) return { min: 5, max: 7 };
+
+  const range = project.speechTime.match(/(\d+)\s*[–-]\s*(\d+)/);
+  if (range) return { min: Number(range[1]), max: Number(range[2]) };
+
+  const single = project.speechTime.match(/(\d+)\s*minute/);
+  if (single) return { min: Number(single[1]), max: Number(single[1]) };
+
   return { min: 5, max: 7 };
 }

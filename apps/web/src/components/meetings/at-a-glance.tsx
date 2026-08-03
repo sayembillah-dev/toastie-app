@@ -220,7 +220,7 @@ function ReadinessCard({ readiness }: { readiness: Readiness }) {
             percent={percent}
             size={96}
             strokeColor={percent === 100 ? '#059669' : '#334155'}
-            trailColor="#f2f2f2"
+            railColor="#f2f2f2"
           />
         </div>
 

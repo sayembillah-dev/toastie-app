@@ -82,7 +82,7 @@ function parseStartPathwayBody(body: unknown): StartPathwayInput {
     throw new LocalApiError(400, `"${String(pathway)}" is not a Toastmasters pathway`);
   }
 
-  const definition = project ? findProject(project) : undefined;
+  const definition = project ? findProject(project, pathway) : undefined;
   if (!definition) {
     throw new LocalApiError(400, `"${String(project)}" is not a project in the catalog`);
   }
