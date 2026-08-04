@@ -5,8 +5,8 @@ import { PATHWAYS } from '@/lib/education/members';
 import { findProject } from '@/lib/education/pathways';
 import type { CreateMeetingInput, Meeting, UpdateMeetingInput } from '@/lib/meetings/meetings';
 import { MEETING_STATUSES } from '@/lib/meetings/meetings';
-import type { Guest, GuestStage } from '@/lib/people/guests';
-import { isGuestStage } from '@/lib/people/guests';
+import type { Guest, GuestSocial, UpdateGuestInput } from '@/lib/people/guests';
+import { isGuestStage, isSocialPlatform } from '@/lib/people/guests';
 
 import {
   readExtrasFor,
@@ -143,20 +143,84 @@ function parseUpdateMeetingBody(body: unknown): UpdateMeetingInput {
   return theme === undefined ? { status } : { status, theme: theme.trim() };
 }
 
-/** The board only ever sends a stage, so an unknown one is the only way this
- * call can go wrong — and it has to 400 rather than write a column nobody
- * renders. */
-function parseUpdateGuestBody(body: unknown): { stage: GuestStage } {
+/** String fields on the guest that the edit panel writes. Kept as a plain
+ * whitelist so validation stays a single map/filter and every unknown key on
+ * the body is dropped rather than persisted. */
+const EDITABLE_STRING_FIELDS = [
+  'firstName',
+  'lastName',
+  'email',
+  'phone',
+  'whatsapp',
+  'avatarUrl',
+  'bio',
+  'notes',
+] as const;
+
+type EditableStringField = (typeof EDITABLE_STRING_FIELDS)[number];
+
+function parseSocials(input: unknown): GuestSocial[] {
+  if (!Array.isArray(input)) throw new LocalApiError(400, 'socials must be an array');
+  return input.map((entry, index) => {
+    if (typeof entry !== 'object' || entry === null) {
+      throw new LocalApiError(400, `socials[${index}] is not an object`);
+    }
+    const { platform, url } = entry as { platform?: unknown; url?: unknown };
+    if (!isSocialPlatform(platform)) {
+      throw new LocalApiError(400, `socials[${index}].platform "${String(platform)}" is unknown`);
+    }
+    if (typeof url !== 'string' || url.trim() === '') {
+      throw new LocalApiError(400, `socials[${index}].url is required`);
+    }
+    return { platform, url: url.trim() };
+  });
+}
+
+/** Validates any subset of the edit panel's fields — the panel Patches only
+ * what changed, and the kanban keeps sending just `stage`. Empty strings on
+ * optional fields are normalised to `undefined` so a cleared input clears the
+ * record rather than storing `""`. */
+function parseUpdateGuestBody(body: unknown): UpdateGuestInput {
   if (typeof body !== 'object' || body === null) {
     throw new LocalApiError(400, 'Expected an update-guest body');
   }
 
-  const { stage } = body as { stage?: unknown };
-  if (!isGuestStage(stage)) {
-    throw new LocalApiError(400, `"${String(stage)}" is not a guest stage`);
+  const input = body as Record<string, unknown>;
+  const output: UpdateGuestInput = {};
+
+  for (const field of EDITABLE_STRING_FIELDS) {
+    if (!(field in input)) continue;
+    const raw = input[field];
+    if (raw === undefined || raw === null || raw === '') {
+      output[field as EditableStringField] = undefined;
+      continue;
+    }
+    if (typeof raw !== 'string') {
+      throw new LocalApiError(400, `${field} must be a string`);
+    }
+    const trimmed = raw.trim();
+    output[field as EditableStringField] = trimmed === '' ? undefined : trimmed;
   }
 
-  return { stage };
+  if ('socials' in input) {
+    output.socials = input.socials === undefined ? undefined : parseSocials(input.socials);
+  }
+
+  if ('stage' in input) {
+    if (!isGuestStage(input.stage)) {
+      throw new LocalApiError(400, `"${String(input.stage)}" is not a guest stage`);
+    }
+    output.stage = input.stage;
+  }
+
+  if (output.firstName === undefined && 'firstName' in input) {
+    throw new LocalApiError(400, 'firstName cannot be blank');
+  }
+  if (output.lastName === undefined && 'lastName' in input) {
+    throw new LocalApiError(400, 'lastName cannot be blank');
+  }
+
+  return output;
 }
 
 /* ---------------------------------------------------------------- routes -- */
@@ -250,8 +314,15 @@ function listGuests(): Guest[] {
   return readGuests();
 }
 
-/** Backs both the Kanban drag-and-drop and the mobile stage dropdown — moving a
- * card is the same single-field write either way. */
+function getGuest({ params }: RouteContext): Guest {
+  const guest = readGuests().find((entry) => entry.id === params.guestId);
+  if (!guest) throw new LocalApiError(404, `No guest with id "${params.guestId}"`);
+  return guest;
+}
+
+/** Backs the Kanban drag/drop (stage-only), the mobile stage dropdown, and the
+ * edit panel — all three are the same shape of PATCH: whichever fields the
+ * caller included get written; the rest are left alone. */
 function updateGuest({ params, body }: RouteContext): Guest {
   const guests = readGuests();
   const existing = guests.find((entry) => entry.id === params.guestId);
@@ -284,6 +355,7 @@ const ROUTES: Route[] = [
   route('POST', '/meetings', createMeeting),
   route('PATCH', '/meetings/:meetingId', updateMeeting),
   route('GET', '/guests', listGuests),
+  route('GET', '/guests/:guestId', getGuest),
   route('PATCH', '/guests/:guestId', updateGuest),
 ];
 

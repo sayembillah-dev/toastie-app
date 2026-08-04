@@ -26,11 +26,67 @@ export function getGuestStage(stage: GuestStage): (typeof GUEST_STAGES)[number] 
   return GUEST_STAGES.find((entry) => entry.id === stage) ?? GUEST_STAGES[0];
 }
 
+/** Known social platforms. `other` is the catch-all for anything not in the
+ * list — the URL still renders, just under a globe icon. */
+export const SOCIAL_PLATFORMS = [
+  { id: 'linkedin', label: 'LinkedIn' },
+  { id: 'facebook', label: 'Facebook' },
+  { id: 'instagram', label: 'Instagram' },
+  { id: 'youtube', label: 'YouTube' },
+  { id: 'twitter', label: 'X (Twitter)' },
+  { id: 'tiktok', label: 'TikTok' },
+  { id: 'website', label: 'Website' },
+  { id: 'other', label: 'Other' },
+] as const;
+
+export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number]['id'];
+
+export const SOCIAL_PLATFORM_IDS: readonly SocialPlatform[] = SOCIAL_PLATFORMS.map(
+  (platform) => platform.id,
+);
+
+export function isSocialPlatform(value: unknown): value is SocialPlatform {
+  return SOCIAL_PLATFORM_IDS.includes(value as SocialPlatform);
+}
+
+export function getSocialPlatform(id: SocialPlatform): (typeof SOCIAL_PLATFORMS)[number] {
+  return (
+    SOCIAL_PLATFORMS.find((entry) => entry.id === id) ??
+    SOCIAL_PLATFORMS[SOCIAL_PLATFORMS.length - 1]
+  );
+}
+
+export interface GuestSocial {
+  platform: SocialPlatform;
+  /** Absolute URL. Stored as-is so the profile can render it straight — broken
+   * links are the caller's problem to validate. */
+  url: string;
+}
+
 export interface Guest {
   id: string;
   firstName: string;
   lastName: string;
   email?: string;
+  /** E.164-ish phone number (leading `+`, digits only). Feeds tel: and wa.me
+   * links straight — the profile strips anything non-numeric before building the
+   * WhatsApp URL, but stored numbers should already be clean. */
+  phone?: string;
+  /** Separate WhatsApp number when it differs from the day-to-day phone. When
+   * absent, the profile falls back to `phone` — the "same as phone" checkbox
+   * on the edit panel writes `undefined` here. */
+  whatsapp?: string;
+  /** Data-URL or absolute image URL. Base64 data URLs live comfortably in the
+   * local-storage back-end while there is no upload service. */
+  avatarUrl?: string;
+  /** Freeform list — the edit panel adds/removes blocks; the info card renders
+   * whichever platforms are present, with each icon deep-linking out. */
+  socials?: GuestSocial[];
+  /** Short public-facing paragraph — the guest at a glance. */
+  bio?: string;
+  /** Private club-facing notes; the space to jot things down that shouldn't sit
+   * in the bio. */
+  notes?: string;
   /** ISO date (YYYY-MM-DD) of their first visit to the club. */
   firstVisit: string;
   /** ISO date (YYYY-MM-DD) of the most recent visit; equal to firstVisit on day one. */
@@ -42,6 +98,24 @@ export interface Guest {
   /** Where they sit in the follow-up pipeline; the Kanban column they land in. */
   stage: GuestStage;
 }
+
+/** Fields the edit panel can write. Excludes the immutable id and derived
+ * counters/dates the club records rather than the user typing them. */
+export type UpdateGuestInput = Partial<
+  Pick<
+    Guest,
+    | 'firstName'
+    | 'lastName'
+    | 'email'
+    | 'phone'
+    | 'whatsapp'
+    | 'avatarUrl'
+    | 'socials'
+    | 'bio'
+    | 'notes'
+    | 'stage'
+  >
+>;
 
 /** Buckets guests into one list per stage, in board order. Guests carrying a
  * stage we no longer ship fall back to New rather than vanishing. */
@@ -62,6 +136,15 @@ export const SEED_GUESTS: Guest[] = [
     firstName: 'Elena',
     lastName: 'Vasquez',
     email: 'elena.vasquez@example.com',
+    phone: '+447700900101',
+    socials: [
+      { platform: 'linkedin', url: 'https://linkedin.com/in/elena-vasquez' },
+      { platform: 'instagram', url: 'https://instagram.com/elenaspeaks' },
+      { platform: 'website', url: 'https://elenavasquez.co' },
+    ],
+    bio: 'Product manager at a fintech, joined to sharpen her exec-review presentations. Prefers evening sessions and asked about the mentorship track.',
+    notes:
+      'Follow up before next Thursday — she asked whether the mentorship track has openings this quarter.',
     firstVisit: '2026-07-08',
     lastVisit: '2026-07-22',
     visitCount: 2,
@@ -73,6 +156,7 @@ export const SEED_GUESTS: Guest[] = [
     firstName: 'Jamal',
     lastName: 'Osei',
     email: 'jamal.osei@example.com',
+    phone: '+447700900102',
     firstVisit: '2026-07-22',
     lastVisit: '2026-07-22',
     visitCount: 1,
@@ -83,6 +167,14 @@ export const SEED_GUESTS: Guest[] = [
     id: 'g-03',
     firstName: 'Mei',
     lastName: 'Tanaka',
+    phone: '+447700900103',
+    whatsapp: '+447700900233',
+    socials: [
+      { platform: 'linkedin', url: 'https://linkedin.com/in/mei-tanaka' },
+      { platform: 'facebook', url: 'https://facebook.com/mei.tanaka' },
+      { platform: 'youtube', url: 'https://youtube.com/@meitanakaspeaks' },
+    ],
+    bio: 'PhD researcher who wants to get comfortable presenting at conferences. Attended three meetings and is warming up to Table Topics.',
     firstVisit: '2026-06-24',
     lastVisit: '2026-07-22',
     visitCount: 3,
@@ -104,6 +196,7 @@ export const SEED_GUESTS: Guest[] = [
     firstName: 'Ada',
     lastName: 'Onyekachi',
     email: 'ada.o@example.com',
+    phone: '+447700900105',
     firstVisit: '2026-05-13',
     lastVisit: '2026-07-08',
     visitCount: 4,
@@ -114,6 +207,7 @@ export const SEED_GUESTS: Guest[] = [
     id: 'g-06',
     firstName: 'Henrik',
     lastName: 'Sørensen',
+    phone: '+447700900106',
     firstVisit: '2026-07-01',
     lastVisit: '2026-07-15',
     visitCount: 2,

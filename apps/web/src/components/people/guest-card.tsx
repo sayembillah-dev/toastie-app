@@ -1,4 +1,5 @@
 import { EnvelopeSimple, UserPlus } from '@phosphor-icons/react/dist/ssr';
+import Link from 'next/link';
 
 import type { Guest } from '@/lib/people/guests';
 import { getGuestInitials, getGuestStage, getGuestSwatch } from '@/lib/people/guests';
@@ -23,7 +24,11 @@ export function GuestCard({ guest }: GuestCardProps) {
   const swatch = getGuestSwatch(guest.id);
 
   return (
-    <div className="group relative overflow-hidden rounded-xl border border-line bg-canvas transition-all duration-200 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-sm">
+    <Link
+      href={`/people/${guest.id}`}
+      aria-label={`Open profile for ${fullName}`}
+      className="group relative block overflow-hidden rounded-xl border border-line bg-canvas transition-all duration-200 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
+    >
       <div className="h-16 bg-emerald-700 px-3 pt-2.5">
         <div className="flex items-start justify-end text-white/80">
           {/* The pipeline stage rather than a "Guest" label — inside the Guests
@@ -84,6 +89,6 @@ export function GuestCard({ guest }: GuestCardProps) {
           ) : null}
         </div>
       </div>
-    </div>
+    </Link>
   );
 }

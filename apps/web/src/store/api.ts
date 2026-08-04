@@ -3,7 +3,7 @@ import { createApi } from '@reduxjs/toolkit/query/react';
 import type { HistoryEvent, MemberStats } from '@/lib/education/history';
 import type { Member, StartPathwayInput } from '@/lib/education/members';
 import type { CreateMeetingInput, Meeting, UpdateMeetingInput } from '@/lib/meetings/meetings';
-import type { Guest, GuestStage } from '@/lib/people/guests';
+import type { Guest, UpdateGuestInput } from '@/lib/people/guests';
 
 import { localBaseQuery } from './local-base-query';
 
@@ -102,26 +102,39 @@ export const toastlyApi = createApi({
       ],
     }),
 
-    /* Moving a card cannot wait for a round trip — the guest has to land in the
-     * new column under the cursor that dropped it, so the cache is patched up
-     * front and rolled back if the write is rejected. */
-    updateGuestStage: build.mutation<Guest, { guestId: string; stage: GuestStage }>({
-      query: ({ guestId, stage }) => ({
+    getGuest: build.query<Guest, string>({
+      query: (guestId) => ({ url: `/guests/${guestId}`, method: 'GET' }),
+      providesTags: (_guest, _error, guestId) => [{ type: 'Guest', id: guestId }],
+    }),
+
+    /* Backs both the kanban stage drop and the edit panel — same PATCH, the
+     * caller decides which fields the body carries. The cache is patched up
+     * front so a moved card lands under the cursor and an edited profile shows
+     * its new values before the round trip finishes; a rejection rolls both
+     * back. */
+    updateGuest: build.mutation<Guest, { guestId: string } & UpdateGuestInput>({
+      query: ({ guestId, ...body }) => ({
         url: `/guests/${guestId}`,
         method: 'PATCH',
-        body: { stage },
+        body,
       }),
-      onQueryStarted: async ({ guestId, stage }, { dispatch, queryFulfilled }) => {
-        const patch = dispatch(
+      onQueryStarted: async ({ guestId, ...changes }, { dispatch, queryFulfilled }) => {
+        const listPatch = dispatch(
           toastlyApi.util.updateQueryData('getGuests', undefined, (draft) => {
             const guest = draft.find((entry) => entry.id === guestId);
-            if (guest) guest.stage = stage;
+            if (guest) Object.assign(guest, changes);
+          }),
+        );
+        const detailPatch = dispatch(
+          toastlyApi.util.updateQueryData('getGuest', guestId, (draft) => {
+            Object.assign(draft, changes);
           }),
         );
         try {
           await queryFulfilled;
         } catch {
-          patch.undo();
+          listPatch.undo();
+          detailPatch.undo();
         }
       },
       invalidatesTags: (_guest, _error, { guestId }) => [{ type: 'Guest', id: guestId }],
@@ -140,5 +153,6 @@ export const {
   useCreateMeetingMutation,
   useUpdateMeetingMutation,
   useGetGuestsQuery,
-  useUpdateGuestStageMutation,
+  useGetGuestQuery,
+  useUpdateGuestMutation,
 } = toastlyApi;

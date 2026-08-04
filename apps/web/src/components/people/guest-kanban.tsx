@@ -2,6 +2,8 @@
 
 import { DotsSixVertical } from '@phosphor-icons/react/dist/ssr';
 import { App, Select } from 'antd';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 
 import type { Guest, GuestStage } from '@/lib/people/guests';
@@ -12,7 +14,7 @@ import {
   getGuestSwatch,
   groupGuestsByStage,
 } from '@/lib/people/guests';
-import { useUpdateGuestStageMutation } from '@/store/api';
+import { useUpdateGuestMutation } from '@/store/api';
 
 /** The id the card writes into the drag payload. A private type keeps stray
  * drags from elsewhere on the page out of the columns. */
@@ -67,6 +69,9 @@ interface KanbanCardProps {
   /** Arrow keys walk the card along the pipeline, so the board is usable
    * without a mouse — dragging is the shortcut, not the only route. */
   onMoveByOffset: (offset: number) => void;
+  /** Enter/Space or a plain click opens the guest's profile. Dragging is a
+   * separate gesture: a click without movement fires this; a drag never does. */
+  onOpen: () => void;
 }
 
 function KanbanCard({
@@ -75,12 +80,14 @@ function KanbanCard({
   onDragStart,
   onDragEnd,
   onMoveByOffset,
+  onOpen,
 }: KanbanCardProps) {
   return (
     <button
       type="button"
       draggable
-      aria-label={`${fullName(guest)} — use the left and right arrow keys to change stage`}
+      aria-label={`${fullName(guest)} — press Enter to open, arrow keys to change stage`}
+      onClick={onOpen}
       onDragStart={(event) => {
         event.dataTransfer.setData(DRAG_MIME, guest.id);
         event.dataTransfer.effectAllowed = 'move';
@@ -125,6 +132,7 @@ interface KanbanColumnProps {
   onCardDragStart: (guestId: string) => void;
   onCardDragEnd: () => void;
   onMoveByOffset: (guest: Guest, offset: number) => void;
+  onOpenGuest: (guest: Guest) => void;
 }
 
 function KanbanColumn({
@@ -138,6 +146,7 @@ function KanbanColumn({
   onCardDragStart,
   onCardDragEnd,
   onMoveByOffset,
+  onOpenGuest,
 }: KanbanColumnProps) {
   return (
     <section
@@ -195,6 +204,7 @@ function KanbanColumn({
               onDragStart={() => onCardDragStart(guest.id)}
               onDragEnd={onCardDragEnd}
               onMoveByOffset={(offset) => onMoveByOffset(guest, offset)}
+              onOpen={() => onOpenGuest(guest)}
             />
           ))
         )}
@@ -310,27 +320,35 @@ function MobileBoard({ guests, onStageChange }: MobileBoardProps) {
                       key={guest.id}
                       className="rounded-xl border border-line bg-canvas p-3 shadow-sm"
                     >
-                      <h4 className="text-sm font-semibold leading-snug text-ink">
-                        {fullName(guest)}
-                      </h4>
+                      {/* Only the top block is a link — the Select at the foot
+                       * has to stay a plain interactive without a nested link
+                       * eating its taps. */}
+                      <Link
+                        href={`/people/${guest.id}`}
+                        className="-m-1 block rounded-lg p-1 transition-colors hover:bg-fill focus:outline-none focus-visible:ring-2 focus-visible:ring-ink"
+                      >
+                        <h4 className="text-sm font-semibold leading-snug text-ink">
+                          {fullName(guest)}
+                        </h4>
 
-                      <div className="mt-2 flex items-center gap-2">
-                        <span
-                          className="rounded-md px-1.5 py-0.5 text-[11px] font-medium"
-                          style={{ backgroundColor: stage.soft, color: stage.accent }}
-                        >
-                          {visitSummary(guest)}
-                        </span>
-                        <span className="ml-auto">
-                          <GuestAvatar guest={guest} size="md" />
-                        </span>
-                      </div>
+                        <div className="mt-2 flex items-center gap-2">
+                          <span
+                            className="rounded-md px-1.5 py-0.5 text-[11px] font-medium"
+                            style={{ backgroundColor: stage.soft, color: stage.accent }}
+                          >
+                            {visitSummary(guest)}
+                          </span>
+                          <span className="ml-auto">
+                            <GuestAvatar guest={guest} size="md" />
+                          </span>
+                        </div>
 
-                      {guest.invitedBy ? (
-                        <p className="mt-2 truncate text-xs text-ink-muted">
-                          Invited by {guest.invitedBy}
-                        </p>
-                      ) : null}
+                        {guest.invitedBy ? (
+                          <p className="mt-2 truncate text-xs text-ink-muted">
+                            Invited by {guest.invitedBy}
+                          </p>
+                        ) : null}
+                      </Link>
 
                       <div className="mt-2.5 border-t border-line pt-2">
                         <Select
@@ -358,16 +376,21 @@ function MobileBoard({ guests, onStageChange }: MobileBoardProps) {
 
 export function GuestKanban({ guests }: { guests: Guest[] }) {
   const { message } = App.useApp();
-  const [updateGuestStage] = useUpdateGuestStageMutation();
+  const router = useRouter();
+  const [updateGuest] = useUpdateGuestMutation();
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<GuestStage | null>(null);
 
   const columns = groupGuestsByStage(guests);
 
+  const openGuest = (guest: Guest) => {
+    router.push(`/people/${guest.id}`);
+  };
+
   const moveGuest = async (guest: Guest, stage: GuestStage) => {
     if (guest.stage === stage) return;
     try {
-      await updateGuestStage({ guestId: guest.id, stage }).unwrap();
+      await updateGuest({ guestId: guest.id, stage }).unwrap();
     } catch {
       message.error(`Could not move ${fullName(guest)}`);
     }
@@ -406,6 +429,7 @@ export function GuestKanban({ guests }: { guests: Guest[] }) {
               setDropTarget(null);
             }}
             onMoveByOffset={moveByOffset}
+            onOpenGuest={openGuest}
           />
         ))}
       </div>
