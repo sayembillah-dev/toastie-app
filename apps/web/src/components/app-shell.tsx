@@ -4,6 +4,7 @@ import {
   AddressBook,
   ArrowLeft,
   Bell,
+  BookOpen,
   CaretRight,
   DotsThree,
   Gear,
@@ -62,6 +63,7 @@ const primaryNav: NavEntry[] = [
   { href: '/', title: 'Dashboard', Icon: SquaresFour },
   { href: '/meetings', title: 'Meetings', Icon: Users },
   { href: '/education', title: 'Education', Icon: GraduationCap },
+  { href: '/library', title: 'Library', Icon: BookOpen },
   { href: '/people', title: 'People', Icon: AddressBook },
 ];
 
