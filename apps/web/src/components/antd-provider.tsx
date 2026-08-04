@@ -27,6 +27,14 @@ export function AntdProvider({ children }: { children: React.ReactNode }) {
             colorBorderSecondary: '#ededed',
             colorBgLayout: '#fafafa',
             colorFillTertiary: '#f2f2f2',
+            /* These three feed every "item selection" component (Select,
+             * Cascader, DatePicker cells, TreeSelect…). By default they derive
+             * from `colorPrimary`, which is near-black here — that turns a
+             * selected + hovered dropdown option into a black plate. The
+             * explicit values keep them soft grey. */
+            controlItemBgHover: '#f2f2f2',
+            controlItemBgActive: '#ebebeb',
+            controlItemBgActiveHover: '#e0e0e0',
             borderRadius: 8,
             controlHeight: 36,
             fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',

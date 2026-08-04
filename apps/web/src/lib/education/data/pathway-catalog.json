@@ -1,0 +1,1172 @@
+{
+  "program": "Toastmasters Pathways Learning Experience",
+  "total_paths": 11,
+  "levels_structure": [
+    { "level": 1, "title": "Mastering Fundamentals" },
+    { "level": 2, "title": "Learning Your Style" },
+    { "level": 3, "title": "Increasing Knowledge" },
+    { "level": 4, "title": "Building Skills" },
+    { "level": 5, "title": "Demonstrating Expertise" }
+  ],
+  "pathways": [
+    {
+      "id": "dynamic-leadership",
+      "name": "Dynamic Leadership",
+      "description": "Focuses on strategic leadership, understanding communication and leadership styles, managing conflict, and leading through organizational change.",
+      "levels": [
+        {
+          "level": 1,
+          "title": "Mastering Fundamentals",
+          "required_projects": [
+            { "name": "Ice Breaker", "speech_time": "4–6 minutes" },
+            { "name": "Writing a Speech with Purpose", "speech_time": "5–7 minutes" },
+            {
+              "name": "Introduction to Vocal Variety and Body Language",
+              "speech_time": "5–7 minutes"
+            },
+            { "name": "Evaluation and Feedback (First Speech)", "speech_time": "5–7 minutes" },
+            {
+              "name": "Evaluation and Feedback (Second Speech with Feedback Applied)",
+              "speech_time": "5–7 minutes"
+            },
+            {
+              "name": "Evaluation and Feedback (Serve as Speech Evaluator)",
+              "speech_time": "2–3 minutes"
+            }
+          ],
+          "electives_required_count": 0,
+          "electives": []
+        },
+        {
+          "level": 2,
+          "title": "Learning Your Style",
+          "required_projects": [
+            { "name": "Understanding Your Leadership Style", "speech_time": "5–7 minutes" },
+            { "name": "Understanding Your Communication Style", "speech_time": "5–7 minutes" },
+            { "name": "Introduction to Toastmasters Mentoring", "speech_time": "5–7 minutes" }
+          ],
+          "electives_required_count": 0,
+          "electives": []
+        },
+        {
+          "level": 3,
+          "title": "Increasing Knowledge",
+          "required_projects": [
+            { "name": "Negotiate the Best Outcome", "speech_time": "5–7 minutes" }
+          ],
+          "electives_required_count": 2,
+          "electives": [
+            { "name": "Active Listening", "speech_time": "Serve as Topicsmaster during a meeting" },
+            { "name": "Connect with Storytelling", "speech_time": "5–7 minutes" },
+            { "name": "Connect with Your Audience", "speech_time": "5–7 minutes" },
+            { "name": "Creating Effective Visual Aids", "speech_time": "5–7 minutes" },
+            { "name": "Deliver Social Speeches", "speech_time": "Two speeches: 3–4 minutes each" },
+            { "name": "Effective Body Language", "speech_time": "5–7 minutes" },
+            { "name": "Focus on the Positive", "speech_time": "5–7 minutes" },
+            { "name": "Inspire Your Audience", "speech_time": "5–7 minutes" },
+            { "name": "Know Your Sense of Humor", "speech_time": "5–7 minutes" },
+            { "name": "Make Connections Through Networking", "speech_time": "5–7 minutes" },
+            { "name": "Prepare for an Interview", "speech_time": "5–7 minutes" },
+            { "name": "Researching and Presenting", "speech_time": "5–7 minutes" },
+            { "name": "Understanding Vocal Variety", "speech_time": "5–7 minutes" },
+            { "name": "Using Descriptive Language", "speech_time": "5–7 minutes" },
+            { "name": "Using Presentation Software", "speech_time": "5–7 minutes" }
+          ]
+        },
+        {
+          "level": 4,
+          "title": "Building Skills",
+          "required_projects": [{ "name": "Manage Change", "speech_time": "5–7 minutes" }],
+          "electives_required_count": 1,
+          "electives": [
+            { "name": "Building a Social Media Presence", "speech_time": "5–7 minutes" },
+            { "name": "Create a Podcast", "speech_time": "5–10 minute recorded segment" },
+            { "name": "Manage Online Meetings", "speech_time": "20–25 minutes" },
+            { "name": "Manage Projects Successfully", "speech_time": "5–7 minutes" },
+            {
+              "name": "Managing a Difficult Audience",
+              "speech_time": "5–7 minute speech + role play"
+            },
+            { "name": "Public Relations Strategies", "speech_time": "5–7 minutes" },
+            {
+              "name": "Question-and-Answer Session",
+              "speech_time": "5–7 minute speech followed by 5-minute Q&A"
+            },
+            { "name": "Write a Compelling Blog", "speech_time": "5–7 minutes" }
+          ]
+        },
+        {
+          "level": 5,
+          "title": "Demonstrating Expertise",
+          "required_projects": [
+            { "name": "Lead in Any Situation", "speech_time": "8–10 minutes" },
+            { "name": "Reflect on Your Path", "speech_time": "10–12 minutes" }
+          ],
+          "electives_required_count": 1,
+          "electives": [
+            {
+              "name": "Ethical Leadership",
+              "speech_time": "20–40 minute workshop or 5–7 minute speech"
+            },
+            {
+              "name": "High Performance Leadership",
+              "speech_time": "First speech: 5–7 minutes; Second speech: 8–10 minutes"
+            },
+            { "name": "Leading in Your Volunteer Organization", "speech_time": "5–7 minutes" },
+            { "name": "Lessons Learned", "speech_time": "5–7 minutes" },
+            { "name": "Moderate a Panel Discussion", "speech_time": "20–40 minutes" },
+            { "name": "Prepare to Speak Professionally", "speech_time": "18–22 minutes" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "effective-coaching",
+      "name": "Effective Coaching",
+      "description": "Focuses on building skills as an effective coach and mentor, learning how to guide individuals and teams toward success.",
+      "levels": [
+        {
+          "level": 1,
+          "title": "Mastering Fundamentals",
+          "required_projects": [
+            { "name": "Ice Breaker", "speech_time": "4–6 minutes" },
+            { "name": "Writing a Speech with Purpose", "speech_time": "5–7 minutes" },
+            {
+              "name": "Introduction to Vocal Variety and Body Language",
+              "speech_time": "5–7 minutes"
+            },
+            { "name": "Evaluation and Feedback (First Speech)", "speech_time": "5–7 minutes" },
+            { "name": "Evaluation and Feedback (Second Speech)", "speech_time": "5–7 minutes" },
+            { "name": "Evaluation and Feedback (Serve as Evaluator)", "speech_time": "2–3 minutes" }
+          ],
+          "electives_required_count": 0,
+          "electives": []
+        },
+        {
+          "level": 2,
+          "title": "Learning Your Style",
+          "required_projects": [
+            { "name": "Understanding Your Leadership Style", "speech_time": "5–7 minutes" },
+            { "name": "Active Listening", "speech_time": "Serve as Topicsmaster" },
+            { "name": "Introduction to Toastmasters Mentoring", "speech_time": "5–7 minutes" }
+          ],
+          "electives_required_count": 0,
+          "electives": []
+        },
+        {
+          "level": 3,
+          "title": "Increasing Knowledge",
+          "required_projects": [{ "name": "Reaching Consensus", "speech_time": "5–7 minutes" }],
+          "electives_required_count": 2,
+          "electives": [
+            { "name": "Active Listening", "speech_time": "Serve as Topicsmaster" },
+            { "name": "Connect with Storytelling", "speech_time": "5–7 minutes" },
+            { "name": "Connect with Your Audience", "speech_time": "5–7 minutes" },
+            { "name": "Creating Effective Visual Aids", "speech_time": "5–7 minutes" },
+            { "name": "Deliver Social Speeches", "speech_time": "Two speeches: 3–4 minutes each" },
+            { "name": "Effective Body Language", "speech_time": "5–7 minutes" },
+            { "name": "Focus on the Positive", "speech_time": "5–7 minutes" },
+            { "name": "Inspire Your Audience", "speech_time": "5–7 minutes" },
+            { "name": "Know Your Sense of Humor", "speech_time": "5–7 minutes" },
+            { "name": "Make Connections Through Networking", "speech_time": "5–7 minutes" },
+            { "name": "Prepare for an Interview", "speech_time": "5–7 minutes" },
+            { "name": "Researching and Presenting", "speech_time": "5–7 minutes" },
+            { "name": "Understanding Vocal Variety", "speech_time": "5–7 minutes" },
+            { "name": "Using Descriptive Language", "speech_time": "5–7 minutes" },
+            { "name": "Using Presentation Software", "speech_time": "5–7 minutes" }
+          ]
+        },
+        {
+          "level": 4,
+          "title": "Building Skills",
+          "required_projects": [
+            { "name": "Improvement Through Coaching", "speech_time": "5–7 minutes" }
+          ],
+          "electives_required_count": 1,
+          "electives": [
+            { "name": "Building a Social Media Presence", "speech_time": "5–7 minutes" },
+            { "name": "Create a Podcast", "speech_time": "5–10 minute segment" },
+            { "name": "Manage Online Meetings", "speech_time": "20–25 minutes" },
+            { "name": "Manage Projects Successfully", "speech_time": "5–7 minutes" },
+            {
+              "name": "Managing a Difficult Audience",
+              "speech_time": "5–7 minute speech + role play"
+            },
+            { "name": "Public Relations Strategies", "speech_time": "5–7 minutes" },
+            {
+              "name": "Question-and-Answer Session",
+              "speech_time": "5–7 minute speech + 5 min Q&A"
+            },
+            { "name": "Write a Compelling Blog", "speech_time": "5–7 minutes" }
+          ]
+        },
+        {
+          "level": 5,
+          "title": "Demonstrating Expertise",
+          "required_projects": [
+            {
+              "name": "High Performance Leadership",
+              "speech_time": "First speech: 5–7 minutes; Second speech: 8–10 minutes"
+            },
+            { "name": "Reflect on Your Path", "speech_time": "10–12 minutes" }
+          ],
+          "electives_required_count": 1,
+          "electives": [
+            {
+              "name": "Ethical Leadership",
+              "speech_time": "20–40 minute workshop or 5–7 minute speech"
+            },
+            { "name": "Leading in Your Volunteer Organization", "speech_time": "5–7 minutes" },
+            { "name": "Lessons Learned", "speech_time": "5–7 minutes" },
+            { "name": "Moderate a Panel Discussion", "speech_time": "20–40 minutes" },
+            { "name": "Prepare to Speak Professionally", "speech_time": "18–22 minutes" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "engaging-humor",
+      "name": "Engaging Humor",
+      "description": "Focuses on incorporating humor into public speaking, engaging audiences, and handling challenging or impromptu speaking situations.",
+      "levels": [
+        {
+          "level": 1,
+          "title": "Mastering Fundamentals",
+          "required_projects": [
+            { "name": "Ice Breaker", "speech_time": "4–6 minutes" },
+            { "name": "Writing a Speech with Purpose", "speech_time": "5–7 minutes" },
+            {
+              "name": "Introduction to Vocal Variety and Body Language",
+              "speech_time": "5–7 minutes"
+            },
+            { "name": "Evaluation and Feedback (First Speech)", "speech_time": "5–7 minutes" },
+            { "name": "Evaluation and Feedback (Second Speech)", "speech_time": "5–7 minutes" },
+            { "name": "Evaluation and Feedback (Serve as Evaluator)", "speech_time": "2–3 minutes" }
+          ],
+          "electives_required_count": 0,
+          "electives": []
+        },
+        {
+          "level": 2,
+          "title": "Learning Your Style",
+          "required_projects": [
+            { "name": "Know Your Sense of Humor", "speech_time": "5–7 minutes" },
+            { "name": "Connect with Your Audience", "speech_time": "5–7 minutes" },
+            { "name": "Introduction to Toastmasters Mentoring", "speech_time": "5–7 minutes" }
+          ],
+          "electives_required_count": 0,
+          "electives": []
+        },
+        {
+          "level": 3,
+          "title": "Increasing Knowledge",
+          "required_projects": [
+            { "name": "Engage Your Audience with Humor", "speech_time": "5–7 minutes" }
+          ],
+          "electives_required_count": 2,
+          "electives": [
+            { "name": "Active Listening", "speech_time": "Serve as Topicsmaster" },
+            { "name": "Connect with Storytelling", "speech_time": "5–7 minutes" },
+            { "name": "Creating Effective Visual Aids", "speech_time": "5–7 minutes" },
+            { "name": "Deliver Social Speeches", "speech_time": "Two speeches: 3–4 minutes each" },
+            { "name": "Effective Body Language", "speech_time": "5–7 minutes" },
+            { "name": "Focus on the Positive", "speech_time": "5–7 minutes" },
+            { "name": "Inspire Your Audience", "speech_time": "5–7 minutes" },
+            { "name": "Make Connections Through Networking", "speech_time": "5–7 minutes" },
+            { "name": "Prepare for an Interview", "speech_time": "5–7 minutes" },
+            { "name": "Researching and Presenting", "speech_time": "5–7 minutes" },
+            { "name": "Understanding Vocal Variety", "speech_time": "5–7 minutes" },
+            { "name": "Using Descriptive Language", "speech_time": "5–7 minutes" },
+            { "name": "Using Presentation Software", "speech_time": "5–7 minutes" }
+          ]
+        },
+        {
+          "level": 4,
+          "title": "Building Skills",
+          "required_projects": [
+            {
+              "name": "Managing a Difficult Audience",
+              "speech_time": "5–7 minute speech + role play"
+            }
+          ],
+          "electives_required_count": 1,
+          "electives": [
+            { "name": "Building a Social Media Presence", "speech_time": "5–7 minutes" },
+            { "name": "Create a Podcast", "speech_time": "5–10 minute segment" },
+            { "name": "Manage Online Meetings", "speech_time": "20–25 minutes" },
+            { "name": "Manage Projects Successfully", "speech_time": "5–7 minutes" },
+            { "name": "Public Relations Strategies", "speech_time": "5–7 minutes" },
+            {
+              "name": "Question-and-Answer Session",
+              "speech_time": "5–7 minute speech + 5 min Q&A"
+            },
+            { "name": "Write a Compelling Blog", "speech_time": "5–7 minutes" }
+          ]
+        },
+        {
+          "level": 5,
+          "title": "Demonstrating Expertise",
+          "required_projects": [
+            { "name": "Deliver a Humorous Speech", "speech_time": "5–7 minutes" },
+            { "name": "Reflect on Your Path", "speech_time": "10–12 minutes" }
+          ],
+          "electives_required_count": 1,
+          "electives": [
+            {
+              "name": "Ethical Leadership",
+              "speech_time": "20–40 minute workshop or 5–7 minute speech"
+            },
+            {
+              "name": "High Performance Leadership",
+              "speech_time": "First speech: 5–7 minutes; Second speech: 8–10 minutes"
+            },
+            { "name": "Leading in Your Volunteer Organization", "speech_time": "5–7 minutes" },
+            { "name": "Lessons Learned", "speech_time": "5–7 minutes" },
+            { "name": "Moderate a Panel Discussion", "speech_time": "20–40 minutes" },
+            { "name": "Prepare to Speak Professionally", "speech_time": "18–22 minutes" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "innovative-planning",
+      "name": "Innovative Planning",
+      "description": "Focuses on project management, creative problem-solving, and advanced planning methodologies.",
+      "levels": [
+        {
+          "level": 1,
+          "title": "Mastering Fundamentals",
+          "required_projects": [
+            { "name": "Ice Breaker", "speech_time": "4–6 minutes" },
+            { "name": "Writing a Speech with Purpose", "speech_time": "5–7 minutes" },
+            {
+              "name": "Introduction to Vocal Variety and Body Language",
+              "speech_time": "5–7 minutes"
+            },
+            { "name": "Evaluation and Feedback (First Speech)", "speech_time": "5–7 minutes" },
+            { "name": "Evaluation and Feedback (Second Speech)", "speech_time": "5–7 minutes" },
+            { "name": "Evaluation and Feedback (Serve as Evaluator)", "speech_time": "2–3 minutes" }
+          ],
+          "electives_required_count": 0,
+          "electives": []
+        },
+        {
+          "level": 2,
+          "title": "Learning Your Style",
+          "required_projects": [
+            { "name": "Understanding Your Leadership Style", "speech_time": "5–7 minutes" },
+            { "name": "Connect with Your Audience", "speech_time": "5–7 minutes" },
+            { "name": "Introduction to Toastmasters Mentoring", "speech_time": "5–7 minutes" }
+          ],
+          "electives_required_count": 0,
+          "electives": []
+        },
+        {
+          "level": 3,
+          "title": "Increasing Knowledge",
+          "required_projects": [{ "name": "Present a Proposal", "speech_time": "5–7 minutes" }],
+          "electives_required_count": 2,
+          "electives": [
+            { "name": "Active Listening", "speech_time": "Serve as Topicsmaster" },
+            { "name": "Connect with Storytelling", "speech_time": "5–7 minutes" },
+            { "name": "Creating Effective Visual Aids", "speech_time": "5–7 minutes" },
+            { "name": "Deliver Social Speeches", "speech_time": "Two speeches: 3–4 minutes each" },
+            { "name": "Effective Body Language", "speech_time": "5–7 minutes" },
+            { "name": "Focus on the Positive", "speech_time": "5–7 minutes" },
+            { "name": "Inspire Your Audience", "speech_time": "5–7 minutes" },
+            { "name": "Know Your Sense of Humor", "speech_time": "5–7 minutes" },
+            { "name": "Make Connections Through Networking", "speech_time": "5–7 minutes" },
+            { "name": "Prepare for an Interview", "speech_time": "5–7 minutes" },
+            { "name": "Researching and Presenting", "speech_time": "5–7 minutes" },
+            { "name": "Understanding Vocal Variety", "speech_time": "5–7 minutes" },
+            { "name": "Using Descriptive Language", "speech_time": "5–7 minutes" },
+            { "name": "Using Presentation Software", "speech_time": "5–7 minutes" }
+          ]
+        },
+        {
+          "level": 4,
+          "title": "Building Skills",
+          "required_projects": [
+            {
+              "name": "Manage Projects Successfully",
+              "speech_time": "First speech: 2–3 minutes; Second speech: 5–7 minutes"
+            }
+          ],
+          "electives_required_count": 1,
+          "electives": [
+            { "name": "Building a Social Media Presence", "speech_time": "5–7 minutes" },
+            { "name": "Create a Podcast", "speech_time": "5–10 minute segment" },
+            { "name": "Manage Online Meetings", "speech_time": "20–25 minutes" },
+            {
+              "name": "Managing a Difficult Audience",
+              "speech_time": "5–7 minute speech + role play"
+            },
+            { "name": "Public Relations Strategies", "speech_time": "5–7 minutes" },
+            {
+              "name": "Question-and-Answer Session",
+              "speech_time": "5–7 minute speech + 5 min Q&A"
+            },
+            { "name": "Write a Compelling Blog", "speech_time": "5–7 minutes" }
+          ]
+        },
+        {
+          "level": 5,
+          "title": "Demonstrating Expertise",
+          "required_projects": [
+            {
+              "name": "High Performance Leadership",
+              "speech_time": "First speech: 5–7 minutes; Second speech: 8–10 minutes"
+            },
+            { "name": "Reflect on Your Path", "speech_time": "10–12 minutes" }
+          ],
+          "electives_required_count": 1,
+          "electives": [
+            {
+              "name": "Ethical Leadership",
+              "speech_time": "20–40 minute workshop or 5–7 minute speech"
+            },
+            { "name": "Leading in Your Volunteer Organization", "speech_time": "5–7 minutes" },
+            { "name": "Lessons Learned", "speech_time": "5–7 minutes" },
+            { "name": "Moderate a Panel Discussion", "speech_time": "20–40 minutes" },
+            { "name": "Prepare to Speak Professionally", "speech_time": "18–22 minutes" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "leadership-development",
+      "name": "Leadership Development",
+      "description": "Focuses on developing skills as an effective leadership practitioner, managing time, and planning/implementing projects.",
+      "levels": [
+        {
+          "level": 1,
+          "title": "Mastering Fundamentals",
+          "required_projects": [
+            { "name": "Ice Breaker", "speech_time": "4–6 minutes" },
+            { "name": "Writing a Speech with Purpose", "speech_time": "5–7 minutes" },
+            {
+              "name": "Introduction to Vocal Variety and Body Language",
+              "speech_time": "5–7 minutes"
+            },
+            { "name": "Evaluation and Feedback (First Speech)", "speech_time": "5–7 minutes" },
+            { "name": "Evaluation and Feedback (Second Speech)", "speech_time": "5–7 minutes" },
+            { "name": "Evaluation and Feedback (Serve as Evaluator)", "speech_time": "2–3 minutes" }
+          ],
+          "electives_required_count": 0,
+          "electives": []
+        },
+        {
+          "level": 2,
+          "title": "Learning Your Style",
+          "required_projects": [
+            { "name": "Managing Time", "speech_time": "5–7 minutes" },
+            { "name": "Understanding Your Leadership Style", "speech_time": "5–7 minutes" },
+            { "name": "Introduction to Toastmasters Mentoring", "speech_time": "5–7 minutes" }
+          ],
+          "electives_required_count": 0,
+          "electives": []
+        },
+        {
+          "level": 3,
+          "title": "Increasing Knowledge",
+          "required_projects": [
+            { "name": "Planning and Implementing", "speech_time": "5–7 minutes" }
+          ],
+          "electives_required_count": 2,
+          "electives": [
+            { "name": "Active Listening", "speech_time": "Serve as Topicsmaster" },
+            { "name": "Connect with Storytelling", "speech_time": "5–7 minutes" },
+            { "name": "Connect with Your Audience", "speech_time": "5–7 minutes" },
+            { "name": "Creating Effective Visual Aids", "speech_time": "5–7 minutes" },
+            { "name": "Deliver Social Speeches", "speech_time": "Two speeches: 3–4 minutes each" },
+            { "name": "Effective Body Language", "speech_time": "5–7 minutes" },
+            { "name": "Focus on the Positive", "speech_time": "5–7 minutes" },
+            { "name": "Inspire Your Audience", "speech_time": "5–7 minutes" },
+            { "name": "Know Your Sense of Humor", "speech_time": "5–7 minutes" },
+            { "name": "Make Connections Through Networking", "speech_time": "5–7 minutes" },
+            { "name": "Prepare for an Interview", "speech_time": "5–7 minutes" },
+            { "name": "Researching and Presenting", "speech_time": "5–7 minutes" },
+            { "name": "Understanding Vocal Variety", "speech_time": "5–7 minutes" },
+            { "name": "Using Descriptive Language", "speech_time": "5–7 minutes" },
+            { "name": "Using Presentation Software", "speech_time": "5–7 minutes" }
+          ]
+        },
+        {
+          "level": 4,
+          "title": "Building Skills",
+          "required_projects": [{ "name": "Leading Your Team", "speech_time": "5–7 minutes" }],
+          "electives_required_count": 1,
+          "electives": [
+            { "name": "Building a Social Media Presence", "speech_time": "5–7 minutes" },
+            { "name": "Create a Podcast", "speech_time": "5–10 minute segment" },
+            { "name": "Manage Online Meetings", "speech_time": "20–25 minutes" },
+            { "name": "Manage Projects Successfully", "speech_time": "5–7 minutes" },
+            {
+              "name": "Managing a Difficult Audience",
+              "speech_time": "5–7 minute speech + role play"
+            },
+            { "name": "Public Relations Strategies", "speech_time": "5–7 minutes" },
+            {
+              "name": "Question-and-Answer Session",
+              "speech_time": "5–7 minute speech + 5 min Q&A"
+            },
+            { "name": "Write a Compelling Blog", "speech_time": "5–7 minutes" }
+          ]
+        },
+        {
+          "level": 5,
+          "title": "Demonstrating Expertise",
+          "required_projects": [
+            { "name": "Manage Successful Events", "speech_time": "5–7 minutes" },
+            { "name": "Reflect on Your Path", "speech_time": "10–12 minutes" }
+          ],
+          "electives_required_count": 1,
+          "electives": [
+            {
+              "name": "Ethical Leadership",
+              "speech_time": "20–40 minute workshop or 5–7 minute speech"
+            },
+            {
+              "name": "High Performance Leadership",
+              "speech_time": "First speech: 5–7 minutes; Second speech: 8–10 minutes"
+            },
+            { "name": "Leading in Your Volunteer Organization", "speech_time": "5–7 minutes" },
+            { "name": "Lessons Learned", "speech_time": "5–7 minutes" },
+            { "name": "Moderate a Panel Discussion", "speech_time": "20–40 minutes" },
+            { "name": "Prepare to Speak Professionally", "speech_time": "18–22 minutes" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "motivational-strategies",
+      "name": "Motivational Strategies",
+      "description": "Focuses on understanding strategies to motivate teams and individuals, building emotional intelligence, and team building.",
+      "levels": [
+        {
+          "level": 1,
+          "title": "Mastering Fundamentals",
+          "required_projects": [
+            { "name": "Ice Breaker", "speech_time": "4–6 minutes" },
+            { "name": "Writing a Speech with Purpose", "speech_time": "5–7 minutes" },
+            {
+              "name": "Introduction to Vocal Variety and Body Language",
+              "speech_time": "5–7 minutes"
+            },
+            { "name": "Evaluation and Feedback (First Speech)", "speech_time": "5–7 minutes" },
+            { "name": "Evaluation and Feedback (Second Speech)", "speech_time": "5–7 minutes" },
+            { "name": "Evaluation and Feedback (Serve as Evaluator)", "speech_time": "2–3 minutes" }
+          ],
+          "electives_required_count": 0,
+          "electives": []
+        },
+        {
+          "level": 2,
+          "title": "Learning Your Style",
+          "required_projects": [
+            { "name": "Understanding Your Communication Style", "speech_time": "5–7 minutes" },
+            { "name": "Active Listening", "speech_time": "Serve as Topicsmaster" },
+            { "name": "Introduction to Toastmasters Mentoring", "speech_time": "5–7 minutes" }
+          ],
+          "electives_required_count": 0,
+          "electives": []
+        },
+        {
+          "level": 3,
+          "title": "Increasing Knowledge",
+          "required_projects": [
+            { "name": "Understanding Emotional Intelligence", "speech_time": "5–7 minutes" }
+          ],
+          "electives_required_count": 2,
+          "electives": [
+            { "name": "Active Listening", "speech_time": "Serve as Topicsmaster" },
+            { "name": "Connect with Storytelling", "speech_time": "5–7 minutes" },
+            { "name": "Connect with Your Audience", "speech_time": "5–7 minutes" },
+            { "name": "Creating Effective Visual Aids", "speech_time": "5–7 minutes" },
+            { "name": "Deliver Social Speeches", "speech_time": "Two speeches: 3–4 minutes each" },
+            { "name": "Effective Body Language", "speech_time": "5–7 minutes" },
+            { "name": "Focus on the Positive", "speech_time": "5–7 minutes" },
+            { "name": "Inspire Your Audience", "speech_time": "5–7 minutes" },
+            { "name": "Know Your Sense of Humor", "speech_time": "5–7 minutes" },
+            { "name": "Make Connections Through Networking", "speech_time": "5–7 minutes" },
+            { "name": "Prepare for an Interview", "speech_time": "5–7 minutes" },
+            { "name": "Researching and Presenting", "speech_time": "5–7 minutes" },
+            { "name": "Understanding Vocal Variety", "speech_time": "5–7 minutes" },
+            { "name": "Using Descriptive Language", "speech_time": "5–7 minutes" },
+            { "name": "Using Presentation Software", "speech_time": "5–7 minutes" }
+          ]
+        },
+        {
+          "level": 4,
+          "title": "Building Skills",
+          "required_projects": [{ "name": "Motivate Others", "speech_time": "5–7 minutes" }],
+          "electives_required_count": 1,
+          "electives": [
+            { "name": "Building a Social Media Presence", "speech_time": "5–7 minutes" },
+            { "name": "Create a Podcast", "speech_time": "5–10 minute segment" },
+            { "name": "Manage Online Meetings", "speech_time": "20–25 minutes" },
+            { "name": "Manage Projects Successfully", "speech_time": "5–7 minutes" },
+            {
+              "name": "Managing a Difficult Audience",
+              "speech_time": "5–7 minute speech + role play"
+            },
+            { "name": "Public Relations Strategies", "speech_time": "5–7 minutes" },
+            {
+              "name": "Question-and-Answer Session",
+              "speech_time": "5–7 minute speech + 5 min Q&A"
+            },
+            { "name": "Write a Compelling Blog", "speech_time": "5–7 minutes" }
+          ]
+        },
+        {
+          "level": 5,
+          "title": "Demonstrating Expertise",
+          "required_projects": [
+            { "name": "Team Building", "speech_time": "5–7 minutes" },
+            { "name": "Reflect on Your Path", "speech_time": "10–12 minutes" }
+          ],
+          "electives_required_count": 1,
+          "electives": [
+            {
+              "name": "Ethical Leadership",
+              "speech_time": "20–40 minute workshop or 5–7 minute speech"
+            },
+            {
+              "name": "High Performance Leadership",
+              "speech_time": "First speech: 5–7 minutes; Second speech: 8–10 minutes"
+            },
+            { "name": "Leading in Your Volunteer Organization", "speech_time": "5–7 minutes" },
+            { "name": "Lessons Learned", "speech_time": "5–7 minutes" },
+            { "name": "Moderate a Panel Discussion", "speech_time": "20–40 minutes" },
+            { "name": "Prepare to Speak Professionally", "speech_time": "18–22 minutes" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "persuasive-influence",
+      "name": "Persuasive Influence",
+      "description": "Focuses on building skills to lead in complex situations, conflict resolution, persuasive speaking, and strategic alignment.",
+      "levels": [
+        {
+          "level": 1,
+          "title": "Mastering Fundamentals",
+          "required_projects": [
+            { "name": "Ice Breaker", "speech_time": "4–6 minutes" },
+            { "name": "Writing a Speech with Purpose", "speech_time": "5–7 minutes" },
+            {
+              "name": "Introduction to Vocal Variety and Body Language",
+              "speech_time": "5–7 minutes"
+            },
+            { "name": "Evaluation and Feedback (First Speech)", "speech_time": "5–7 minutes" },
+            { "name": "Evaluation and Feedback (Second Speech)", "speech_time": "5–7 minutes" },
+            { "name": "Evaluation and Feedback (Serve as Evaluator)", "speech_time": "2–3 minutes" }
+          ],
+          "electives_required_count": 0,
+          "electives": []
+        },
+        {
+          "level": 2,
+          "title": "Learning Your Style",
+          "required_projects": [
+            { "name": "Understanding Your Leadership Style", "speech_time": "5–7 minutes" },
+            { "name": "Active Listening", "speech_time": "Serve as Topicsmaster" },
+            { "name": "Introduction to Toastmasters Mentoring", "speech_time": "5–7 minutes" }
+          ],
+          "electives_required_count": 0,
+          "electives": []
+        },
+        {
+          "level": 3,
+          "title": "Increasing Knowledge",
+          "required_projects": [
+            { "name": "Understanding Conflict Resolution", "speech_time": "5–7 minutes" }
+          ],
+          "electives_required_count": 2,
+          "electives": [
+            { "name": "Active Listening", "speech_time": "Serve as Topicsmaster" },
+            { "name": "Connect with Storytelling", "speech_time": "5–7 minutes" },
+            { "name": "Connect with Your Audience", "speech_time": "5–7 minutes" },
+            { "name": "Creating Effective Visual Aids", "speech_time": "5–7 minutes" },
+            { "name": "Deliver Social Speeches", "speech_time": "Two speeches: 3–4 minutes each" },
+            { "name": "Effective Body Language", "speech_time": "5–7 minutes" },
+            { "name": "Focus on the Positive", "speech_time": "5–7 minutes" },
+            { "name": "Inspire Your Audience", "speech_time": "5–7 minutes" },
+            { "name": "Know Your Sense of Humor", "speech_time": "5–7 minutes" },
+            { "name": "Make Connections Through Networking", "speech_time": "5–7 minutes" },
+            { "name": "Prepare for an Interview", "speech_time": "5–7 minutes" },
+            { "name": "Researching and Presenting", "speech_time": "5–7 minutes" },
+            { "name": "Understanding Vocal Variety", "speech_time": "5–7 minutes" },
+            { "name": "Using Descriptive Language", "speech_time": "5–7 minutes" },
+            { "name": "Using Presentation Software", "speech_time": "5–7 minutes" }
+          ]
+        },
+        {
+          "level": 4,
+          "title": "Building Skills",
+          "required_projects": [
+            { "name": "Leading in Difficult Situations", "speech_time": "5–7 minutes" }
+          ],
+          "electives_required_count": 1,
+          "electives": [
+            { "name": "Building a Social Media Presence", "speech_time": "5–7 minutes" },
+            { "name": "Create a Podcast", "speech_time": "5–10 minute segment" },
+            { "name": "Manage Online Meetings", "speech_time": "20–25 minutes" },
+            { "name": "Manage Projects Successfully", "speech_time": "5–7 minutes" },
+            {
+              "name": "Managing a Difficult Audience",
+              "speech_time": "5–7 minute speech + role play"
+            },
+            { "name": "Public Relations Strategies", "speech_time": "5–7 minutes" },
+            {
+              "name": "Question-and-Answer Session",
+              "speech_time": "5–7 minute speech + 5 min Q&A"
+            },
+            { "name": "Write a Compelling Blog", "speech_time": "5–7 minutes" }
+          ]
+        },
+        {
+          "level": 5,
+          "title": "Demonstrating Expertise",
+          "required_projects": [
+            {
+              "name": "High Performance Leadership",
+              "speech_time": "First speech: 5–7 minutes; Second speech: 8–10 minutes"
+            },
+            { "name": "Reflect on Your Path", "speech_time": "10–12 minutes" }
+          ],
+          "electives_required_count": 1,
+          "electives": [
+            {
+              "name": "Ethical Leadership",
+              "speech_time": "20–40 minute workshop or 5–7 minute speech"
+            },
+            { "name": "Leading in Your Volunteer Organization", "speech_time": "5–7 minutes" },
+            { "name": "Lessons Learned", "speech_time": "5–7 minutes" },
+            { "name": "Moderate a Panel Discussion", "speech_time": "20–40 minutes" },
+            { "name": "Prepare to Speak Professionally", "speech_time": "18–22 minutes" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "presentation-mastery",
+      "name": "Presentation Mastery",
+      "description": "Focuses on building core public speaking skills, effective speech writing, connecting with audiences, and professional speaking.",
+      "levels": [
+        {
+          "level": 1,
+          "title": "Mastering Fundamentals",
+          "required_projects": [
+            { "name": "Ice Breaker", "speech_time": "4–6 minutes" },
+            { "name": "Writing a Speech with Purpose", "speech_time": "5–7 minutes" },
+            {
+              "name": "Introduction to Vocal Variety and Body Language",
+              "speech_time": "5–7 minutes"
+            },
+            { "name": "Evaluation and Feedback (First Speech)", "speech_time": "5–7 minutes" },
+            { "name": "Evaluation and Feedback (Second Speech)", "speech_time": "5–7 minutes" },
+            { "name": "Evaluation and Feedback (Serve as Evaluator)", "speech_time": "2–3 minutes" }
+          ],
+          "electives_required_count": 0,
+          "electives": []
+        },
+        {
+          "level": 2,
+          "title": "Learning Your Style",
+          "required_projects": [
+            { "name": "Understanding Your Communication Style", "speech_time": "5–7 minutes" },
+            { "name": "Effective Body Language", "speech_time": "5–7 minutes" },
+            { "name": "Introduction to Toastmasters Mentoring", "speech_time": "5–7 minutes" }
+          ],
+          "electives_required_count": 0,
+          "electives": []
+        },
+        {
+          "level": 3,
+          "title": "Increasing Knowledge",
+          "required_projects": [{ "name": "Persuasive Speaking", "speech_time": "5–7 minutes" }],
+          "electives_required_count": 2,
+          "electives": [
+            { "name": "Active Listening", "speech_time": "Serve as Topicsmaster" },
+            { "name": "Connect with Storytelling", "speech_time": "5–7 minutes" },
+            { "name": "Connect with Your Audience", "speech_time": "5–7 minutes" },
+            { "name": "Creating Effective Visual Aids", "speech_time": "5–7 minutes" },
+            { "name": "Deliver Social Speeches", "speech_time": "Two speeches: 3–4 minutes each" },
+            { "name": "Focus on the Positive", "speech_time": "5–7 minutes" },
+            { "name": "Inspire Your Audience", "speech_time": "5–7 minutes" },
+            { "name": "Know Your Sense of Humor", "speech_time": "5–7 minutes" },
+            { "name": "Make Connections Through Networking", "speech_time": "5–7 minutes" },
+            { "name": "Prepare for an Interview", "speech_time": "5–7 minutes" },
+            { "name": "Researching and Presenting", "speech_time": "5–7 minutes" },
+            { "name": "Understanding Vocal Variety", "speech_time": "5–7 minutes" },
+            { "name": "Using Descriptive Language", "speech_time": "5–7 minutes" },
+            { "name": "Using Presentation Software", "speech_time": "5–7 minutes" }
+          ]
+        },
+        {
+          "level": 4,
+          "title": "Building Skills",
+          "required_projects": [
+            {
+              "name": "Managing a Difficult Audience",
+              "speech_time": "5–7 minute speech + role play"
+            }
+          ],
+          "electives_required_count": 1,
+          "electives": [
+            { "name": "Building a Social Media Presence", "speech_time": "5–7 minutes" },
+            { "name": "Create a Podcast", "speech_time": "5–10 minute segment" },
+            { "name": "Manage Online Meetings", "speech_time": "20–25 minutes" },
+            { "name": "Manage Projects Successfully", "speech_time": "5–7 minutes" },
+            { "name": "Public Relations Strategies", "speech_time": "5–7 minutes" },
+            {
+              "name": "Question-and-Answer Session",
+              "speech_time": "5–7 minute speech + 5 min Q&A"
+            },
+            { "name": "Write a Compelling Blog", "speech_time": "5–7 minutes" }
+          ]
+        },
+        {
+          "level": 5,
+          "title": "Demonstrating Expertise",
+          "required_projects": [
+            { "name": "Prepare to Speak Professionally", "speech_time": "18–22 minutes" },
+            { "name": "Reflect on Your Path", "speech_time": "10–12 minutes" }
+          ],
+          "electives_required_count": 1,
+          "electives": [
+            {
+              "name": "Ethical Leadership",
+              "speech_time": "20–40 minute workshop or 5–7 minute speech"
+            },
+            {
+              "name": "High Performance Leadership",
+              "speech_time": "First speech: 5–7 minutes; Second speech: 8–10 minutes"
+            },
+            { "name": "Leading in Your Volunteer Organization", "speech_time": "5–7 minutes" },
+            { "name": "Lessons Learned", "speech_time": "5–7 minutes" },
+            { "name": "Moderate a Panel Discussion", "speech_time": "20–40 minutes" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "strategic-relationships",
+      "name": "Strategic Relationships",
+      "description": "Focuses on networking, cross-cultural communication, public relations strategies, and building long-term strategic relationships.",
+      "levels": [
+        {
+          "level": 1,
+          "title": "Mastering Fundamentals",
+          "required_projects": [
+            { "name": "Ice Breaker", "speech_time": "4–6 minutes" },
+            { "name": "Writing a Speech with Purpose", "speech_time": "5–7 minutes" },
+            {
+              "name": "Introduction to Vocal Variety and Body Language",
+              "speech_time": "5–7 minutes"
+            },
+            { "name": "Evaluation and Feedback (First Speech)", "speech_time": "5–7 minutes" },
+            { "name": "Evaluation and Feedback (Second Speech)", "speech_time": "5–7 minutes" },
+            { "name": "Evaluation and Feedback (Serve as Evaluator)", "speech_time": "2–3 minutes" }
+          ],
+          "electives_required_count": 0,
+          "electives": []
+        },
+        {
+          "level": 2,
+          "title": "Learning Your Style",
+          "required_projects": [
+            { "name": "Understanding Your Leadership Style", "speech_time": "5–7 minutes" },
+            { "name": "Cross-Cultural Understanding", "speech_time": "5–7 minutes" },
+            { "name": "Introduction to Toastmasters Mentoring", "speech_time": "5–7 minutes" }
+          ],
+          "electives_required_count": 0,
+          "electives": []
+        },
+        {
+          "level": 3,
+          "title": "Increasing Knowledge",
+          "required_projects": [
+            { "name": "Make Connections Through Networking", "speech_time": "5–7 minutes" }
+          ],
+          "electives_required_count": 2,
+          "electives": [
+            { "name": "Active Listening", "speech_time": "Serve as Topicsmaster" },
+            { "name": "Connect with Storytelling", "speech_time": "5–7 minutes" },
+            { "name": "Connect with Your Audience", "speech_time": "5–7 minutes" },
+            { "name": "Creating Effective Visual Aids", "speech_time": "5–7 minutes" },
+            { "name": "Deliver Social Speeches", "speech_time": "Two speeches: 3–4 minutes each" },
+            { "name": "Effective Body Language", "speech_time": "5–7 minutes" },
+            { "name": "Focus on the Positive", "speech_time": "5–7 minutes" },
+            { "name": "Inspire Your Audience", "speech_time": "5–7 minutes" },
+            { "name": "Know Your Sense of Humor", "speech_time": "5–7 minutes" },
+            { "name": "Prepare for an Interview", "speech_time": "5–7 minutes" },
+            { "name": "Researching and Presenting", "speech_time": "5–7 minutes" },
+            { "name": "Understanding Vocal Variety", "speech_time": "5–7 minutes" },
+            { "name": "Using Descriptive Language", "speech_time": "5–7 minutes" },
+            { "name": "Using Presentation Software", "speech_time": "5–7 minutes" }
+          ]
+        },
+        {
+          "level": 4,
+          "title": "Building Skills",
+          "required_projects": [
+            { "name": "Public Relations Strategies", "speech_time": "5–7 minutes" }
+          ],
+          "electives_required_count": 1,
+          "electives": [
+            { "name": "Building a Social Media Presence", "speech_time": "5–7 minutes" },
+            { "name": "Create a Podcast", "speech_time": "5–10 minute segment" },
+            { "name": "Manage Online Meetings", "speech_time": "20–25 minutes" },
+            { "name": "Manage Projects Successfully", "speech_time": "5–7 minutes" },
+            {
+              "name": "Managing a Difficult Audience",
+              "speech_time": "5–7 minute speech + role play"
+            },
+            {
+              "name": "Question-and-Answer Session",
+              "speech_time": "5–7 minute speech + 5 min Q&A"
+            },
+            { "name": "Write a Compelling Blog", "speech_time": "5–7 minutes" }
+          ]
+        },
+        {
+          "level": 5,
+          "title": "Demonstrating Expertise",
+          "required_projects": [
+            { "name": "Leading in Your Volunteer Organization", "speech_time": "5–7 minutes" },
+            { "name": "Reflect on Your Path", "speech_time": "10–12 minutes" }
+          ],
+          "electives_required_count": 1,
+          "electives": [
+            {
+              "name": "Ethical Leadership",
+              "speech_time": "20–40 minute workshop or 5–7 minute speech"
+            },
+            {
+              "name": "High Performance Leadership",
+              "speech_time": "First speech: 5–7 minutes; Second speech: 8–10 minutes"
+            },
+            { "name": "Lessons Learned", "speech_time": "5–7 minutes" },
+            { "name": "Moderate a Panel Discussion", "speech_time": "20–40 minutes" },
+            { "name": "Prepare to Speak Professionally", "speech_time": "18–22 minutes" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "team-collaboration",
+      "name": "Team Collaboration",
+      "description": "Focuses on active listening, collaborative leadership, motivating team members, and leading successful group initiatives.",
+      "levels": [
+        {
+          "level": 1,
+          "title": "Mastering Fundamentals",
+          "required_projects": [
+            { "name": "Ice Breaker", "speech_time": "4–6 minutes" },
+            { "name": "Writing a Speech with Purpose", "speech_time": "5–7 minutes" },
+            {
+              "name": "Introduction to Vocal Variety and Body Language",
+              "speech_time": "5–7 minutes"
+            },
+            { "name": "Evaluation and Feedback (First Speech)", "speech_time": "5–7 minutes" },
+            { "name": "Evaluation and Feedback (Second Speech)", "speech_time": "5–7 minutes" },
+            { "name": "Evaluation and Feedback (Serve as Evaluator)", "speech_time": "2–3 minutes" }
+          ],
+          "electives_required_count": 0,
+          "electives": []
+        },
+        {
+          "level": 2,
+          "title": "Learning Your Style",
+          "required_projects": [
+            { "name": "Understanding Your Leadership Style", "speech_time": "5–7 minutes" },
+            { "name": "Active Listening", "speech_time": "Serve as Topicsmaster" },
+            { "name": "Introduction to Toastmasters Mentoring", "speech_time": "5–7 minutes" }
+          ],
+          "electives_required_count": 0,
+          "electives": []
+        },
+        {
+          "level": 3,
+          "title": "Increasing Knowledge",
+          "required_projects": [
+            { "name": "Successful Collaboration", "speech_time": "5–7 minutes" }
+          ],
+          "electives_required_count": 2,
+          "electives": [
+            { "name": "Active Listening", "speech_time": "Serve as Topicsmaster" },
+            { "name": "Connect with Storytelling", "speech_time": "5–7 minutes" },
+            { "name": "Connect with Your Audience", "speech_time": "5–7 minutes" },
+            { "name": "Creating Effective Visual Aids", "speech_time": "5–7 minutes" },
+            { "name": "Deliver Social Speeches", "speech_time": "Two speeches: 3–4 minutes each" },
+            { "name": "Effective Body Language", "speech_time": "5–7 minutes" },
+            { "name": "Focus on the Positive", "speech_time": "5–7 minutes" },
+            { "name": "Inspire Your Audience", "speech_time": "5–7 minutes" },
+            { "name": "Know Your Sense of Humor", "speech_time": "5–7 minutes" },
+            { "name": "Make Connections Through Networking", "speech_time": "5–7 minutes" },
+            { "name": "Prepare for an Interview", "speech_time": "5–7 minutes" },
+            { "name": "Researching and Presenting", "speech_time": "5–7 minutes" },
+            { "name": "Understanding Vocal Variety", "speech_time": "5–7 minutes" },
+            { "name": "Using Descriptive Language", "speech_time": "5–7 minutes" },
+            { "name": "Using Presentation Software", "speech_time": "5–7 minutes" }
+          ]
+        },
+        {
+          "level": 4,
+          "title": "Building Skills",
+          "required_projects": [{ "name": "Motivate Others", "speech_time": "5–7 minutes" }],
+          "electives_required_count": 1,
+          "electives": [
+            { "name": "Building a Social Media Presence", "speech_time": "5–7 minutes" },
+            { "name": "Create a Podcast", "speech_time": "5–10 minute segment" },
+            { "name": "Manage Online Meetings", "speech_time": "20–25 minutes" },
+            { "name": "Manage Projects Successfully", "speech_time": "5–7 minutes" },
+            {
+              "name": "Managing a Difficult Audience",
+              "speech_time": "5–7 minute speech + role play"
+            },
+            { "name": "Public Relations Strategies", "speech_time": "5–7 minutes" },
+            {
+              "name": "Question-and-Answer Session",
+              "speech_time": "5–7 minute speech + 5 min Q&A"
+            },
+            { "name": "Write a Compelling Blog", "speech_time": "5–7 minutes" }
+          ]
+        },
+        {
+          "level": 5,
+          "title": "Demonstrating Expertise",
+          "required_projects": [
+            { "name": "Lead in Any Situation", "speech_time": "8–10 minutes" },
+            { "name": "Reflect on Your Path", "speech_time": "10–12 minutes" }
+          ],
+          "electives_required_count": 1,
+          "electives": [
+            {
+              "name": "Ethical Leadership",
+              "speech_time": "20–40 minute workshop or 5–7 minute speech"
+            },
+            {
+              "name": "High Performance Leadership",
+              "speech_time": "First speech: 5–7 minutes; Second speech: 8–10 minutes"
+            },
+            { "name": "Leading in Your Volunteer Organization", "speech_time": "5–7 minutes" },
+            { "name": "Lessons Learned", "speech_time": "5–7 minutes" },
+            { "name": "Moderate a Panel Discussion", "speech_time": "20–40 minutes" },
+            { "name": "Prepare to Speak Professionally", "speech_time": "18–22 minutes" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "visionary-communication",
+      "name": "Visionary Communication",
+      "description": "Focuses on developing communication plans, managing organizational change, establishing strategic visions, and inspiring others.",
+      "levels": [
+        {
+          "level": 1,
+          "title": "Mastering Fundamentals",
+          "required_projects": [
+            { "name": "Ice Breaker", "speech_time": "4–6 minutes" },
+            { "name": "Writing a Speech with Purpose", "speech_time": "5–7 minutes" },
+            {
+              "name": "Introduction to Vocal Variety and Body Language",
+              "speech_time": "5–7 minutes"
+            },
+            { "name": "Evaluation and Feedback (First Speech)", "speech_time": "5–7 minutes" },
+            { "name": "Evaluation and Feedback (Second Speech)", "speech_time": "5–7 minutes" },
+            { "name": "Evaluation and Feedback (Serve as Evaluator)", "speech_time": "2–3 minutes" }
+          ],
+          "electives_required_count": 0,
+          "electives": []
+        },
+        {
+          "level": 2,
+          "title": "Learning Your Style",
+          "required_projects": [
+            { "name": "Understanding Your Leadership Style", "speech_time": "5–7 minutes" },
+            { "name": "Understanding Your Communication Style", "speech_time": "5–7 minutes" },
+            { "name": "Introduction to Toastmasters Mentoring", "speech_time": "5–7 minutes" }
+          ],
+          "electives_required_count": 0,
+          "electives": []
+        },
+        {
+          "level": 3,
+          "title": "Increasing Knowledge",
+          "required_projects": [
+            { "name": "Develop a Communication Plan", "speech_time": "5–7 minutes" }
+          ],
+          "electives_required_count": 2,
+          "electives": [
+            { "name": "Active Listening", "speech_time": "Serve as Topicsmaster" },
+            { "name": "Connect with Storytelling", "speech_time": "5–7 minutes" },
+            { "name": "Connect with Your Audience", "speech_time": "5–7 minutes" },
+            { "name": "Creating Effective Visual Aids", "speech_time": "5–7 minutes" },
+            { "name": "Deliver Social Speeches", "speech_time": "Two speeches: 3–4 minutes each" },
+            { "name": "Effective Body Language", "speech_time": "5–7 minutes" },
+            { "name": "Focus on the Positive", "speech_time": "5–7 minutes" },
+            { "name": "Inspire Your Audience", "speech_time": "5–7 minutes" },
+            { "name": "Know Your Sense of Humor", "speech_time": "5–7 minutes" },
+            { "name": "Make Connections Through Networking", "speech_time": "5–7 minutes" },
+            { "name": "Prepare for an Interview", "speech_time": "5–7 minutes" },
+            { "name": "Researching and Presenting", "speech_time": "5–7 minutes" },
+            { "name": "Understanding Vocal Variety", "speech_time": "5–7 minutes" },
+            { "name": "Using Descriptive Language", "speech_time": "5–7 minutes" },
+            { "name": "Using Presentation Software", "speech_time": "5–7 minutes" }
+          ]
+        },
+        {
+          "level": 4,
+          "title": "Building Skills",
+          "required_projects": [{ "name": "Communicate Change", "speech_time": "5–7 minutes" }],
+          "electives_required_count": 1,
+          "electives": [
+            { "name": "Building a Social Media Presence", "speech_time": "5–7 minutes" },
+            { "name": "Create a Podcast", "speech_time": "5–10 minute segment" },
+            { "name": "Manage Online Meetings", "speech_time": "20–25 minutes" },
+            { "name": "Manage Projects Successfully", "speech_time": "5–7 minutes" },
+            {
+              "name": "Managing a Difficult Audience",
+              "speech_time": "5–7 minute speech + role play"
+            },
+            { "name": "Public Relations Strategies", "speech_time": "5–7 minutes" },
+            {
+              "name": "Question-and-Answer Session",
+              "speech_time": "5–7 minute speech + 5 min Q&A"
+            },
+            { "name": "Write a Compelling Blog", "speech_time": "5–7 minutes" }
+          ]
+        },
+        {
+          "level": 5,
+          "title": "Demonstrating Expertise",
+          "required_projects": [
+            {
+              "name": "Develop Your Vision",
+              "speech_time": "First speech: 5–7 minutes; Second speech: 5–7 minutes"
+            },
+            { "name": "Reflect on Your Path", "speech_time": "10–12 minutes" }
+          ],
+          "electives_required_count": 1,
+          "electives": [
+            {
+              "name": "Ethical Leadership",
+              "speech_time": "20–40 minute workshop or 5–7 minute speech"
+            },
+            {
+              "name": "High Performance Leadership",
+              "speech_time": "First speech: 5–7 minutes; Second speech: 8–10 minutes"
+            },
+            { "name": "Leading in Your Volunteer Organization", "speech_time": "5–7 minutes" },
+            { "name": "Lessons Learned", "speech_time": "5–7 minutes" },
+            { "name": "Moderate a Panel Discussion", "speech_time": "20–40 minutes" },
+            { "name": "Prepare to Speak Professionally", "speech_time": "18–22 minutes" }
+          ]
+        }
+      ]
+    }
+  ]
+}

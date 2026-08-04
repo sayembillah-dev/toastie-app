@@ -101,7 +101,7 @@ export function AssigneeSelect({
       placeholder={placeholder}
       aria-label={ariaLabel}
       onSearch={setSearch}
-      onDropdownVisibleChange={(open) => {
+      onOpenChange={(open) => {
         if (!open) setSearch('');
       }}
       /* We filter in `options` above so the "add as guest" row can appear even

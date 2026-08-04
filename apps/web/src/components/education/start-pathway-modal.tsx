@@ -130,7 +130,7 @@ export function StartPathwayModal({ open, member, onClose }: StartPathwayModalPr
         void handleSubmit();
       }}
       confirmLoading={isSubmitting}
-      maskClosable={!isSubmitting}
+      mask={{ closable: !isSubmitting }}
       okText="Start Pathway"
       cancelText="Cancel"
       okButtonProps={{ disabled: !canSubmit, size: 'middle' }}
@@ -152,7 +152,7 @@ export function StartPathwayModal({ open, member, onClose }: StartPathwayModalPr
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-ink">Start a Pathway</h2>
             <p className="mt-0.5 text-xs text-ink-soft">
-              Set {member.firstName}&apos;s learning path. Their history and progress on Toastly
+              Set {member.firstName}&apos;s learning path. Their history and progress on Toastie
               begin from the level of the project you select.
             </p>
           </div>

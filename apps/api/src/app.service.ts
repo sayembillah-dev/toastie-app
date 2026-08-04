@@ -10,7 +10,7 @@ export interface Greeting {
 export class AppService {
   getHello(): Greeting {
     return {
-      message: 'Hello from the Toastly API 🍞',
+      message: 'Hello from the Toastie API 🍞',
       service: '@toastly/api',
       timestamp: new Date().toISOString(),
     };

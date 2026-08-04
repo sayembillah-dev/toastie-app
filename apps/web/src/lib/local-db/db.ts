@@ -7,8 +7,18 @@ import {
 } from '@/lib/education/history';
 import type { Member } from '@/lib/education/members';
 import { SEED_MEMBERS } from '@/lib/education/members';
+import type { Asset } from '@/lib/library/assets';
+import { SEED_ASSETS } from '@/lib/library/assets';
+import type { LibraryDocument } from '@/lib/library/documents';
+import { SEED_DOCUMENTS } from '@/lib/library/documents';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { SEED_MEETINGS } from '@/lib/meetings/meetings';
+import type { ContactLog } from '@/lib/people/contact-logs';
+import { SEED_CONTACT_LOGS } from '@/lib/people/contact-logs';
+import type { Guest } from '@/lib/people/guests';
+import { SEED_GUESTS } from '@/lib/people/guests';
+import type { VisitLog } from '@/lib/people/visit-logs';
+import { SEED_VISIT_LOGS } from '@/lib/people/visit-logs';
 
 /**
  * The stand-in persistence layer. Until the Nest API exists, every write the UI
@@ -22,13 +32,26 @@ import { SEED_MEETINGS } from '@/lib/meetings/meetings';
 
 /** Bump when the shape of a table changes so stale payloads reseed instead of
  * crashing a returning user's browser. */
-const SCHEMA_VERSION = 'v1';
+/* v2 added `stage` to the guest table — a v1 payload would leave every guest
+ * out of the Kanban columns.
+ * v3 replaced the fixed social fields with the `socials` array shape and added
+ * avatarUrl / whatsapp / notes to Guest.
+ * v4 introduced the contact-logs table backing the Contact logs drawer.
+ * v5 introduced the visit-logs table backing the Visit logs drawer.
+ * v6 introduced the assets table backing the Library > Assets tab.
+ * v7 introduced the documents table backing the Library > Documents tab. */
+const SCHEMA_VERSION = 'v7';
 
 export const DB_KEYS = {
   members: `toastly.db.${SCHEMA_VERSION}.members`,
   historyEvents: `toastly.db.${SCHEMA_VERSION}.history-events`,
   memberExtras: `toastly.db.${SCHEMA_VERSION}.member-extras`,
   meetings: `toastly.db.${SCHEMA_VERSION}.meetings`,
+  guests: `toastly.db.${SCHEMA_VERSION}.guests`,
+  contactLogs: `toastly.db.${SCHEMA_VERSION}.contact-logs`,
+  visitLogs: `toastly.db.${SCHEMA_VERSION}.visit-logs`,
+  assets: `toastly.db.${SCHEMA_VERSION}.assets`,
+  documents: `toastly.db.${SCHEMA_VERSION}.documents`,
 } as const;
 
 /** Used by the cross-tab sync listener to tell our writes apart from any other
@@ -52,6 +75,26 @@ function seedHistoryEvents(): HistoryEvent[] {
 
 function seedMeetings(): Meeting[] {
   return SEED_MEETINGS;
+}
+
+function seedGuests(): Guest[] {
+  return SEED_GUESTS;
+}
+
+function seedContactLogs(): ContactLog[] {
+  return SEED_CONTACT_LOGS;
+}
+
+function seedVisitLogs(): VisitLog[] {
+  return SEED_VISIT_LOGS;
+}
+
+function seedAssets(): Asset[] {
+  return SEED_ASSETS;
+}
+
+function seedDocuments(): LibraryDocument[] {
+  return SEED_DOCUMENTS;
 }
 
 function seedMemberExtras(): MemberExtrasTable {
@@ -109,6 +152,46 @@ export function readMeetings(): Meeting[] {
 
 export function writeMeetings(meetings: Meeting[]): void {
   writeTable(DB_KEYS.meetings, meetings);
+}
+
+export function readGuests(): Guest[] {
+  return readTable(DB_KEYS.guests, seedGuests);
+}
+
+export function writeGuests(guests: Guest[]): void {
+  writeTable(DB_KEYS.guests, guests);
+}
+
+export function readContactLogs(): ContactLog[] {
+  return readTable(DB_KEYS.contactLogs, seedContactLogs);
+}
+
+export function writeContactLogs(logs: ContactLog[]): void {
+  writeTable(DB_KEYS.contactLogs, logs);
+}
+
+export function readVisitLogs(): VisitLog[] {
+  return readTable(DB_KEYS.visitLogs, seedVisitLogs);
+}
+
+export function writeVisitLogs(logs: VisitLog[]): void {
+  writeTable(DB_KEYS.visitLogs, logs);
+}
+
+export function readAssets(): Asset[] {
+  return readTable(DB_KEYS.assets, seedAssets);
+}
+
+export function writeAssets(assets: Asset[]): void {
+  writeTable(DB_KEYS.assets, assets);
+}
+
+export function readDocuments(): LibraryDocument[] {
+  return readTable(DB_KEYS.documents, seedDocuments);
+}
+
+export function writeDocuments(docs: LibraryDocument[]): void {
+  writeTable(DB_KEYS.documents, docs);
 }
 
 export function readMemberExtras(): MemberExtrasTable {
