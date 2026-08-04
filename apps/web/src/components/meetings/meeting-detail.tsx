@@ -54,7 +54,7 @@ function buildTabs(meeting: Meeting): TabDef[] {
       key: 'checklist',
       label: 'Checklist',
       Icon: CheckSquare,
-      content: <ChecklistTab />,
+      content: <ChecklistTab meetingId={meeting.id} />,
     },
     {
       key: 'theme',

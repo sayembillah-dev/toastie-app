@@ -7,6 +7,15 @@ import {
 } from '@/lib/education/history';
 import type { Member } from '@/lib/education/members';
 import { SEED_MEMBERS } from '@/lib/education/members';
+import type { BudgetLine } from '@/lib/finance/budget';
+import { SEED_BUDGET_LINES } from '@/lib/finance/budget';
+import type { DuesRecord } from '@/lib/finance/dues';
+import { SEED_DUES_RECORDS } from '@/lib/finance/dues';
+import type { Transaction } from '@/lib/finance/transactions';
+import { SEED_TRANSACTIONS } from '@/lib/finance/transactions';
+import type { ChecklistItem } from '@/lib/inventory/checklist';
+import type { InventoryItem } from '@/lib/inventory/inventory-items';
+import { SEED_INVENTORY_ITEMS } from '@/lib/inventory/inventory-items';
 import type { Asset } from '@/lib/library/assets';
 import { SEED_ASSETS } from '@/lib/library/assets';
 import type { LibraryDocument } from '@/lib/library/documents';
@@ -39,8 +48,12 @@ import { SEED_VISIT_LOGS } from '@/lib/people/visit-logs';
  * v4 introduced the contact-logs table backing the Contact logs drawer.
  * v5 introduced the visit-logs table backing the Visit logs drawer.
  * v6 introduced the assets table backing the Library > Assets tab.
- * v7 introduced the documents table backing the Library > Documents tab. */
-const SCHEMA_VERSION = 'v7';
+ * v7 introduced the documents table backing the Library > Documents tab.
+ * v8 introduced the checklists (per meeting) and inventory-items tables
+ *    backing the Inventory & checklist page.
+ * v9 introduced the transactions, dues-records and budget-lines tables
+ *    backing the Finance (treasurer) page. */
+const SCHEMA_VERSION = 'v9';
 
 export const DB_KEYS = {
   members: `toastly.db.${SCHEMA_VERSION}.members`,
@@ -52,6 +65,11 @@ export const DB_KEYS = {
   visitLogs: `toastly.db.${SCHEMA_VERSION}.visit-logs`,
   assets: `toastly.db.${SCHEMA_VERSION}.assets`,
   documents: `toastly.db.${SCHEMA_VERSION}.documents`,
+  checklists: `toastly.db.${SCHEMA_VERSION}.checklists`,
+  inventoryItems: `toastly.db.${SCHEMA_VERSION}.inventory-items`,
+  transactions: `toastly.db.${SCHEMA_VERSION}.transactions`,
+  duesRecords: `toastly.db.${SCHEMA_VERSION}.dues-records`,
+  budgetLines: `toastly.db.${SCHEMA_VERSION}.budget-lines`,
 } as const;
 
 /** Used by the cross-tab sync listener to tell our writes apart from any other
@@ -59,6 +77,10 @@ export const DB_KEYS = {
 export const DB_KEY_LIST: readonly string[] = Object.values(DB_KEYS);
 
 type MemberExtrasTable = Record<string, MemberProfileExtras>;
+
+/** One row per meeting — the checklist rows the meeting owns. Absent
+ * meetings return an empty list and are seeded on first write. */
+export type ChecklistsTable = Record<string, ChecklistItem[]>;
 
 /* ---------------------------------------------------------------- seeding -- */
 
@@ -95,6 +117,29 @@ function seedAssets(): Asset[] {
 
 function seedDocuments(): LibraryDocument[] {
   return SEED_DOCUMENTS;
+}
+
+function seedChecklists(): ChecklistsTable {
+  /* Empty by default — the first read for a given meeting seeds that meeting's
+   * row with the default checklist so a returning user's edits are never
+   * overwritten by the seed data. */
+  return {};
+}
+
+function seedInventoryItems(): InventoryItem[] {
+  return SEED_INVENTORY_ITEMS;
+}
+
+function seedTransactions(): Transaction[] {
+  return SEED_TRANSACTIONS;
+}
+
+function seedDuesRecords(): DuesRecord[] {
+  return SEED_DUES_RECORDS;
+}
+
+function seedBudgetLines(): BudgetLine[] {
+  return SEED_BUDGET_LINES;
 }
 
 function seedMemberExtras(): MemberExtrasTable {
@@ -192,6 +237,46 @@ export function readDocuments(): LibraryDocument[] {
 
 export function writeDocuments(docs: LibraryDocument[]): void {
   writeTable(DB_KEYS.documents, docs);
+}
+
+export function readChecklists(): ChecklistsTable {
+  return readTable(DB_KEYS.checklists, seedChecklists);
+}
+
+export function writeChecklists(checklists: ChecklistsTable): void {
+  writeTable(DB_KEYS.checklists, checklists);
+}
+
+export function readInventoryItems(): InventoryItem[] {
+  return readTable(DB_KEYS.inventoryItems, seedInventoryItems);
+}
+
+export function writeInventoryItems(items: InventoryItem[]): void {
+  writeTable(DB_KEYS.inventoryItems, items);
+}
+
+export function readTransactions(): Transaction[] {
+  return readTable(DB_KEYS.transactions, seedTransactions);
+}
+
+export function writeTransactions(transactions: Transaction[]): void {
+  writeTable(DB_KEYS.transactions, transactions);
+}
+
+export function readDuesRecords(): DuesRecord[] {
+  return readTable(DB_KEYS.duesRecords, seedDuesRecords);
+}
+
+export function writeDuesRecords(records: DuesRecord[]): void {
+  writeTable(DB_KEYS.duesRecords, records);
+}
+
+export function readBudgetLines(): BudgetLine[] {
+  return readTable(DB_KEYS.budgetLines, seedBudgetLines);
+}
+
+export function writeBudgetLines(lines: BudgetLine[]): void {
+  writeTable(DB_KEYS.budgetLines, lines);
 }
 
 export function readMemberExtras(): MemberExtrasTable {

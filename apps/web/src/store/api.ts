@@ -2,6 +2,27 @@ import { createApi } from '@reduxjs/toolkit/query/react';
 
 import type { HistoryEvent, MemberStats } from '@/lib/education/history';
 import type { Member, StartPathwayInput } from '@/lib/education/members';
+import type {
+  BudgetLine,
+  CreateBudgetLineInput,
+  UpdateBudgetLineInput,
+} from '@/lib/finance/budget';
+import type { DuesRecord, UpdateDuesRecordInput } from '@/lib/finance/dues';
+import type {
+  CreateTransactionInput,
+  Transaction,
+  UpdateTransactionInput,
+} from '@/lib/finance/transactions';
+import type {
+  ChecklistItem,
+  CreateChecklistItemInput,
+  UpdateChecklistItemInput,
+} from '@/lib/inventory/checklist';
+import type {
+  CreateInventoryItemInput,
+  InventoryItem,
+  UpdateInventoryItemInput,
+} from '@/lib/inventory/inventory-items';
 import type { Asset, AssetsPage, CreateAssetInput, UpdateAssetInput } from '@/lib/library/assets';
 import { ASSETS_PAGE_SIZE } from '@/lib/library/assets';
 import type {
@@ -39,6 +60,11 @@ export const toastlyApi = createApi({
     'VisitLog',
     'Asset',
     'Document',
+    'Checklist',
+    'InventoryItem',
+    'Transaction',
+    'DuesRecord',
+    'BudgetLine',
   ],
   endpoints: (build) => ({
     getMembers: build.query<Member[], void>({
@@ -527,6 +553,207 @@ export const toastlyApi = createApi({
       },
       invalidatesTags: [{ type: 'Document', id: 'LIST' }],
     }),
+
+    /* Checklist is keyed by meeting: the cache entry per meetingId is what the
+     * Meeting tab and the Inventory tab both read, so a tick in one surface
+     * shows up instantly in the other. */
+    getChecklist: build.query<ChecklistItem[], string>({
+      query: (meetingId) => ({ url: `/meetings/${meetingId}/checklist`, method: 'GET' }),
+      providesTags: (_items, _error, meetingId) => [{ type: 'Checklist', id: meetingId }],
+    }),
+
+    createChecklistItem: build.mutation<
+      ChecklistItem,
+      { meetingId: string } & CreateChecklistItemInput
+    >({
+      query: ({ meetingId, ...body }) => ({
+        url: `/meetings/${meetingId}/checklist`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_item, _error, { meetingId }) => [{ type: 'Checklist', id: meetingId }],
+    }),
+
+    /* Toggling done is the hot path — an optimistic update keeps the UI
+     * checkbox feeling instant while the round trip finishes. */
+    updateChecklistItem: build.mutation<
+      ChecklistItem,
+      { meetingId: string; itemId: string } & UpdateChecklistItemInput
+    >({
+      query: ({ meetingId, itemId, ...body }) => ({
+        url: `/meetings/${meetingId}/checklist/${itemId}`,
+        method: 'PATCH',
+        body,
+      }),
+      onQueryStarted: async ({ meetingId, itemId, ...changes }, { dispatch, queryFulfilled }) => {
+        const patch = dispatch(
+          toastlyApi.util.updateQueryData('getChecklist', meetingId, (draft) => {
+            const entry = draft.find((row) => row.id === itemId);
+            if (entry) Object.assign(entry, changes);
+          }),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+      invalidatesTags: (_item, _error, { meetingId }) => [{ type: 'Checklist', id: meetingId }],
+    }),
+
+    deleteChecklistItem: build.mutation<null, { meetingId: string; itemId: string }>({
+      query: ({ meetingId, itemId }) => ({
+        url: `/meetings/${meetingId}/checklist/${itemId}`,
+        method: 'DELETE',
+      }),
+      onQueryStarted: async ({ meetingId, itemId }, { dispatch, queryFulfilled }) => {
+        const patch = dispatch(
+          toastlyApi.util.updateQueryData('getChecklist', meetingId, (draft) =>
+            draft.filter((entry) => entry.id !== itemId),
+          ),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+      invalidatesTags: (_item, _error, { meetingId }) => [{ type: 'Checklist', id: meetingId }],
+    }),
+
+    /* Inventory items are a small single-list resource — no pagination, no
+     * search. The Inventory tab reads the whole roster and filters on the
+     * client. */
+    listInventoryItems: build.query<InventoryItem[], void>({
+      query: () => ({ url: '/inventory-items', method: 'GET' }),
+      providesTags: (items) => [
+        { type: 'InventoryItem', id: 'LIST' },
+        ...(items ?? []).map((item) => ({ type: 'InventoryItem' as const, id: item.id })),
+      ],
+    }),
+
+    createInventoryItem: build.mutation<InventoryItem, CreateInventoryItemInput>({
+      query: (body) => ({ url: '/inventory-items', method: 'POST', body }),
+      invalidatesTags: [{ type: 'InventoryItem', id: 'LIST' }],
+    }),
+
+    updateInventoryItem: build.mutation<
+      InventoryItem,
+      { itemId: string } & UpdateInventoryItemInput
+    >({
+      query: ({ itemId, ...body }) => ({
+        url: `/inventory-items/${itemId}`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: (_item, _error, { itemId }) => [
+        { type: 'InventoryItem', id: itemId },
+        { type: 'InventoryItem', id: 'LIST' },
+      ],
+    }),
+
+    deleteInventoryItem: build.mutation<null, string>({
+      query: (itemId) => ({ url: `/inventory-items/${itemId}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'InventoryItem', id: 'LIST' }],
+    }),
+
+    /* The whole ledger is a small single-list resource, same shape as
+     * inventory items — the Transactions tab reads it all and filters on the
+     * client. */
+    listTransactions: build.query<Transaction[], void>({
+      query: () => ({ url: '/transactions', method: 'GET' }),
+      providesTags: (txs) => [
+        { type: 'Transaction', id: 'LIST' },
+        ...(txs ?? []).map((tx) => ({ type: 'Transaction' as const, id: tx.id })),
+      ],
+    }),
+
+    createTransaction: build.mutation<Transaction, CreateTransactionInput>({
+      query: (body) => ({ url: '/transactions', method: 'POST', body }),
+      invalidatesTags: [{ type: 'Transaction', id: 'LIST' }],
+    }),
+
+    updateTransaction: build.mutation<
+      Transaction,
+      { transactionId: string } & UpdateTransactionInput
+    >({
+      query: ({ transactionId, ...body }) => ({
+        url: `/transactions/${transactionId}`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: (_tx, _error, { transactionId }) => [
+        { type: 'Transaction', id: transactionId },
+        { type: 'Transaction', id: 'LIST' },
+      ],
+    }),
+
+    deleteTransaction: build.mutation<null, string>({
+      query: (transactionId) => ({ url: `/transactions/${transactionId}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'Transaction', id: 'LIST' }],
+    }),
+
+    /* Keyed by dues period — switching periods on the Dues tab hits a fresh
+     * cache slot rather than refiltering one giant list. */
+    listDuesRecords: build.query<DuesRecord[], string>({
+      query: (periodId) => ({
+        url: `/dues-records?${new URLSearchParams({ periodId }).toString()}`,
+        method: 'GET',
+      }),
+      providesTags: (records) => [
+        { type: 'DuesRecord', id: 'LIST' },
+        ...(records ?? []).map((record) => ({ type: 'DuesRecord' as const, id: record.id })),
+      ],
+    }),
+
+    /* Recording (or clearing) a payment writes the linked ledger entry
+     * server-side, so this also invalidates the transaction list — see
+     * `updateDuesRecord` in `local-db/handlers.ts`. */
+    updateDuesRecord: build.mutation<DuesRecord, { recordId: string } & UpdateDuesRecordInput>({
+      query: ({ recordId, ...body }) => ({
+        url: `/dues-records/${recordId}`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: (_record, _error, { recordId }) => [
+        { type: 'DuesRecord', id: recordId },
+        { type: 'DuesRecord', id: 'LIST' },
+        { type: 'Transaction', id: 'LIST' },
+      ],
+    }),
+
+    listBudgetLines: build.query<BudgetLine[], string>({
+      query: (fiscalYear) => ({
+        url: `/budget-lines?${new URLSearchParams({ fiscalYear }).toString()}`,
+        method: 'GET',
+      }),
+      providesTags: (lines) => [
+        { type: 'BudgetLine', id: 'LIST' },
+        ...(lines ?? []).map((line) => ({ type: 'BudgetLine' as const, id: line.id })),
+      ],
+    }),
+
+    createBudgetLine: build.mutation<BudgetLine, CreateBudgetLineInput>({
+      query: (body) => ({ url: '/budget-lines', method: 'POST', body }),
+      invalidatesTags: [{ type: 'BudgetLine', id: 'LIST' }],
+    }),
+
+    updateBudgetLine: build.mutation<BudgetLine, { lineId: string } & UpdateBudgetLineInput>({
+      query: ({ lineId, ...body }) => ({
+        url: `/budget-lines/${lineId}`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: (_line, _error, { lineId }) => [
+        { type: 'BudgetLine', id: lineId },
+        { type: 'BudgetLine', id: 'LIST' },
+      ],
+    }),
+
+    deleteBudgetLine: build.mutation<null, string>({
+      query: (lineId) => ({ url: `/budget-lines/${lineId}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'BudgetLine', id: 'LIST' }],
+    }),
   }),
 });
 
@@ -560,4 +787,22 @@ export const {
   useCreateDocumentMutation,
   useUpdateDocumentMutation,
   useDeleteDocumentMutation,
+  useGetChecklistQuery,
+  useCreateChecklistItemMutation,
+  useUpdateChecklistItemMutation,
+  useDeleteChecklistItemMutation,
+  useListInventoryItemsQuery,
+  useCreateInventoryItemMutation,
+  useUpdateInventoryItemMutation,
+  useDeleteInventoryItemMutation,
+  useListTransactionsQuery,
+  useCreateTransactionMutation,
+  useUpdateTransactionMutation,
+  useDeleteTransactionMutation,
+  useListDuesRecordsQuery,
+  useUpdateDuesRecordMutation,
+  useListBudgetLinesQuery,
+  useCreateBudgetLineMutation,
+  useUpdateBudgetLineMutation,
+  useDeleteBudgetLineMutation,
 } = toastlyApi;

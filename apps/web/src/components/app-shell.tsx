@@ -6,6 +6,7 @@ import {
   Bell,
   BookOpen,
   CaretRight,
+  ClipboardText,
   DotsThree,
   Gear,
   GraduationCap,
@@ -15,6 +16,7 @@ import {
   SidebarSimple,
   SquaresFour,
   Users,
+  Wallet,
   X,
 } from '@phosphor-icons/react/dist/ssr';
 import { Avatar, Badge, Button, Drawer, Input, Layout, Menu } from 'antd';
@@ -65,6 +67,8 @@ const primaryNav: NavEntry[] = [
   { href: '/education', title: 'Education', Icon: GraduationCap },
   { href: '/library', title: 'Library', Icon: BookOpen },
   { href: '/people', title: 'People', Icon: AddressBook },
+  { href: '/inventory', title: 'Inventory & checklist', Icon: ClipboardText },
+  { href: '/finance', title: 'Finance', Icon: Wallet },
 ];
 
 /** Named routes win; anything deeper falls back to title-cased segments.

@@ -3,6 +3,47 @@ import { computeMemberStats, sortEvents } from '@/lib/education/history';
 import type { Member, StartPathwayInput } from '@/lib/education/members';
 import { PATHWAYS } from '@/lib/education/members';
 import { findProject } from '@/lib/education/pathways';
+import type {
+  BudgetLine,
+  CreateBudgetLineInput,
+  UpdateBudgetLineInput,
+} from '@/lib/finance/budget';
+import { BUDGET_LINE_NOTE_MAX } from '@/lib/finance/budget';
+import type { DuesRecord, UpdateDuesRecordInput } from '@/lib/finance/dues';
+import { getDuesPeriod } from '@/lib/finance/dues';
+import type {
+  CreateTransactionInput,
+  Transaction,
+  UpdateTransactionInput,
+} from '@/lib/finance/transactions';
+import {
+  CATEGORY_LABELS,
+  isIncomeCategory,
+  isPaymentMethod,
+  isTransactionCategory,
+  sortTransactionsNewestFirst,
+  TRANSACTION_COUNTERPARTY_MAX,
+  TRANSACTION_DESCRIPTION_MAX,
+  TRANSACTION_REFERENCE_MAX,
+} from '@/lib/finance/transactions';
+import type {
+  ChecklistItem,
+  CreateChecklistItemInput,
+  UpdateChecklistItemInput,
+} from '@/lib/inventory/checklist';
+import { CHECKLIST_ITEM_TEXT_MAX, DEFAULT_CHECKLIST_TEXTS } from '@/lib/inventory/checklist';
+import type {
+  CreateInventoryItemInput,
+  InventoryItem,
+  UpdateInventoryItemInput,
+} from '@/lib/inventory/inventory-items';
+import {
+  INVENTORY_DESCRIPTION_MAX,
+  INVENTORY_IMAGE_MAX_BYTES,
+  INVENTORY_TITLE_MAX,
+  isInventoryImageMimeType,
+  sortInventoryItemsNewestFirst,
+} from '@/lib/inventory/inventory-items';
 import type { Asset, AssetsPage, CreateAssetInput, UpdateAssetInput } from '@/lib/library/assets';
 import {
   ASSET_FILE_MAX_BYTES,
@@ -41,21 +82,31 @@ import { VISIT_LOG_NOTES_MAX, VISIT_LOG_ROLE_MAX } from '@/lib/people/visit-logs
 
 import {
   readAssets,
+  readBudgetLines,
+  readChecklists,
   readContactLogs,
   readDocuments,
+  readDuesRecords,
   readExtrasFor,
   readGuests,
   readHistoryEvents,
+  readInventoryItems,
   readMeetings,
   readMembers,
+  readTransactions,
   readVisitLogs,
   writeAssets,
+  writeBudgetLines,
+  writeChecklists,
   writeContactLogs,
   writeDocuments,
+  writeDuesRecords,
   writeGuests,
   writeHistoryEvents,
+  writeInventoryItems,
   writeMeetings,
   writeMembers,
+  writeTransactions,
   writeVisitLogs,
 } from './db';
 
@@ -889,6 +940,779 @@ function deleteDocument({ params }: RouteContext): null {
   return null;
 }
 
+/* ------------------------------------------------------------ checklists -- */
+
+function requireMeetingExists(meetingId: string): void {
+  const meeting = readMeetings().find((entry) => entry.id === meetingId);
+  if (!meeting) throw new LocalApiError(404, `No meeting with id "${meetingId}"`);
+}
+
+function createChecklistItemId(meetingId: string): string {
+  return `${meetingId}-chk-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+}
+
+/** Returns the meeting's checklist, seeding it with the default rows on first
+ * read. The seed happens here rather than at DB-init time so a meeting created
+ * after the seed run still lands with a helpful starter list. */
+function loadChecklistFor(meetingId: string): ChecklistItem[] {
+  const table = readChecklists();
+  if (table[meetingId]) return table[meetingId];
+
+  const seeded = DEFAULT_CHECKLIST_TEXTS.map((text) => ({
+    id: createChecklistItemId(meetingId),
+    text,
+    done: false,
+  }));
+  writeChecklists({ ...table, [meetingId]: seeded });
+  return seeded;
+}
+
+function saveChecklistFor(meetingId: string, items: ChecklistItem[]): void {
+  writeChecklists({ ...readChecklists(), [meetingId]: items });
+}
+
+function parseCreateChecklistItemBody(body: unknown): CreateChecklistItemInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected a create-checklist-item body');
+  }
+  const { text } = body as Partial<CreateChecklistItemInput>;
+  if (typeof text !== 'string' || text.trim() === '') {
+    throw new LocalApiError(400, 'A checklist item needs some text');
+  }
+  if (text.length > CHECKLIST_ITEM_TEXT_MAX) {
+    throw new LocalApiError(
+      400,
+      `Please keep the item under ${CHECKLIST_ITEM_TEXT_MAX} characters`,
+    );
+  }
+  return { text: text.trim() };
+}
+
+function parseUpdateChecklistItemBody(body: unknown): UpdateChecklistItemInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected an update-checklist-item body');
+  }
+  const input = body as Record<string, unknown>;
+  const output: UpdateChecklistItemInput = {};
+  if ('text' in input) {
+    const raw = input.text;
+    if (typeof raw !== 'string' || raw.trim() === '') {
+      throw new LocalApiError(400, 'A checklist item cannot be blank');
+    }
+    if (raw.length > CHECKLIST_ITEM_TEXT_MAX) {
+      throw new LocalApiError(
+        400,
+        `Please keep the item under ${CHECKLIST_ITEM_TEXT_MAX} characters`,
+      );
+    }
+    output.text = raw.trim();
+  }
+  if ('done' in input) {
+    if (typeof input.done !== 'boolean') {
+      throw new LocalApiError(400, 'done must be a boolean');
+    }
+    output.done = input.done;
+  }
+  return output;
+}
+
+function listChecklist({ params }: RouteContext): ChecklistItem[] {
+  requireMeetingExists(params.meetingId);
+  return loadChecklistFor(params.meetingId);
+}
+
+function createChecklistItem({ params, body }: RouteContext): ChecklistItem {
+  requireMeetingExists(params.meetingId);
+  const input = parseCreateChecklistItemBody(body);
+  const item: ChecklistItem = {
+    id: createChecklistItemId(params.meetingId),
+    text: input.text,
+    done: false,
+  };
+  const current = loadChecklistFor(params.meetingId);
+  saveChecklistFor(params.meetingId, [...current, item]);
+  return item;
+}
+
+function updateChecklistItem({ params, body }: RouteContext): ChecklistItem {
+  requireMeetingExists(params.meetingId);
+  const current = loadChecklistFor(params.meetingId);
+  const existing = current.find((entry) => entry.id === params.itemId);
+  if (!existing) throw new LocalApiError(404, `No checklist item with id "${params.itemId}"`);
+  const updated: ChecklistItem = { ...existing, ...parseUpdateChecklistItemBody(body) };
+  saveChecklistFor(
+    params.meetingId,
+    current.map((entry) => (entry.id === updated.id ? updated : entry)),
+  );
+  return updated;
+}
+
+function deleteChecklistItem({ params }: RouteContext): null {
+  requireMeetingExists(params.meetingId);
+  const current = loadChecklistFor(params.meetingId);
+  if (!current.some((entry) => entry.id === params.itemId)) {
+    throw new LocalApiError(404, `No checklist item with id "${params.itemId}"`);
+  }
+  saveChecklistFor(
+    params.meetingId,
+    current.filter((entry) => entry.id !== params.itemId),
+  );
+  return null;
+}
+
+/* --------------------------------------------------------- inventory items -- */
+
+function parseCreateInventoryItemBody(body: unknown): CreateInventoryItemInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected a create-inventory-item body');
+  }
+  const { title, description, imageUrl, imageMimeType } = body as Partial<CreateInventoryItemInput>;
+
+  if (typeof title !== 'string' || title.trim() === '') {
+    throw new LocalApiError(400, 'A title is required');
+  }
+  if (title.length > INVENTORY_TITLE_MAX) {
+    throw new LocalApiError(400, `Please keep the title under ${INVENTORY_TITLE_MAX} characters`);
+  }
+
+  const output: CreateInventoryItemInput = { title: title.trim() };
+
+  if (description !== undefined && description !== null && description !== '') {
+    if (typeof description !== 'string') {
+      throw new LocalApiError(400, 'description must be a string');
+    }
+    if (description.length > INVENTORY_DESCRIPTION_MAX) {
+      throw new LocalApiError(
+        400,
+        `Please keep the description under ${INVENTORY_DESCRIPTION_MAX} characters`,
+      );
+    }
+    output.description = description.trim();
+  }
+
+  if (imageUrl !== undefined && imageUrl !== null && imageUrl !== '') {
+    if (typeof imageUrl !== 'string' || !imageUrl.startsWith('data:')) {
+      throw new LocalApiError(400, 'A data-URL image payload is required');
+    }
+    if (!isInventoryImageMimeType(imageMimeType)) {
+      throw new LocalApiError(400, `"${String(imageMimeType)}" is not a supported image type`);
+    }
+    /* Rough size check — a base64 payload is ~4/3 the byte count. Kept as an
+     * upper bound rather than exact math because the client already validates
+     * against the same ceiling on the way in. */
+    const approxBytes = Math.floor((imageUrl.length * 3) / 4);
+    if (approxBytes > INVENTORY_IMAGE_MAX_BYTES) {
+      const mb = (INVENTORY_IMAGE_MAX_BYTES / (1024 * 1024)).toFixed(0);
+      throw new LocalApiError(400, `Please choose an image under ${mb} MB`);
+    }
+    output.imageUrl = imageUrl;
+    output.imageMimeType = imageMimeType;
+  }
+
+  return output;
+}
+
+function parseUpdateInventoryItemBody(body: unknown): UpdateInventoryItemInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected an update-inventory-item body');
+  }
+  const input = body as Record<string, unknown>;
+  const output: UpdateInventoryItemInput = {};
+
+  if ('title' in input) {
+    const raw = input.title;
+    if (typeof raw !== 'string' || raw.trim() === '') {
+      throw new LocalApiError(400, 'A title cannot be blank');
+    }
+    if (raw.length > INVENTORY_TITLE_MAX) {
+      throw new LocalApiError(400, `Please keep the title under ${INVENTORY_TITLE_MAX} characters`);
+    }
+    output.title = raw.trim();
+  }
+
+  if ('description' in input) {
+    const raw = input.description;
+    if (raw === undefined || raw === null || raw === '') {
+      output.description = undefined;
+    } else if (typeof raw !== 'string') {
+      throw new LocalApiError(400, 'description must be a string');
+    } else {
+      if (raw.length > INVENTORY_DESCRIPTION_MAX) {
+        throw new LocalApiError(
+          400,
+          `Please keep the description under ${INVENTORY_DESCRIPTION_MAX} characters`,
+        );
+      }
+      output.description = raw.trim();
+    }
+  }
+
+  if ('imageUrl' in input) {
+    const raw = input.imageUrl;
+    if (raw === null || raw === '' || raw === undefined) {
+      output.imageUrl = null;
+      output.imageMimeType = null;
+    } else if (typeof raw !== 'string' || !raw.startsWith('data:')) {
+      throw new LocalApiError(400, 'A data-URL image payload is required');
+    } else {
+      if (!isInventoryImageMimeType(input.imageMimeType)) {
+        throw new LocalApiError(
+          400,
+          `"${String(input.imageMimeType)}" is not a supported image type`,
+        );
+      }
+      const approxBytes = Math.floor((raw.length * 3) / 4);
+      if (approxBytes > INVENTORY_IMAGE_MAX_BYTES) {
+        const mb = (INVENTORY_IMAGE_MAX_BYTES / (1024 * 1024)).toFixed(0);
+        throw new LocalApiError(400, `Please choose an image under ${mb} MB`);
+      }
+      output.imageUrl = raw;
+      output.imageMimeType = input.imageMimeType;
+    }
+  }
+
+  return output;
+}
+
+function createInventoryItemId(): string {
+  return `inv-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+}
+
+function listInventoryItems(): InventoryItem[] {
+  return sortInventoryItemsNewestFirst(readInventoryItems());
+}
+
+function getInventoryItem({ params }: RouteContext): InventoryItem {
+  const item = readInventoryItems().find((entry) => entry.id === params.itemId);
+  if (!item) throw new LocalApiError(404, `No inventory item with id "${params.itemId}"`);
+  return item;
+}
+
+function createInventoryItem({ body }: RouteContext): InventoryItem {
+  const input = parseCreateInventoryItemBody(body);
+  const item: InventoryItem = {
+    id: createInventoryItemId(),
+    title: input.title,
+    description: input.description,
+    imageUrl: input.imageUrl,
+    imageMimeType: input.imageMimeType,
+    createdAt: new Date().toISOString(),
+  };
+  writeInventoryItems([...readInventoryItems(), item]);
+  return item;
+}
+
+function updateInventoryItem({ params, body }: RouteContext): InventoryItem {
+  const items = readInventoryItems();
+  const existing = items.find((entry) => entry.id === params.itemId);
+  if (!existing) throw new LocalApiError(404, `No inventory item with id "${params.itemId}"`);
+
+  const changes = parseUpdateInventoryItemBody(body);
+  /* Assemble the row explicitly so `null` clears through to `undefined` on the
+   * stored record — spread would keep the null and skew type checks downstream. */
+  const updated: InventoryItem = {
+    ...existing,
+    updatedAt: new Date().toISOString(),
+  };
+  if (changes.title !== undefined) updated.title = changes.title;
+  if ('description' in changes) updated.description = changes.description;
+  if ('imageUrl' in changes) {
+    updated.imageUrl = changes.imageUrl ?? undefined;
+    updated.imageMimeType = changes.imageMimeType ?? undefined;
+  }
+
+  writeInventoryItems(items.map((entry) => (entry.id === updated.id ? updated : entry)));
+  return updated;
+}
+
+function deleteInventoryItem({ params }: RouteContext): null {
+  const items = readInventoryItems();
+  const existing = items.find((entry) => entry.id === params.itemId);
+  if (!existing) throw new LocalApiError(404, `No inventory item with id "${params.itemId}"`);
+  writeInventoryItems(items.filter((entry) => entry.id !== params.itemId));
+  return null;
+}
+
+/* ----------------------------------------------------------- transactions -- */
+
+function parseCreateTransactionBody(body: unknown): CreateTransactionInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected a create-transaction body');
+  }
+
+  const { date, direction, category, amountMinor, description, method, counterparty, reference } =
+    body as Partial<CreateTransactionInput>;
+
+  if (typeof date !== 'string' || Number.isNaN(new Date(date).getTime())) {
+    throw new LocalApiError(400, 'A valid date is required');
+  }
+  if (direction !== 'in' && direction !== 'out') {
+    throw new LocalApiError(400, '"direction" must be "in" or "out"');
+  }
+  if (!isTransactionCategory(category)) {
+    throw new LocalApiError(400, `"${String(category)}" is not a transaction category`);
+  }
+  if (typeof amountMinor !== 'number' || !Number.isInteger(amountMinor) || amountMinor <= 0) {
+    throw new LocalApiError(400, 'The amount must be a whole number of poisha above zero');
+  }
+  if (typeof description !== 'string' || description.trim() === '') {
+    throw new LocalApiError(400, 'A description is required');
+  }
+  if (description.trim().length > TRANSACTION_DESCRIPTION_MAX) {
+    throw new LocalApiError(
+      400,
+      `The description must be ${TRANSACTION_DESCRIPTION_MAX} characters or fewer`,
+    );
+  }
+  if (!isPaymentMethod(method)) {
+    throw new LocalApiError(400, `"${String(method)}" is not a payment method`);
+  }
+
+  const output: CreateTransactionInput = {
+    date,
+    direction,
+    category,
+    amountMinor,
+    description: description.trim(),
+    method,
+  };
+
+  if (counterparty !== undefined) {
+    if (typeof counterparty !== 'string' || counterparty.length > TRANSACTION_COUNTERPARTY_MAX) {
+      throw new LocalApiError(
+        400,
+        `The counterparty must be ${TRANSACTION_COUNTERPARTY_MAX} characters or fewer`,
+      );
+    }
+    if (counterparty.trim() !== '') output.counterparty = counterparty.trim();
+  }
+  if (reference !== undefined) {
+    if (typeof reference !== 'string' || reference.length > TRANSACTION_REFERENCE_MAX) {
+      throw new LocalApiError(
+        400,
+        `The reference must be ${TRANSACTION_REFERENCE_MAX} characters or fewer`,
+      );
+    }
+    if (reference.trim() !== '') output.reference = reference.trim();
+  }
+
+  return output;
+}
+
+function parseUpdateTransactionBody(body: unknown): UpdateTransactionInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected an update-transaction body');
+  }
+
+  const { date, direction, category, amountMinor, description, method, counterparty, reference } =
+    body as Partial<UpdateTransactionInput>;
+  const output: UpdateTransactionInput = {};
+
+  if (date !== undefined) {
+    if (typeof date !== 'string' || Number.isNaN(new Date(date).getTime())) {
+      throw new LocalApiError(400, 'A valid date is required');
+    }
+    output.date = date;
+  }
+  if (direction !== undefined) {
+    if (direction !== 'in' && direction !== 'out') {
+      throw new LocalApiError(400, '"direction" must be "in" or "out"');
+    }
+    output.direction = direction;
+  }
+  if (category !== undefined) {
+    if (!isTransactionCategory(category)) {
+      throw new LocalApiError(400, `"${String(category)}" is not a transaction category`);
+    }
+    output.category = category;
+  }
+  if (amountMinor !== undefined) {
+    if (typeof amountMinor !== 'number' || !Number.isInteger(amountMinor) || amountMinor <= 0) {
+      throw new LocalApiError(400, 'The amount must be a whole number of poisha above zero');
+    }
+    output.amountMinor = amountMinor;
+  }
+  if (description !== undefined) {
+    if (typeof description !== 'string' || description.trim() === '') {
+      throw new LocalApiError(400, 'A description is required');
+    }
+    if (description.trim().length > TRANSACTION_DESCRIPTION_MAX) {
+      throw new LocalApiError(
+        400,
+        `The description must be ${TRANSACTION_DESCRIPTION_MAX} characters or fewer`,
+      );
+    }
+    output.description = description.trim();
+  }
+  if (method !== undefined) {
+    if (!isPaymentMethod(method)) {
+      throw new LocalApiError(400, `"${String(method)}" is not a payment method`);
+    }
+    output.method = method;
+  }
+  if (counterparty !== undefined) {
+    if (typeof counterparty !== 'string' || counterparty.length > TRANSACTION_COUNTERPARTY_MAX) {
+      throw new LocalApiError(
+        400,
+        `The counterparty must be ${TRANSACTION_COUNTERPARTY_MAX} characters or fewer`,
+      );
+    }
+    output.counterparty = counterparty.trim() === '' ? undefined : counterparty.trim();
+  }
+  if (reference !== undefined) {
+    if (typeof reference !== 'string' || reference.length > TRANSACTION_REFERENCE_MAX) {
+      throw new LocalApiError(
+        400,
+        `The reference must be ${TRANSACTION_REFERENCE_MAX} characters or fewer`,
+      );
+    }
+    output.reference = reference.trim() === '' ? undefined : reference.trim();
+  }
+
+  return output;
+}
+
+function createTransactionId(): string {
+  return `tx-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+}
+
+function listTransactions(): Transaction[] {
+  return sortTransactionsNewestFirst(readTransactions());
+}
+
+function getTransaction({ params }: RouteContext): Transaction {
+  const tx = readTransactions().find((entry) => entry.id === params.transactionId);
+  if (!tx) throw new LocalApiError(404, `No transaction with id "${params.transactionId}"`);
+  return tx;
+}
+
+function createTransaction({ body }: RouteContext): Transaction {
+  const input = parseCreateTransactionBody(body);
+  const tx: Transaction = {
+    id: createTransactionId(),
+    ...input,
+    createdAt: new Date().toISOString(),
+  };
+  writeTransactions([...readTransactions(), tx]);
+  return tx;
+}
+
+/** Entries auto-created from a dues payment carry the payment, not the other
+ * way round — editing or deleting them here would let the ledger and the
+ * dues record disagree, so both writes are refused and the caller is pointed
+ * back at the Dues tab. */
+function requireEditableTransaction(
+  transactions: Transaction[],
+  transactionId: string,
+): Transaction {
+  const existing = transactions.find((entry) => entry.id === transactionId);
+  if (!existing) throw new LocalApiError(404, `No transaction with id "${transactionId}"`);
+  if (existing.duesRecordId) {
+    throw new LocalApiError(
+      409,
+      'This entry was recorded from a dues payment — change it from the Dues tab instead.',
+    );
+  }
+  return existing;
+}
+
+function updateTransaction({ params, body }: RouteContext): Transaction {
+  const transactions = readTransactions();
+  const existing = requireEditableTransaction(transactions, params.transactionId);
+  const changes = parseUpdateTransactionBody(body);
+  const updated: Transaction = { ...existing, ...changes, updatedAt: new Date().toISOString() };
+  writeTransactions(transactions.map((entry) => (entry.id === updated.id ? updated : entry)));
+  return updated;
+}
+
+function deleteTransaction({ params }: RouteContext): null {
+  const transactions = readTransactions();
+  requireEditableTransaction(transactions, params.transactionId);
+  writeTransactions(transactions.filter((entry) => entry.id !== params.transactionId));
+  return null;
+}
+
+/* ------------------------------------------------------------ dues records -- */
+
+/** Returns every member's record for the period, materialising a fresh unpaid
+ * row for anyone the People roster has grown to include since the period was
+ * last read. This is what keeps the Dues tab following the member roster
+ * without a separate sync step. */
+function listDuesRecords({ query }: RouteContext): DuesRecord[] {
+  const periodId = query.periodId;
+  if (!periodId) throw new LocalApiError(400, 'A periodId query parameter is required');
+  const period = getDuesPeriod(periodId);
+  if (!period) throw new LocalApiError(404, `No dues period with id "${periodId}"`);
+
+  const existing = readDuesRecords();
+  const members = readMembers();
+  const byMemberId = new Map(
+    existing
+      .filter((record) => record.periodId === periodId)
+      .map((record) => [record.memberId, record]),
+  );
+
+  let changed = false;
+  const now = new Date().toISOString();
+  for (const member of members) {
+    if (byMemberId.has(member.id)) continue;
+    byMemberId.set(member.id, {
+      id: `dues-${periodId}-${member.id}`,
+      periodId,
+      memberId: member.id,
+      amountDueMinor: period.standardAmountMinor,
+      amountPaidMinor: 0,
+      waived: false,
+      createdAt: now,
+    });
+    changed = true;
+  }
+
+  const forPeriod = members
+    .map((member) => byMemberId.get(member.id))
+    .filter((record): record is DuesRecord => record !== undefined);
+
+  if (changed) {
+    const otherPeriods = existing.filter((record) => record.periodId !== periodId);
+    writeDuesRecords([...otherPeriods, ...forPeriod]);
+  }
+
+  return forPeriod;
+}
+
+function parseUpdateDuesRecordBody(body: unknown): UpdateDuesRecordInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected an update-dues-record body');
+  }
+
+  const { amountPaidMinor, waived, paidOn, method, note } = body as Record<string, unknown>;
+  const output: UpdateDuesRecordInput = {};
+
+  if (amountPaidMinor !== undefined) {
+    if (
+      typeof amountPaidMinor !== 'number' ||
+      !Number.isInteger(amountPaidMinor) ||
+      amountPaidMinor < 0
+    ) {
+      throw new LocalApiError(400, 'The amount paid must be a non-negative whole number of poisha');
+    }
+    output.amountPaidMinor = amountPaidMinor;
+  }
+  if (waived !== undefined) {
+    if (typeof waived !== 'boolean') throw new LocalApiError(400, '"waived" must be a boolean');
+    output.waived = waived;
+  }
+  if (paidOn !== undefined) {
+    if (
+      paidOn !== null &&
+      (typeof paidOn !== 'string' || Number.isNaN(new Date(paidOn).getTime()))
+    ) {
+      throw new LocalApiError(400, 'paidOn must be a valid date or null');
+    }
+    output.paidOn = paidOn === null ? null : paidOn;
+  }
+  if (method !== undefined) {
+    if (method !== null && !isPaymentMethod(method)) {
+      throw new LocalApiError(400, `"${String(method)}" is not a payment method`);
+    }
+    output.method = method === null ? null : method;
+  }
+  if (note !== undefined) {
+    if (note !== null && typeof note !== 'string') {
+      throw new LocalApiError(400, 'note must be a string or null');
+    }
+    output.note = note === null ? null : note.trim();
+  }
+
+  return output;
+}
+
+/** The one write path where two tables change together. Recording a payment
+ * (or clearing one) keeps the ledger truthful without the treasurer entering
+ * the same payment twice — see `requireEditableTransaction` above for the
+ * other half of that guarantee. */
+function updateDuesRecord({ params, body }: RouteContext): DuesRecord {
+  const records = readDuesRecords();
+  const existing = records.find((entry) => entry.id === params.recordId);
+  if (!existing) throw new LocalApiError(404, `No dues record with id "${params.recordId}"`);
+
+  const changes = parseUpdateDuesRecordBody(body);
+  const updated: DuesRecord = { ...existing, updatedAt: new Date().toISOString() };
+  if (changes.amountPaidMinor !== undefined) updated.amountPaidMinor = changes.amountPaidMinor;
+  if (changes.waived !== undefined) updated.waived = changes.waived;
+  if ('paidOn' in changes) updated.paidOn = changes.paidOn ?? undefined;
+  if ('method' in changes) updated.method = changes.method ?? undefined;
+  if ('note' in changes) updated.note = changes.note ?? undefined;
+
+  writeDuesRecords(records.map((entry) => (entry.id === updated.id ? updated : entry)));
+
+  const transactions = readTransactions();
+  const linked = transactions.find((tx) => tx.duesRecordId === updated.id);
+  const period = getDuesPeriod(updated.periodId);
+  const member = readMembers().find((entry) => entry.id === updated.memberId);
+  const now = new Date().toISOString();
+
+  if (updated.amountPaidMinor > 0 && !updated.waived) {
+    if (linked) {
+      writeTransactions(
+        transactions.map((tx) =>
+          tx.id === linked.id
+            ? {
+                ...tx,
+                amountMinor: updated.amountPaidMinor,
+                date: updated.paidOn ?? tx.date,
+                method: updated.method ?? tx.method,
+                updatedAt: now,
+              }
+            : tx,
+        ),
+      );
+    } else {
+      const newTx: Transaction = {
+        id: createTransactionId(),
+        date: updated.paidOn ?? now.slice(0, 10),
+        direction: 'in',
+        category: 'dues',
+        amountMinor: updated.amountPaidMinor,
+        description: `Dues — ${period?.label ?? updated.periodId}`,
+        method: updated.method ?? 'cash',
+        counterparty: member ? `${member.firstName} ${member.lastName}` : undefined,
+        duesRecordId: updated.id,
+        createdAt: now,
+      };
+      writeTransactions([...transactions, newTx]);
+    }
+  } else if (linked) {
+    /* Reset to zero, or waived after already having a recorded payment —
+     * retire the linked entry rather than leaving stale income on the ledger. */
+    writeTransactions(transactions.filter((tx) => tx.id !== linked.id));
+  }
+
+  return updated;
+}
+
+/* ------------------------------------------------------------ budget lines -- */
+
+function parseCreateBudgetLineBody(body: unknown): CreateBudgetLineInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected a create-budget-line body');
+  }
+
+  const { fiscalYear, kind, category, plannedMinor, note } = body as Partial<CreateBudgetLineInput>;
+
+  if (typeof fiscalYear !== 'string' || fiscalYear.trim() === '') {
+    throw new LocalApiError(400, 'A fiscal year is required');
+  }
+  if (kind !== 'income' && kind !== 'expense') {
+    throw new LocalApiError(400, '"kind" must be "income" or "expense"');
+  }
+  if (!isTransactionCategory(category)) {
+    throw new LocalApiError(400, `"${String(category)}" is not a transaction category`);
+  }
+  if ((kind === 'income') !== isIncomeCategory(category)) {
+    throw new LocalApiError(
+      400,
+      `"${CATEGORY_LABELS[category]}" is not ${kind === 'income' ? 'an income' : 'an expense'} category`,
+    );
+  }
+  if (typeof plannedMinor !== 'number' || !Number.isInteger(plannedMinor) || plannedMinor < 0) {
+    throw new LocalApiError(
+      400,
+      'The planned amount must be a non-negative whole number of poisha',
+    );
+  }
+  if (
+    readBudgetLines().some(
+      (line) => line.fiscalYear === fiscalYear.trim() && line.category === category,
+    )
+  ) {
+    throw new LocalApiError(
+      409,
+      `A budget line for "${CATEGORY_LABELS[category]}" already exists for ${fiscalYear.trim()}`,
+    );
+  }
+
+  const output: CreateBudgetLineInput = {
+    fiscalYear: fiscalYear.trim(),
+    kind,
+    category,
+    plannedMinor,
+  };
+  if (note !== undefined) {
+    if (typeof note !== 'string' || note.length > BUDGET_LINE_NOTE_MAX) {
+      throw new LocalApiError(400, `The note must be ${BUDGET_LINE_NOTE_MAX} characters or fewer`);
+    }
+    if (note.trim() !== '') output.note = note.trim();
+  }
+
+  return output;
+}
+
+function parseUpdateBudgetLineBody(body: unknown): UpdateBudgetLineInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected an update-budget-line body');
+  }
+
+  const { plannedMinor, note } = body as Partial<UpdateBudgetLineInput>;
+  const output: UpdateBudgetLineInput = {};
+
+  if (plannedMinor !== undefined) {
+    if (typeof plannedMinor !== 'number' || !Number.isInteger(plannedMinor) || plannedMinor < 0) {
+      throw new LocalApiError(
+        400,
+        'The planned amount must be a non-negative whole number of poisha',
+      );
+    }
+    output.plannedMinor = plannedMinor;
+  }
+  if (note !== undefined) {
+    if (note !== null && (typeof note !== 'string' || note.length > BUDGET_LINE_NOTE_MAX)) {
+      throw new LocalApiError(400, `The note must be ${BUDGET_LINE_NOTE_MAX} characters or fewer`);
+    }
+    output.note = note === null ? null : note.trim();
+  }
+
+  return output;
+}
+
+function createBudgetLine({ body }: RouteContext): BudgetLine {
+  const input = parseCreateBudgetLineBody(body);
+  const line: BudgetLine = {
+    id: `bud-${input.fiscalYear}-${input.category}`,
+    ...input,
+    createdAt: new Date().toISOString(),
+  };
+  writeBudgetLines([...readBudgetLines(), line]);
+  return line;
+}
+
+function listBudgetLines({ query }: RouteContext): BudgetLine[] {
+  const lines = readBudgetLines();
+  return query.fiscalYear ? lines.filter((line) => line.fiscalYear === query.fiscalYear) : lines;
+}
+
+function updateBudgetLine({ params, body }: RouteContext): BudgetLine {
+  const lines = readBudgetLines();
+  const existing = lines.find((entry) => entry.id === params.lineId);
+  if (!existing) throw new LocalApiError(404, `No budget line with id "${params.lineId}"`);
+
+  const changes = parseUpdateBudgetLineBody(body);
+  const updated: BudgetLine = { ...existing, updatedAt: new Date().toISOString() };
+  if (changes.plannedMinor !== undefined) updated.plannedMinor = changes.plannedMinor;
+  if ('note' in changes) updated.note = changes.note ?? undefined;
+
+  writeBudgetLines(lines.map((entry) => (entry.id === updated.id ? updated : entry)));
+  return updated;
+}
+
+function deleteBudgetLine({ params }: RouteContext): null {
+  const lines = readBudgetLines();
+  const existing = lines.find((entry) => entry.id === params.lineId);
+  if (!existing) throw new LocalApiError(404, `No budget line with id "${params.lineId}"`);
+  writeBudgetLines(lines.filter((entry) => entry.id !== params.lineId));
+  return null;
+}
+
 interface Route {
   method: HttpMethod;
   /** Path split on `/`; a `:name` segment captures into `params`. */
@@ -932,6 +1756,26 @@ const ROUTES: Route[] = [
   route('POST', '/documents', createDocument),
   route('PATCH', '/documents/:documentId', updateDocument),
   route('DELETE', '/documents/:documentId', deleteDocument),
+  route('GET', '/meetings/:meetingId/checklist', listChecklist),
+  route('POST', '/meetings/:meetingId/checklist', createChecklistItem),
+  route('PATCH', '/meetings/:meetingId/checklist/:itemId', updateChecklistItem),
+  route('DELETE', '/meetings/:meetingId/checklist/:itemId', deleteChecklistItem),
+  route('GET', '/inventory-items', listInventoryItems),
+  route('GET', '/inventory-items/:itemId', getInventoryItem),
+  route('POST', '/inventory-items', createInventoryItem),
+  route('PATCH', '/inventory-items/:itemId', updateInventoryItem),
+  route('DELETE', '/inventory-items/:itemId', deleteInventoryItem),
+  route('GET', '/transactions', listTransactions),
+  route('GET', '/transactions/:transactionId', getTransaction),
+  route('POST', '/transactions', createTransaction),
+  route('PATCH', '/transactions/:transactionId', updateTransaction),
+  route('DELETE', '/transactions/:transactionId', deleteTransaction),
+  route('GET', '/dues-records', listDuesRecords),
+  route('PATCH', '/dues-records/:recordId', updateDuesRecord),
+  route('GET', '/budget-lines', listBudgetLines),
+  route('POST', '/budget-lines', createBudgetLine),
+  route('PATCH', '/budget-lines/:lineId', updateBudgetLine),
+  route('DELETE', '/budget-lines/:lineId', deleteBudgetLine),
 ];
 
 function toSegments(path: string): string[] {
