@@ -3,6 +3,15 @@ import { computeMemberStats, sortEvents } from '@/lib/education/history';
 import type { Member, StartPathwayInput } from '@/lib/education/members';
 import { PATHWAYS } from '@/lib/education/members';
 import { findProject } from '@/lib/education/pathways';
+import type { Asset, AssetsPage, CreateAssetInput, UpdateAssetInput } from '@/lib/library/assets';
+import {
+  ASSET_FILE_MAX_BYTES,
+  ASSET_TITLE_MAX,
+  ASSETS_PAGE_SIZE,
+  isAssetMimeType,
+  matchesAssetQuery,
+  sortAssetsNewestFirst,
+} from '@/lib/library/assets';
 import type { CreateMeetingInput, Meeting, UpdateMeetingInput } from '@/lib/meetings/meetings';
 import { MEETING_STATUSES } from '@/lib/meetings/meetings';
 import type {
@@ -17,6 +26,7 @@ import type { CreateVisitLogInput, UpdateVisitLogInput, VisitLog } from '@/lib/p
 import { VISIT_LOG_NOTES_MAX, VISIT_LOG_ROLE_MAX } from '@/lib/people/visit-logs';
 
 import {
+  readAssets,
   readContactLogs,
   readExtrasFor,
   readGuests,
@@ -24,6 +34,7 @@ import {
   readMeetings,
   readMembers,
   readVisitLogs,
+  writeAssets,
   writeContactLogs,
   writeGuests,
   writeHistoryEvents,
@@ -62,6 +73,8 @@ export class LocalApiError extends Error {
 
 interface RouteContext {
   params: Record<string, string>;
+  /** Parsed `?key=value` pairs off the URL. Empty when the request had none. */
+  query: Record<string, string>;
   body: unknown;
 }
 
@@ -315,8 +328,8 @@ function createMeeting({ body }: RouteContext): Meeting {
 
 /** Save as Draft and Publish are the same write with a different `status` —
  * the split lives in the meeting page's two buttons, not in two routes. */
-function updateMeeting({ params, body }: RouteContext): Meeting {
-  const existing = getMeeting({ params, body });
+function updateMeeting({ params, query, body }: RouteContext): Meeting {
+  const existing = getMeeting({ params, query, body });
   const updated: Meeting = { ...existing, ...parseUpdateMeetingBody(body) };
   writeMeetings(readMeetings().map((entry) => (entry.id === existing.id ? updated : entry)));
   return updated;
@@ -614,6 +627,132 @@ function deleteVisitLog({ params }: RouteContext): null {
   return null;
 }
 
+/* --------------------------------------------------------------- assets --- */
+
+function parseCreateAssetBody(body: unknown): CreateAssetInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected a create-asset body');
+  }
+  const { title, imageUrl, mimeType, width, height, sizeBytes } = body as Partial<CreateAssetInput>;
+
+  if (typeof title !== 'string' || title.trim() === '') {
+    throw new LocalApiError(400, 'A title is required');
+  }
+  if (title.length > ASSET_TITLE_MAX) {
+    throw new LocalApiError(400, `Please keep the title under ${ASSET_TITLE_MAX} characters`);
+  }
+  if (!isAssetMimeType(mimeType)) {
+    throw new LocalApiError(400, `"${String(mimeType)}" is not a supported image type`);
+  }
+  if (typeof imageUrl !== 'string' || !imageUrl.startsWith('data:')) {
+    throw new LocalApiError(400, 'A data-URL image payload is required');
+  }
+  if (
+    typeof width !== 'number' ||
+    !Number.isFinite(width) ||
+    width < 1 ||
+    typeof height !== 'number' ||
+    !Number.isFinite(height) ||
+    height < 1
+  ) {
+    throw new LocalApiError(400, 'Image dimensions must be positive numbers');
+  }
+  if (typeof sizeBytes !== 'number' || sizeBytes < 0) {
+    throw new LocalApiError(400, 'File size must be a non-negative number');
+  }
+  if (sizeBytes > ASSET_FILE_MAX_BYTES) {
+    const mb = (ASSET_FILE_MAX_BYTES / (1024 * 1024)).toFixed(0);
+    throw new LocalApiError(400, `Please upload an image under ${mb} MB`);
+  }
+  return {
+    title: title.trim(),
+    imageUrl,
+    mimeType,
+    width: Math.round(width),
+    height: Math.round(height),
+    sizeBytes: Math.round(sizeBytes),
+  };
+}
+
+function parseUpdateAssetBody(body: unknown): UpdateAssetInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected an update-asset body');
+  }
+  const input = body as Record<string, unknown>;
+  const output: UpdateAssetInput = {};
+  if ('title' in input) {
+    const raw = input.title;
+    if (typeof raw !== 'string' || raw.trim() === '') {
+      throw new LocalApiError(400, 'A title cannot be blank');
+    }
+    if (raw.length > ASSET_TITLE_MAX) {
+      throw new LocalApiError(400, `Please keep the title under ${ASSET_TITLE_MAX} characters`);
+    }
+    output.title = raw.trim();
+  }
+  return output;
+}
+
+function createAssetId(): string {
+  return `asset-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+}
+
+/** Paginated list. `q` filters by title (case-insensitive); `offset` and
+ * `limit` frame the window. Sorted newest first so both fresh uploads and the
+ * seed data land near the top of the grid. */
+function listAssets({ query }: RouteContext): AssetsPage {
+  const needle = (query.q ?? '').trim().toLowerCase();
+  const offset = Number.parseInt(query.offset ?? '0', 10);
+  const limit = Number.parseInt(query.limit ?? String(ASSETS_PAGE_SIZE), 10);
+  const safeOffset = Number.isFinite(offset) && offset >= 0 ? offset : 0;
+  const safeLimit =
+    Number.isFinite(limit) && limit > 0 ? Math.min(limit, ASSETS_PAGE_SIZE * 4) : ASSETS_PAGE_SIZE;
+
+  const all = sortAssetsNewestFirst(readAssets());
+  const filtered = needle ? all.filter((asset) => matchesAssetQuery(asset, needle)) : all;
+  const items = filtered.slice(safeOffset, safeOffset + safeLimit);
+  const nextOffset = safeOffset + items.length < filtered.length ? safeOffset + items.length : null;
+  return { items, total: filtered.length, nextOffset };
+}
+
+function getAsset({ params }: RouteContext): Asset {
+  const asset = readAssets().find((entry) => entry.id === params.assetId);
+  if (!asset) throw new LocalApiError(404, `No asset with id "${params.assetId}"`);
+  return asset;
+}
+
+function createAsset({ body }: RouteContext): Asset {
+  const input = parseCreateAssetBody(body);
+  const asset: Asset = {
+    id: createAssetId(),
+    ...input,
+    createdAt: new Date().toISOString(),
+  };
+  writeAssets([...readAssets(), asset]);
+  return asset;
+}
+
+function updateAsset({ params, body }: RouteContext): Asset {
+  const assets = readAssets();
+  const existing = assets.find((entry) => entry.id === params.assetId);
+  if (!existing) throw new LocalApiError(404, `No asset with id "${params.assetId}"`);
+  const updated: Asset = {
+    ...existing,
+    ...parseUpdateAssetBody(body),
+    updatedAt: new Date().toISOString(),
+  };
+  writeAssets(assets.map((entry) => (entry.id === updated.id ? updated : entry)));
+  return updated;
+}
+
+function deleteAsset({ params }: RouteContext): null {
+  const assets = readAssets();
+  const existing = assets.find((entry) => entry.id === params.assetId);
+  if (!existing) throw new LocalApiError(404, `No asset with id "${params.assetId}"`);
+  writeAssets(assets.filter((entry) => entry.id !== params.assetId));
+  return null;
+}
+
 interface Route {
   method: HttpMethod;
   /** Path split on `/`; a `:name` segment captures into `params`. */
@@ -647,10 +786,24 @@ const ROUTES: Route[] = [
   route('POST', '/guests/:guestId/visit-logs', createVisitLog),
   route('PATCH', '/guests/:guestId/visit-logs/:logId', updateVisitLog),
   route('DELETE', '/guests/:guestId/visit-logs/:logId', deleteVisitLog),
+  route('GET', '/assets', listAssets),
+  route('GET', '/assets/:assetId', getAsset),
+  route('POST', '/assets', createAsset),
+  route('PATCH', '/assets/:assetId', updateAsset),
+  route('DELETE', '/assets/:assetId', deleteAsset),
 ];
 
 function toSegments(path: string): string[] {
   return path.split('?')[0].split('/').filter(Boolean);
+}
+
+function parseQuery(url: string): Record<string, string> {
+  const queryIndex = url.indexOf('?');
+  if (queryIndex === -1) return {};
+  const search = new URLSearchParams(url.slice(queryIndex + 1));
+  const out: Record<string, string> = {};
+  for (const [key, value] of search) out[key] = value;
+  return out;
 }
 
 function matchRoute(
@@ -685,5 +838,9 @@ export function handleLocalRequest(request: LocalRequest): unknown {
   const match = matchRoute(method, request.url);
   if (!match) throw new LocalApiError(404, `No local route for ${method} ${request.url}`);
 
-  return match.route.handler({ params: match.params, body: request.body });
+  return match.route.handler({
+    params: match.params,
+    query: parseQuery(request.url),
+    body: request.body,
+  });
 }

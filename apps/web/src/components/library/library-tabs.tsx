@@ -3,6 +3,7 @@
 import { Calendar, FileText, Package } from '@phosphor-icons/react/dist/ssr';
 import { Tabs } from 'antd';
 
+import { AssetsTab } from '@/components/library/assets-tab';
 import { PlannerTab } from '@/components/library/planner-tab';
 
 /** Placeholder shown inside each tab until the section is built out. Kept
@@ -49,7 +50,7 @@ export function LibraryTabs() {
                 Assets
               </span>
             ),
-            children: <ComingSoon label="Assets" />,
+            children: <AssetsTab />,
           },
           {
             key: 'documents',

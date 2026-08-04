@@ -7,6 +7,8 @@ import {
 } from '@/lib/education/history';
 import type { Member } from '@/lib/education/members';
 import { SEED_MEMBERS } from '@/lib/education/members';
+import type { Asset } from '@/lib/library/assets';
+import { SEED_ASSETS } from '@/lib/library/assets';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { SEED_MEETINGS } from '@/lib/meetings/meetings';
 import type { ContactLog } from '@/lib/people/contact-logs';
@@ -33,8 +35,9 @@ import { SEED_VISIT_LOGS } from '@/lib/people/visit-logs';
  * v3 replaced the fixed social fields with the `socials` array shape and added
  * avatarUrl / whatsapp / notes to Guest.
  * v4 introduced the contact-logs table backing the Contact logs drawer.
- * v5 introduced the visit-logs table backing the Visit logs drawer. */
-const SCHEMA_VERSION = 'v5';
+ * v5 introduced the visit-logs table backing the Visit logs drawer.
+ * v6 introduced the assets table backing the Library > Assets tab. */
+const SCHEMA_VERSION = 'v6';
 
 export const DB_KEYS = {
   members: `toastly.db.${SCHEMA_VERSION}.members`,
@@ -44,6 +47,7 @@ export const DB_KEYS = {
   guests: `toastly.db.${SCHEMA_VERSION}.guests`,
   contactLogs: `toastly.db.${SCHEMA_VERSION}.contact-logs`,
   visitLogs: `toastly.db.${SCHEMA_VERSION}.visit-logs`,
+  assets: `toastly.db.${SCHEMA_VERSION}.assets`,
 } as const;
 
 /** Used by the cross-tab sync listener to tell our writes apart from any other
@@ -79,6 +83,10 @@ function seedContactLogs(): ContactLog[] {
 
 function seedVisitLogs(): VisitLog[] {
   return SEED_VISIT_LOGS;
+}
+
+function seedAssets(): Asset[] {
+  return SEED_ASSETS;
 }
 
 function seedMemberExtras(): MemberExtrasTable {
@@ -160,6 +168,14 @@ export function readVisitLogs(): VisitLog[] {
 
 export function writeVisitLogs(logs: VisitLog[]): void {
   writeTable(DB_KEYS.visitLogs, logs);
+}
+
+export function readAssets(): Asset[] {
+  return readTable(DB_KEYS.assets, seedAssets);
+}
+
+export function writeAssets(assets: Asset[]): void {
+  writeTable(DB_KEYS.assets, assets);
 }
 
 export function readMemberExtras(): MemberExtrasTable {

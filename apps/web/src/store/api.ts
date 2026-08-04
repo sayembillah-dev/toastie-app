@@ -2,6 +2,8 @@ import { createApi } from '@reduxjs/toolkit/query/react';
 
 import type { HistoryEvent, MemberStats } from '@/lib/education/history';
 import type { Member, StartPathwayInput } from '@/lib/education/members';
+import type { Asset, AssetsPage, CreateAssetInput, UpdateAssetInput } from '@/lib/library/assets';
+import { ASSETS_PAGE_SIZE } from '@/lib/library/assets';
 import type { CreateMeetingInput, Meeting, UpdateMeetingInput } from '@/lib/meetings/meetings';
 import type {
   ContactLog,
@@ -21,7 +23,7 @@ import { localBaseQuery } from './local-base-query';
 export const toastlyApi = createApi({
   reducerPath: 'toastlyApi',
   baseQuery: localBaseQuery,
-  tagTypes: ['Member', 'History', 'Meeting', 'Guest', 'ContactLog', 'VisitLog'],
+  tagTypes: ['Member', 'History', 'Meeting', 'Guest', 'ContactLog', 'VisitLog', 'Asset'],
   endpoints: (build) => ({
     getMembers: build.query<Member[], void>({
       query: () => ({ url: '/members', method: 'GET' }),
@@ -293,6 +295,116 @@ export const toastlyApi = createApi({
       },
       invalidatesTags: (_log, _error, { guestId }) => [{ type: 'VisitLog', id: guestId }],
     }),
+
+    /* Paginated with a merge strategy: every offset for the same `q` folds
+     * into a single cache entry, so an infinite-scroll listener can call the
+     * hook repeatedly with a bumped `offset` and the UI reads one growing
+     * list rather than an array of pages. Switching `q` reseeds the entry.
+     * `nextOffset` is carried alongside so the caller knows when to stop. */
+    listAssets: build.query<AssetsPage, { q: string; offset: number }>({
+      query: ({ q, offset }) => {
+        const params = new URLSearchParams({
+          offset: String(offset),
+          limit: String(ASSETS_PAGE_SIZE),
+        });
+        if (q) params.set('q', q);
+        return { url: `/assets?${params.toString()}`, method: 'GET' };
+      },
+      /* Serialise by search only — every offset lands in the same cache slot
+       * so pages append instead of shard. */
+      serializeQueryArgs: ({ endpointName, queryArgs }) => `${endpointName}:${queryArgs.q}`,
+      merge: (currentCache, incoming, { arg }) => {
+        if (arg.offset === 0) {
+          currentCache.items = incoming.items;
+        } else {
+          const seen = new Set(currentCache.items.map((asset) => asset.id));
+          currentCache.items = currentCache.items.concat(
+            incoming.items.filter((asset) => !seen.has(asset.id)),
+          );
+        }
+        currentCache.total = incoming.total;
+        currentCache.nextOffset = incoming.nextOffset;
+      },
+      forceRefetch: ({ currentArg, previousArg }) =>
+        currentArg?.q !== previousArg?.q || currentArg?.offset !== previousArg?.offset,
+      providesTags: (page) => [
+        { type: 'Asset' as const, id: 'LIST' },
+        ...(page?.items ?? []).map((asset) => ({ type: 'Asset' as const, id: asset.id })),
+      ],
+    }),
+
+    createAsset: build.mutation<Asset, CreateAssetInput>({
+      query: (body) => ({ url: '/assets', method: 'POST', body }),
+      invalidatesTags: [{ type: 'Asset', id: 'LIST' }],
+    }),
+
+    /* Optimistic title edit against every cached asset list — the record
+     * shows up in as many `q` buckets as the user has scrolled through, and
+     * they should all reflect the new title on the way to the server. */
+    updateAsset: build.mutation<Asset, { assetId: string } & UpdateAssetInput>({
+      query: ({ assetId, ...body }) => ({
+        url: `/assets/${assetId}`,
+        method: 'PATCH',
+        body,
+      }),
+      onQueryStarted: async ({ assetId, ...changes }, { dispatch, getState, queryFulfilled }) => {
+        const affected = toastlyApi.util.selectInvalidatedBy(getState(), [
+          { type: 'Asset', id: 'LIST' },
+        ]);
+        const patches = affected
+          .filter((entry) => entry.endpointName === 'listAssets')
+          .map((entry) =>
+            dispatch(
+              toastlyApi.util.updateQueryData(
+                'listAssets',
+                entry.originalArgs as { q: string; offset: number },
+                (draft) => {
+                  const asset = draft.items.find((item) => item.id === assetId);
+                  if (asset) Object.assign(asset, changes);
+                },
+              ),
+            ),
+          );
+        try {
+          await queryFulfilled;
+        } catch {
+          for (const patch of patches) patch.undo();
+        }
+      },
+      invalidatesTags: (_asset, _error, { assetId }) => [{ type: 'Asset', id: assetId }],
+    }),
+
+    /* Same broadcast pattern as the title edit — drop the row from every
+     * cached list at once so the grid closes over the gap before the round
+     * trip finishes. */
+    deleteAsset: build.mutation<null, string>({
+      query: (assetId) => ({ url: `/assets/${assetId}`, method: 'DELETE' }),
+      onQueryStarted: async (assetId, { dispatch, getState, queryFulfilled }) => {
+        const affected = toastlyApi.util.selectInvalidatedBy(getState(), [
+          { type: 'Asset', id: 'LIST' },
+        ]);
+        const patches = affected
+          .filter((entry) => entry.endpointName === 'listAssets')
+          .map((entry) =>
+            dispatch(
+              toastlyApi.util.updateQueryData(
+                'listAssets',
+                entry.originalArgs as { q: string; offset: number },
+                (draft) => {
+                  draft.items = draft.items.filter((asset) => asset.id !== assetId);
+                  draft.total = Math.max(0, draft.total - 1);
+                },
+              ),
+            ),
+          );
+        try {
+          await queryFulfilled;
+        } catch {
+          for (const patch of patches) patch.undo();
+        }
+      },
+      invalidatesTags: [{ type: 'Asset', id: 'LIST' }],
+    }),
   }),
 });
 
@@ -318,4 +430,8 @@ export const {
   useCreateVisitLogMutation,
   useUpdateVisitLogMutation,
   useDeleteVisitLogMutation,
+  useListAssetsQuery,
+  useCreateAssetMutation,
+  useUpdateAssetMutation,
+  useDeleteAssetMutation,
 } = toastlyApi;
