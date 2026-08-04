@@ -4,6 +4,13 @@ import type { HistoryEvent, MemberStats } from '@/lib/education/history';
 import type { Member, StartPathwayInput } from '@/lib/education/members';
 import type { Asset, AssetsPage, CreateAssetInput, UpdateAssetInput } from '@/lib/library/assets';
 import { ASSETS_PAGE_SIZE } from '@/lib/library/assets';
+import type {
+  CreateDocumentInput,
+  DocumentsPage,
+  LibraryDocument,
+  UpdateDocumentInput,
+} from '@/lib/library/documents';
+import { DOCUMENTS_PAGE_SIZE } from '@/lib/library/documents';
 import type { CreateMeetingInput, Meeting, UpdateMeetingInput } from '@/lib/meetings/meetings';
 import type {
   ContactLog,
@@ -23,7 +30,16 @@ import { localBaseQuery } from './local-base-query';
 export const toastlyApi = createApi({
   reducerPath: 'toastlyApi',
   baseQuery: localBaseQuery,
-  tagTypes: ['Member', 'History', 'Meeting', 'Guest', 'ContactLog', 'VisitLog', 'Asset'],
+  tagTypes: [
+    'Member',
+    'History',
+    'Meeting',
+    'Guest',
+    'ContactLog',
+    'VisitLog',
+    'Asset',
+    'Document',
+  ],
   endpoints: (build) => ({
     getMembers: build.query<Member[], void>({
       query: () => ({ url: '/members', method: 'GET' }),
@@ -405,6 +421,112 @@ export const toastlyApi = createApi({
       },
       invalidatesTags: [{ type: 'Asset', id: 'LIST' }],
     }),
+
+    /* Same paginate-and-merge shape as `listAssets`: every offset for a given
+     * `q` folds into one cache entry so the infinite-scroll listener can
+     * bump `offset` and the UI reads a single growing list. */
+    listDocuments: build.query<DocumentsPage, { q: string; offset: number }>({
+      query: ({ q, offset }) => {
+        const params = new URLSearchParams({
+          offset: String(offset),
+          limit: String(DOCUMENTS_PAGE_SIZE),
+        });
+        if (q) params.set('q', q);
+        return { url: `/documents?${params.toString()}`, method: 'GET' };
+      },
+      serializeQueryArgs: ({ endpointName, queryArgs }) => `${endpointName}:${queryArgs.q}`,
+      merge: (currentCache, incoming, { arg }) => {
+        if (arg.offset === 0) {
+          currentCache.items = incoming.items;
+        } else {
+          const seen = new Set(currentCache.items.map((doc) => doc.id));
+          currentCache.items = currentCache.items.concat(
+            incoming.items.filter((doc) => !seen.has(doc.id)),
+          );
+        }
+        currentCache.total = incoming.total;
+        currentCache.nextOffset = incoming.nextOffset;
+      },
+      forceRefetch: ({ currentArg, previousArg }) =>
+        currentArg?.q !== previousArg?.q || currentArg?.offset !== previousArg?.offset,
+      providesTags: (page) => [
+        { type: 'Document' as const, id: 'LIST' },
+        ...(page?.items ?? []).map((doc) => ({ type: 'Document' as const, id: doc.id })),
+      ],
+    }),
+
+    createDocument: build.mutation<LibraryDocument, CreateDocumentInput>({
+      query: (body) => ({ url: '/documents', method: 'POST', body }),
+      invalidatesTags: [{ type: 'Document', id: 'LIST' }],
+    }),
+
+    /* Optimistic title edit across every cached document list — a rename
+     * should show up in the same beat in whichever `q` buckets the user has
+     * scrolled through. */
+    updateDocument: build.mutation<LibraryDocument, { documentId: string } & UpdateDocumentInput>({
+      query: ({ documentId, ...body }) => ({
+        url: `/documents/${documentId}`,
+        method: 'PATCH',
+        body,
+      }),
+      onQueryStarted: async (
+        { documentId, ...changes },
+        { dispatch, getState, queryFulfilled },
+      ) => {
+        const affected = toastlyApi.util.selectInvalidatedBy(getState(), [
+          { type: 'Document', id: 'LIST' },
+        ]);
+        const patches = affected
+          .filter((entry) => entry.endpointName === 'listDocuments')
+          .map((entry) =>
+            dispatch(
+              toastlyApi.util.updateQueryData(
+                'listDocuments',
+                entry.originalArgs as { q: string; offset: number },
+                (draft) => {
+                  const doc = draft.items.find((item) => item.id === documentId);
+                  if (doc) Object.assign(doc, changes);
+                },
+              ),
+            ),
+          );
+        try {
+          await queryFulfilled;
+        } catch {
+          for (const patch of patches) patch.undo();
+        }
+      },
+      invalidatesTags: (_doc, _error, { documentId }) => [{ type: 'Document', id: documentId }],
+    }),
+
+    deleteDocument: build.mutation<null, string>({
+      query: (documentId) => ({ url: `/documents/${documentId}`, method: 'DELETE' }),
+      onQueryStarted: async (documentId, { dispatch, getState, queryFulfilled }) => {
+        const affected = toastlyApi.util.selectInvalidatedBy(getState(), [
+          { type: 'Document', id: 'LIST' },
+        ]);
+        const patches = affected
+          .filter((entry) => entry.endpointName === 'listDocuments')
+          .map((entry) =>
+            dispatch(
+              toastlyApi.util.updateQueryData(
+                'listDocuments',
+                entry.originalArgs as { q: string; offset: number },
+                (draft) => {
+                  draft.items = draft.items.filter((doc) => doc.id !== documentId);
+                  draft.total = Math.max(0, draft.total - 1);
+                },
+              ),
+            ),
+          );
+        try {
+          await queryFulfilled;
+        } catch {
+          for (const patch of patches) patch.undo();
+        }
+      },
+      invalidatesTags: [{ type: 'Document', id: 'LIST' }],
+    }),
   }),
 });
 
@@ -434,4 +556,8 @@ export const {
   useCreateAssetMutation,
   useUpdateAssetMutation,
   useDeleteAssetMutation,
+  useListDocumentsQuery,
+  useCreateDocumentMutation,
+  useUpdateDocumentMutation,
+  useDeleteDocumentMutation,
 } = toastlyApi;

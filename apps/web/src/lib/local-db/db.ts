@@ -9,6 +9,8 @@ import type { Member } from '@/lib/education/members';
 import { SEED_MEMBERS } from '@/lib/education/members';
 import type { Asset } from '@/lib/library/assets';
 import { SEED_ASSETS } from '@/lib/library/assets';
+import type { LibraryDocument } from '@/lib/library/documents';
+import { SEED_DOCUMENTS } from '@/lib/library/documents';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { SEED_MEETINGS } from '@/lib/meetings/meetings';
 import type { ContactLog } from '@/lib/people/contact-logs';
@@ -36,8 +38,9 @@ import { SEED_VISIT_LOGS } from '@/lib/people/visit-logs';
  * avatarUrl / whatsapp / notes to Guest.
  * v4 introduced the contact-logs table backing the Contact logs drawer.
  * v5 introduced the visit-logs table backing the Visit logs drawer.
- * v6 introduced the assets table backing the Library > Assets tab. */
-const SCHEMA_VERSION = 'v6';
+ * v6 introduced the assets table backing the Library > Assets tab.
+ * v7 introduced the documents table backing the Library > Documents tab. */
+const SCHEMA_VERSION = 'v7';
 
 export const DB_KEYS = {
   members: `toastly.db.${SCHEMA_VERSION}.members`,
@@ -48,6 +51,7 @@ export const DB_KEYS = {
   contactLogs: `toastly.db.${SCHEMA_VERSION}.contact-logs`,
   visitLogs: `toastly.db.${SCHEMA_VERSION}.visit-logs`,
   assets: `toastly.db.${SCHEMA_VERSION}.assets`,
+  documents: `toastly.db.${SCHEMA_VERSION}.documents`,
 } as const;
 
 /** Used by the cross-tab sync listener to tell our writes apart from any other
@@ -87,6 +91,10 @@ function seedVisitLogs(): VisitLog[] {
 
 function seedAssets(): Asset[] {
   return SEED_ASSETS;
+}
+
+function seedDocuments(): LibraryDocument[] {
+  return SEED_DOCUMENTS;
 }
 
 function seedMemberExtras(): MemberExtrasTable {
@@ -176,6 +184,14 @@ export function readAssets(): Asset[] {
 
 export function writeAssets(assets: Asset[]): void {
   writeTable(DB_KEYS.assets, assets);
+}
+
+export function readDocuments(): LibraryDocument[] {
+  return readTable(DB_KEYS.documents, seedDocuments);
+}
+
+export function writeDocuments(docs: LibraryDocument[]): void {
+  writeTable(DB_KEYS.documents, docs);
 }
 
 export function readMemberExtras(): MemberExtrasTable {

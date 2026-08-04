@@ -12,6 +12,20 @@ import {
   matchesAssetQuery,
   sortAssetsNewestFirst,
 } from '@/lib/library/assets';
+import type {
+  CreateDocumentInput,
+  DocumentsPage,
+  LibraryDocument,
+  UpdateDocumentInput,
+} from '@/lib/library/documents';
+import {
+  DOCUMENT_FILE_MAX_BYTES,
+  DOCUMENT_TITLE_MAX,
+  DOCUMENTS_PAGE_SIZE,
+  isDocumentMimeType,
+  matchesDocumentQuery,
+  sortDocumentsNewestFirst,
+} from '@/lib/library/documents';
 import type { CreateMeetingInput, Meeting, UpdateMeetingInput } from '@/lib/meetings/meetings';
 import { MEETING_STATUSES } from '@/lib/meetings/meetings';
 import type {
@@ -28,6 +42,7 @@ import { VISIT_LOG_NOTES_MAX, VISIT_LOG_ROLE_MAX } from '@/lib/people/visit-logs
 import {
   readAssets,
   readContactLogs,
+  readDocuments,
   readExtrasFor,
   readGuests,
   readHistoryEvents,
@@ -36,6 +51,7 @@ import {
   readVisitLogs,
   writeAssets,
   writeContactLogs,
+  writeDocuments,
   writeGuests,
   writeHistoryEvents,
   writeMeetings,
@@ -753,6 +769,126 @@ function deleteAsset({ params }: RouteContext): null {
   return null;
 }
 
+/* ------------------------------------------------------------ documents --- */
+
+function parseCreateDocumentBody(body: unknown): CreateDocumentInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected a create-document body');
+  }
+  const { title, fileName, fileUrl, mimeType, sizeBytes } = body as Partial<CreateDocumentInput>;
+
+  if (typeof title !== 'string' || title.trim() === '') {
+    throw new LocalApiError(400, 'A title is required');
+  }
+  if (title.length > DOCUMENT_TITLE_MAX) {
+    throw new LocalApiError(400, `Please keep the title under ${DOCUMENT_TITLE_MAX} characters`);
+  }
+  if (typeof fileName !== 'string' || fileName.trim() === '') {
+    throw new LocalApiError(400, 'A filename is required');
+  }
+  if (!isDocumentMimeType(mimeType)) {
+    throw new LocalApiError(400, `"${String(mimeType)}" is not a supported document type`);
+  }
+  if (typeof fileUrl !== 'string' || !fileUrl.startsWith('data:')) {
+    throw new LocalApiError(400, 'A data-URL file payload is required');
+  }
+  if (typeof sizeBytes !== 'number' || sizeBytes < 0) {
+    throw new LocalApiError(400, 'File size must be a non-negative number');
+  }
+  if (sizeBytes > DOCUMENT_FILE_MAX_BYTES) {
+    const mb = (DOCUMENT_FILE_MAX_BYTES / (1024 * 1024)).toFixed(0);
+    throw new LocalApiError(400, `Please upload a file under ${mb} MB`);
+  }
+  return {
+    title: title.trim(),
+    fileName: fileName.trim(),
+    fileUrl,
+    mimeType,
+    sizeBytes: Math.round(sizeBytes),
+  };
+}
+
+function parseUpdateDocumentBody(body: unknown): UpdateDocumentInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected an update-document body');
+  }
+  const input = body as Record<string, unknown>;
+  const output: UpdateDocumentInput = {};
+  if ('title' in input) {
+    const raw = input.title;
+    if (typeof raw !== 'string' || raw.trim() === '') {
+      throw new LocalApiError(400, 'A title cannot be blank');
+    }
+    if (raw.length > DOCUMENT_TITLE_MAX) {
+      throw new LocalApiError(400, `Please keep the title under ${DOCUMENT_TITLE_MAX} characters`);
+    }
+    output.title = raw.trim();
+  }
+  return output;
+}
+
+function createDocumentId(): string {
+  return `document-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+}
+
+/** Paginated list. `q` filters by title or filename (case-insensitive);
+ * `offset` and `limit` frame the window. Sorted newest first so both fresh
+ * uploads and the seed data land near the top of the list. */
+function listDocuments({ query }: RouteContext): DocumentsPage {
+  const needle = (query.q ?? '').trim().toLowerCase();
+  const offset = Number.parseInt(query.offset ?? '0', 10);
+  const limit = Number.parseInt(query.limit ?? String(DOCUMENTS_PAGE_SIZE), 10);
+  const safeOffset = Number.isFinite(offset) && offset >= 0 ? offset : 0;
+  const safeLimit =
+    Number.isFinite(limit) && limit > 0
+      ? Math.min(limit, DOCUMENTS_PAGE_SIZE * 4)
+      : DOCUMENTS_PAGE_SIZE;
+
+  const all = sortDocumentsNewestFirst(readDocuments());
+  const filtered = needle ? all.filter((doc) => matchesDocumentQuery(doc, needle)) : all;
+  const items = filtered.slice(safeOffset, safeOffset + safeLimit);
+  const nextOffset = safeOffset + items.length < filtered.length ? safeOffset + items.length : null;
+  return { items, total: filtered.length, nextOffset };
+}
+
+function getDocument({ params }: RouteContext): LibraryDocument {
+  const doc = readDocuments().find((entry) => entry.id === params.documentId);
+  if (!doc) throw new LocalApiError(404, `No document with id "${params.documentId}"`);
+  return doc;
+}
+
+function createDocument({ body }: RouteContext): LibraryDocument {
+  const input = parseCreateDocumentBody(body);
+  const doc: LibraryDocument = {
+    id: createDocumentId(),
+    ...input,
+    createdAt: new Date().toISOString(),
+  };
+  writeDocuments([...readDocuments(), doc]);
+  return doc;
+}
+
+function updateDocument({ params, body }: RouteContext): LibraryDocument {
+  const docs = readDocuments();
+  const existing = docs.find((entry) => entry.id === params.documentId);
+  if (!existing) throw new LocalApiError(404, `No document with id "${params.documentId}"`);
+  const updated: LibraryDocument = {
+    ...existing,
+    ...parseUpdateDocumentBody(body),
+    updatedAt: new Date().toISOString(),
+  };
+  writeDocuments(docs.map((entry) => (entry.id === updated.id ? updated : entry)));
+  return updated;
+}
+
+function deleteDocument({ params }: RouteContext): null {
+  const docs = readDocuments();
+  const existing = docs.find((entry) => entry.id === params.documentId);
+  if (!existing) throw new LocalApiError(404, `No document with id "${params.documentId}"`);
+  writeDocuments(docs.filter((entry) => entry.id !== params.documentId));
+  return null;
+}
+
 interface Route {
   method: HttpMethod;
   /** Path split on `/`; a `:name` segment captures into `params`. */
@@ -791,6 +927,11 @@ const ROUTES: Route[] = [
   route('POST', '/assets', createAsset),
   route('PATCH', '/assets/:assetId', updateAsset),
   route('DELETE', '/assets/:assetId', deleteAsset),
+  route('GET', '/documents', listDocuments),
+  route('GET', '/documents/:documentId', getDocument),
+  route('POST', '/documents', createDocument),
+  route('PATCH', '/documents/:documentId', updateDocument),
+  route('DELETE', '/documents/:documentId', deleteDocument),
 ];
 
 function toSegments(path: string): string[] {

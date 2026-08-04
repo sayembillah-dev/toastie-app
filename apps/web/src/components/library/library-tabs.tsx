@@ -4,17 +4,8 @@ import { Calendar, FileText, Package } from '@phosphor-icons/react/dist/ssr';
 import { Tabs } from 'antd';
 
 import { AssetsTab } from '@/components/library/assets-tab';
+import { DocumentsTab } from '@/components/library/documents-tab';
 import { PlannerTab } from '@/components/library/planner-tab';
-
-/** Placeholder shown inside each tab until the section is built out. Kept
- * inline for now — when a tab gets real content it moves to its own file. */
-function ComingSoon({ label }: { label: string }) {
-  return (
-    <div className="flex min-h-64 items-center justify-center text-sm text-ink-soft">
-      {label} — coming soon.
-    </div>
-  );
-}
 
 /** Tabs live on the Library page so all sections share the same header,
  * breadcrumb and content padding. */
@@ -60,7 +51,7 @@ export function LibraryTabs() {
                 Documents
               </span>
             ),
-            children: <ComingSoon label="Documents" />,
+            children: <DocumentsTab />,
           },
         ]}
       />
