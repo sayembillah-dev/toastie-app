@@ -24,7 +24,9 @@ import { SEED_GUESTS } from '@/lib/people/guests';
 
 /** Bump when the shape of a table changes so stale payloads reseed instead of
  * crashing a returning user's browser. */
-const SCHEMA_VERSION = 'v1';
+/* v2 added `stage` to the guest table — a v1 payload would leave every guest
+ * out of the Kanban columns. */
+const SCHEMA_VERSION = 'v2';
 
 export const DB_KEYS = {
   members: `toastly.db.${SCHEMA_VERSION}.members`,

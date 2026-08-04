@@ -197,7 +197,7 @@ export function ProgressTab({ member, onStartPathway }: ProgressTabProps) {
               {startingLevel > 1 ? (
                 <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-fill px-2.5 py-1 text-[11px] font-medium text-ink-soft">
                   <Flag size={11} weight="bold" />
-                  Journey on Toastly started at Level {startingLevel}
+                  Journey on Toastie started at Level {startingLevel}
                 </div>
               ) : null}
             </div>

@@ -3,7 +3,7 @@ import { createApi } from '@reduxjs/toolkit/query/react';
 import type { HistoryEvent, MemberStats } from '@/lib/education/history';
 import type { Member, StartPathwayInput } from '@/lib/education/members';
 import type { CreateMeetingInput, Meeting, UpdateMeetingInput } from '@/lib/meetings/meetings';
-import type { Guest } from '@/lib/people/guests';
+import type { Guest, GuestStage } from '@/lib/people/guests';
 
 import { localBaseQuery } from './local-base-query';
 
@@ -101,6 +101,31 @@ export const toastlyApi = createApi({
         ...(guests ?? []).map((guest) => ({ type: 'Guest' as const, id: guest.id })),
       ],
     }),
+
+    /* Moving a card cannot wait for a round trip — the guest has to land in the
+     * new column under the cursor that dropped it, so the cache is patched up
+     * front and rolled back if the write is rejected. */
+    updateGuestStage: build.mutation<Guest, { guestId: string; stage: GuestStage }>({
+      query: ({ guestId, stage }) => ({
+        url: `/guests/${guestId}`,
+        method: 'PATCH',
+        body: { stage },
+      }),
+      onQueryStarted: async ({ guestId, stage }, { dispatch, queryFulfilled }) => {
+        const patch = dispatch(
+          toastlyApi.util.updateQueryData('getGuests', undefined, (draft) => {
+            const guest = draft.find((entry) => entry.id === guestId);
+            if (guest) guest.stage = stage;
+          }),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+      invalidatesTags: (_guest, _error, { guestId }) => [{ type: 'Guest', id: guestId }],
+    }),
   }),
 });
 
@@ -115,4 +140,5 @@ export const {
   useCreateMeetingMutation,
   useUpdateMeetingMutation,
   useGetGuestsQuery,
+  useUpdateGuestStageMutation,
 } = toastlyApi;

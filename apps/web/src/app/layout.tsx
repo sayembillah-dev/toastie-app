@@ -7,7 +7,7 @@ import './globals.css';
 import './print.css';
 
 export const metadata: Metadata = {
-  title: 'Toastly',
+  title: 'Toastie',
   description: 'Next.js + NestJS monorepo with Tailwind CSS and Ant Design',
 };
 

@@ -1,21 +1,53 @@
 'use client';
 
-import { MagnifyingGlass, WarningCircle } from '@phosphor-icons/react/dist/ssr';
-import { Input } from 'antd';
+import {
+  Kanban,
+  MagnifyingGlass,
+  SquaresFour,
+  WarningCircle,
+} from '@phosphor-icons/react/dist/ssr';
+import { Input, Segmented } from 'antd';
 import { useMemo, useState } from 'react';
 
 import { GuestCard } from '@/components/people/guest-card';
+import { GuestKanban } from '@/components/people/guest-kanban';
 import type { Guest } from '@/lib/people/guests';
+import { GUEST_STAGES } from '@/lib/people/guests';
 import { useGetGuestsQuery } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
 const GRID_CLASSES =
   'grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
 
+/** The board leads: follow-up is what the guest list is for, and the card grid
+ * is the reference view you drop into for the detail. */
+type GuestView = 'kanban' | 'cards';
+
 function matchesQuery(guest: Guest, needle: string): boolean {
   const haystack =
     `${guest.firstName} ${guest.lastName} ${guest.email ?? ''} ${guest.invitedBy ?? ''}`.toLowerCase();
   return haystack.includes(needle);
+}
+
+/** Six empty columns while the guests load, so the board does not pop into
+ * place from a card grid that was never going to be shown. */
+function BoardSkeleton() {
+  return (
+    <div
+      className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
+      aria-hidden
+    >
+      {GUEST_STAGES.map((stage) => (
+        <div key={stage.id} className="rounded-xl border border-line bg-sidebar p-1.5">
+          <div className="mb-1.5 h-3 w-2/3 animate-pulse rounded bg-fill-strong" />
+          <div className="flex flex-col gap-1.5">
+            <div className="h-11 animate-pulse rounded-lg bg-fill-strong" />
+            <div className="h-11 animate-pulse rounded-lg bg-fill-strong" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function DirectorySkeleton() {
@@ -43,6 +75,7 @@ function DirectorySkeleton() {
 export function GuestsDirectory() {
   const { data: guests, isLoading, isError, error } = useGetGuestsQuery();
   const [query, setQuery] = useState('');
+  const [view, setView] = useState<GuestView>('kanban');
 
   const trimmed = query.trim().toLowerCase();
   const filtered = useMemo(() => {
@@ -56,21 +89,50 @@ export function GuestsDirectory() {
         <p className="text-sm text-ink-soft">
           Visitors who have dropped in to a meeting — keep in touch and invite them back.
         </p>
-        <div className="w-full sm:w-72">
-          <Input
-            allowClear
-            size="middle"
-            placeholder="Search guests, emails, invitees"
-            aria-label="Search guests"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            prefix={<MagnifyingGlass size={16} className="text-ink-muted" />}
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <div className="min-w-0 flex-1 sm:w-72 sm:flex-none">
+            <Input
+              allowClear
+              size="middle"
+              placeholder="Search guests, emails, invitees"
+              aria-label="Search guests"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              prefix={<MagnifyingGlass size={16} className="text-ink-muted" />}
+              disabled={isLoading}
+            />
+          </div>
+          <Segmented<GuestView>
+            value={view}
+            onChange={setView}
             disabled={isLoading}
+            options={[
+              {
+                value: 'kanban',
+                title: 'Board view',
+                label: (
+                  <span className="inline-flex items-center">
+                    <Kanban size={16} weight="bold" aria-hidden />
+                    <span className="sr-only">Board view</span>
+                  </span>
+                ),
+              },
+              {
+                value: 'cards',
+                title: 'Card view',
+                label: (
+                  <span className="inline-flex items-center">
+                    <SquaresFour size={16} weight="bold" aria-hidden />
+                    <span className="sr-only">Card view</span>
+                  </span>
+                ),
+              },
+            ]}
           />
         </div>
       </div>
 
-      {isLoading ? <DirectorySkeleton /> : null}
+      {isLoading ? view === 'kanban' ? <BoardSkeleton /> : <DirectorySkeleton /> : null}
 
       {isError ? (
         <div className="rounded-xl border border-dashed border-line-strong px-6 py-16 text-center">
@@ -107,6 +169,8 @@ export function GuestsDirectory() {
               </>
             )}
           </div>
+        ) : view === 'kanban' ? (
+          <GuestKanban guests={filtered} />
         ) : (
           <div className={GRID_CLASSES}>
             {filtered.map((guest) => (

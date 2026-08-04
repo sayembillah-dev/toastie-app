@@ -4,7 +4,6 @@ import {
   AddressBook,
   ArrowLeft,
   Bell,
-  Bread,
   CaretRight,
   DotsThree,
   Gear,
@@ -18,6 +17,7 @@ import {
   X,
 } from '@phosphor-icons/react/dist/ssr';
 import { Avatar, Badge, Button, Drawer, Input, Layout, Menu } from 'antd';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Fragment } from 'react';
@@ -30,6 +30,8 @@ import {
   selectSidebarCollapsed,
   sidebarToggled,
 } from '@/store/ui-slice';
+
+import toastieLogo from '../../assets/toastie.svg';
 
 /* Only Sider comes from antd — the header and content live inside the content
  * panel below, so antd's Header/Content wrappers would only fight the layout. */
@@ -140,10 +142,10 @@ function SidebarBody({
       >
         {collapsed ? null : (
           <>
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-ink text-white">
-              <Bread size={16} />
-            </span>
-            <span className="truncate text-base font-semibold text-ink">Toastly</span>
+            {/* The mark carries its own colour, so it sits bare rather than in
+             * a tinted chip. 32px keeps its optical weight on the row. */}
+            <Image src={toastieLogo} alt="" aria-hidden className="h-8 w-auto shrink-0" priority />
+            <span className="truncate text-base font-semibold text-ink">Toastie</span>
           </>
         )}
         <span className={collapsed ? '' : 'ml-auto'}>{brandAction}</span>

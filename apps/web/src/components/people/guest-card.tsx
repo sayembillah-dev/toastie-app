@@ -1,31 +1,10 @@
 import { EnvelopeSimple, UserPlus } from '@phosphor-icons/react/dist/ssr';
 
 import type { Guest } from '@/lib/people/guests';
-import { getGuestInitials } from '@/lib/people/guests';
+import { getGuestInitials, getGuestStage, getGuestSwatch } from '@/lib/people/guests';
 
 interface GuestCardProps {
   guest: Guest;
-}
-
-const AVATAR_PALETTE = [
-  { bg: '#FFE4E6', fg: '#881337' },
-  { bg: '#FEF3C7', fg: '#78350F' },
-  { bg: '#ECFCCB', fg: '#365314' },
-  { bg: '#D1FAE5', fg: '#064E3B' },
-  { bg: '#CFFAFE', fg: '#164E63' },
-  { bg: '#DBEAFE', fg: '#1E3A8A' },
-  { bg: '#E0E7FF', fg: '#312E81' },
-  { bg: '#EDE9FE', fg: '#4C1D95' },
-  { bg: '#FAE8FF', fg: '#701A75' },
-  { bg: '#FCE7F3', fg: '#831843' },
-] as const;
-
-function hashString(input: string): number {
-  let hash = 0;
-  for (let i = 0; i < input.length; i++) {
-    hash = ((hash << 5) - hash + input.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash);
 }
 
 const VISIT_DATE_FMT = new Intl.DateTimeFormat('en-GB', {
@@ -41,14 +20,16 @@ function formatVisitDate(iso: string): string {
 export function GuestCard({ guest }: GuestCardProps) {
   const fullName = `${guest.firstName} ${guest.lastName}`;
   const initials = getGuestInitials(guest);
-  const swatch = AVATAR_PALETTE[hashString(guest.id) % AVATAR_PALETTE.length];
+  const swatch = getGuestSwatch(guest.id);
 
   return (
     <div className="group relative overflow-hidden rounded-xl border border-line bg-canvas transition-all duration-200 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-sm">
       <div className="h-16 bg-emerald-700 px-3 pt-2.5">
         <div className="flex items-start justify-end text-white/80">
+          {/* The pipeline stage rather than a "Guest" label — inside the Guests
+           * tab the type is a given, and this is what the board tracks. */}
           <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
-            Guest
+            {getGuestStage(guest.stage).label}
           </span>
         </div>
       </div>

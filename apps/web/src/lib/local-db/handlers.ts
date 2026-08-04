@@ -5,7 +5,8 @@ import { PATHWAYS } from '@/lib/education/members';
 import { findProject } from '@/lib/education/pathways';
 import type { CreateMeetingInput, Meeting, UpdateMeetingInput } from '@/lib/meetings/meetings';
 import { MEETING_STATUSES } from '@/lib/meetings/meetings';
-import type { Guest } from '@/lib/people/guests';
+import type { Guest, GuestStage } from '@/lib/people/guests';
+import { isGuestStage } from '@/lib/people/guests';
 
 import {
   readExtrasFor,
@@ -13,6 +14,7 @@ import {
   readHistoryEvents,
   readMeetings,
   readMembers,
+  writeGuests,
   writeHistoryEvents,
   writeMeetings,
   writeMembers,
@@ -141,6 +143,22 @@ function parseUpdateMeetingBody(body: unknown): UpdateMeetingInput {
   return theme === undefined ? { status } : { status, theme: theme.trim() };
 }
 
+/** The board only ever sends a stage, so an unknown one is the only way this
+ * call can go wrong — and it has to 400 rather than write a column nobody
+ * renders. */
+function parseUpdateGuestBody(body: unknown): { stage: GuestStage } {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected an update-guest body');
+  }
+
+  const { stage } = body as { stage?: unknown };
+  if (!isGuestStage(stage)) {
+    throw new LocalApiError(400, `"${String(stage)}" is not a guest stage`);
+  }
+
+  return { stage };
+}
+
 /* ---------------------------------------------------------------- routes -- */
 
 function listMembers(): Member[] {
@@ -232,6 +250,18 @@ function listGuests(): Guest[] {
   return readGuests();
 }
 
+/** Backs both the Kanban drag-and-drop and the mobile stage dropdown — moving a
+ * card is the same single-field write either way. */
+function updateGuest({ params, body }: RouteContext): Guest {
+  const guests = readGuests();
+  const existing = guests.find((entry) => entry.id === params.guestId);
+  if (!existing) throw new LocalApiError(404, `No guest with id "${params.guestId}"`);
+
+  const updated: Guest = { ...existing, ...parseUpdateGuestBody(body) };
+  writeGuests(guests.map((entry) => (entry.id === updated.id ? updated : entry)));
+  return updated;
+}
+
 interface Route {
   method: HttpMethod;
   /** Path split on `/`; a `:name` segment captures into `params`. */
@@ -254,6 +284,7 @@ const ROUTES: Route[] = [
   route('POST', '/meetings', createMeeting),
   route('PATCH', '/meetings/:meetingId', updateMeeting),
   route('GET', '/guests', listGuests),
+  route('PATCH', '/guests/:guestId', updateGuest),
 ];
 
 function toSegments(path: string): string[] {
