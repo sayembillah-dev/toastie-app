@@ -2,18 +2,25 @@
 
 import {
   ArrowsClockwise,
+  CalendarCheck,
+  ChatCircleDots,
   PencilSimple,
   Trash,
   UserCircleCheck,
+  WarningCircle,
   X,
 } from '@phosphor-icons/react/dist/ssr';
 import { App, Button, Drawer, Popover } from 'antd';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import { ContactLogsDrawer } from '@/components/people/contact-logs-drawer';
 import { GuestEditPanel } from '@/components/people/guest-edit-panel';
+import { VisitLogsDrawer } from '@/components/people/visit-logs-drawer';
 import type { Guest, GuestStage } from '@/lib/people/guests';
 import { GUEST_STAGES } from '@/lib/people/guests';
-import { useUpdateGuestMutation } from '@/store/api';
+import { useDeleteGuestMutation, useUpdateGuestMutation } from '@/store/api';
+import { getApiErrorMessage } from '@/store/api-error';
 
 /** Above this width the actions column renders the popover; below it, the same
  * menu opens as a bottom sheet. Matches Tailwind's `md` so the layout switch
@@ -192,7 +199,7 @@ function MoveStageTrigger({ guest }: MoveStageTriggerProps) {
       trigger="click"
       placement="rightTop"
       arrow={false}
-      overlayInnerStyle={{ padding: 0 }}
+      styles={{ container: { padding: 0 } }}
       content={menu}
     >
       {triggerButton}
@@ -205,39 +212,134 @@ interface GuestActionsProps {
 }
 
 /** Three vertical actions under the hero: Move stage (opens the stage menu),
- * Edit (opens the left-side edit panel), Delete (placeholder — waiting on
- * spec). */
+ * Edit (opens the right-side edit panel), Delete (confirms then removes the
+ * record and routes back to the People index). */
 export function GuestActions({ guest }: GuestActionsProps) {
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
+  const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteGuest, { isLoading: isDeleting }] = useDeleteGuestMutation();
+
+  const fullName = `${guest.firstName} ${guest.lastName}`;
+
+  /* Runs the delete inside the confirm modal's `onOk` so the dialog stays open
+   * with its own spinner while the request is in flight — the user gets a
+   * single interaction rather than a modal that closes then something happens
+   * elsewhere. Navigating out before the toast fires keeps the profile from
+   * flashing an error state on a record that is on its way out. */
+  const confirmDelete = () => {
+    modal.confirm({
+      title: `Delete ${fullName}?`,
+      icon: <WarningCircle size={20} weight="fill" className="text-rose-600" />,
+      content: (
+        <p className="text-sm text-ink-soft">
+          This removes {fullName} from the guest list. Their visit count and any notes on file are
+          discarded. This action cannot be undone.
+        </p>
+      ),
+      okText: 'Delete guest',
+      okButtonProps: { danger: true },
+      cancelText: 'Cancel',
+      centered: true,
+      onOk: async () => {
+        try {
+          await deleteGuest(guest.id).unwrap();
+          message.success(`${fullName} was deleted`);
+          router.push('/people');
+        } catch (err) {
+          message.error(getApiErrorMessage(err));
+          /* Rethrow so antd keeps the modal open on failure — the user sees the
+           * error toast and can retry from the same dialog. */
+          throw err;
+        }
+      },
+    });
+  };
 
   return (
-    <section
-      aria-label="Guest actions"
-      className="flex flex-col gap-2 rounded-2xl border border-line bg-canvas p-3"
-    >
-      <MoveStageTrigger guest={guest} />
-      <Button
-        block
-        size="middle"
-        onClick={() => setEditOpen(true)}
-        icon={<PencilSimple size={16} weight="bold" />}
-        className="justify-start"
+    <div className="flex flex-col gap-4">
+      <section
+        aria-label="Guest actions"
+        className="flex flex-col gap-2 rounded-2xl border border-line bg-canvas p-3"
       >
-        Edit
-      </Button>
-      <Button
-        block
-        danger
-        size="middle"
-        onClick={() => message.info('Delete guest — coming soon')}
-        icon={<Trash size={16} weight="bold" />}
-        className="justify-start"
-      >
-        Delete
-      </Button>
+        <SectionTitle>Actions</SectionTitle>
+        <MoveStageTrigger guest={guest} />
+        <Button
+          block
+          size="middle"
+          onClick={() => setEditOpen(true)}
+          icon={<PencilSimple size={16} weight="bold" />}
+          className="justify-start"
+        >
+          Edit
+        </Button>
+        <Button
+          block
+          danger
+          size="middle"
+          loading={isDeleting}
+          onClick={confirmDelete}
+          icon={<Trash size={16} weight="bold" />}
+          className="justify-start"
+        >
+          Delete
+        </Button>
+      </section>
+
+      <GuestActivity guest={guest} />
 
       <GuestEditPanel guest={guest} open={editOpen} onClose={() => setEditOpen(false)} />
-    </section>
+    </div>
+  );
+}
+
+/** Section header used inside the small p-3 action/activity boxes. Tightened
+ * against the parent's padding so the label sits flush with the button icons
+ * beneath it. */
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <h2 className="px-1 pb-1 text-sm font-semibold text-ink">{children}</h2>;
+}
+
+interface GuestActivityProps {
+  guest: Guest;
+}
+
+/** Second stacked box beneath Actions — the "history" affordances (visits,
+ * contacts). The panels themselves are stubbed placeholders for now; contents
+ * arrive with the follow-up spec. */
+function GuestActivity({ guest }: GuestActivityProps) {
+  const [visitsOpen, setVisitsOpen] = useState(false);
+  const [contactsOpen, setContactsOpen] = useState(false);
+
+  return (
+    <>
+      <section
+        aria-label="Guest activity"
+        className="flex flex-col gap-2 rounded-2xl border border-line bg-canvas p-3"
+      >
+        <SectionTitle>Activity</SectionTitle>
+        <Button
+          block
+          size="middle"
+          onClick={() => setVisitsOpen(true)}
+          icon={<CalendarCheck size={16} weight="bold" />}
+          className="justify-start"
+        >
+          See Visit Logs
+        </Button>
+        <Button
+          block
+          size="middle"
+          onClick={() => setContactsOpen(true)}
+          icon={<ChatCircleDots size={16} weight="bold" />}
+          className="justify-start"
+        >
+          See Contact Logs
+        </Button>
+      </section>
+
+      <VisitLogsDrawer guest={guest} open={visitsOpen} onClose={() => setVisitsOpen(false)} />
+      <ContactLogsDrawer guest={guest} open={contactsOpen} onClose={() => setContactsOpen(false)} />
+    </>
   );
 }

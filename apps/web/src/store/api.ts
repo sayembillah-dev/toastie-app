@@ -3,7 +3,13 @@ import { createApi } from '@reduxjs/toolkit/query/react';
 import type { HistoryEvent, MemberStats } from '@/lib/education/history';
 import type { Member, StartPathwayInput } from '@/lib/education/members';
 import type { CreateMeetingInput, Meeting, UpdateMeetingInput } from '@/lib/meetings/meetings';
+import type {
+  ContactLog,
+  CreateContactLogInput,
+  UpdateContactLogInput,
+} from '@/lib/people/contact-logs';
 import type { Guest, UpdateGuestInput } from '@/lib/people/guests';
+import type { CreateVisitLogInput, UpdateVisitLogInput, VisitLog } from '@/lib/people/visit-logs';
 
 import { localBaseQuery } from './local-base-query';
 
@@ -15,7 +21,7 @@ import { localBaseQuery } from './local-base-query';
 export const toastlyApi = createApi({
   reducerPath: 'toastlyApi',
   baseQuery: localBaseQuery,
-  tagTypes: ['Member', 'History', 'Meeting', 'Guest'],
+  tagTypes: ['Member', 'History', 'Meeting', 'Guest', 'ContactLog', 'VisitLog'],
   endpoints: (build) => ({
     getMembers: build.query<Member[], void>({
       query: () => ({ url: '/members', method: 'GET' }),
@@ -139,6 +145,154 @@ export const toastlyApi = createApi({
       },
       invalidatesTags: (_guest, _error, { guestId }) => [{ type: 'Guest', id: guestId }],
     }),
+
+    /* Removes the guest and drops both cache entries — the list patch pulls the
+     * card out of the grid/kanban straight away, and the detail cache is reset
+     * so a stale navigation back to the profile hits `getGuest` again and 404s
+     * cleanly rather than reading the deleted record from memory. */
+    deleteGuest: build.mutation<null, string>({
+      query: (guestId) => ({ url: `/guests/${guestId}`, method: 'DELETE' }),
+      onQueryStarted: async (guestId, { dispatch, queryFulfilled }) => {
+        const listPatch = dispatch(
+          toastlyApi.util.updateQueryData('getGuests', undefined, (draft) =>
+            draft.filter((entry) => entry.id !== guestId),
+          ),
+        );
+        try {
+          await queryFulfilled;
+          dispatch(toastlyApi.util.invalidateTags([{ type: 'Guest', id: guestId }]));
+        } catch {
+          listPatch.undo();
+        }
+      },
+      invalidatesTags: [{ type: 'Guest', id: 'LIST' }],
+    }),
+
+    /* One cache entry per guest — the drawer scopes every read to a single
+     * guest, so a per-guestId tag keeps invalidations tight. Server returns
+     * newest-first so the drawer maps straight through. */
+    getContactLogs: build.query<ContactLog[], string>({
+      query: (guestId) => ({ url: `/guests/${guestId}/contact-logs`, method: 'GET' }),
+      providesTags: (_logs, _error, guestId) => [{ type: 'ContactLog', id: guestId }],
+    }),
+
+    /* Optimistic prepend so the just-typed entry lands at the top before the
+     * server acknowledges. Server assigns id/createdAt — invalidation on
+     * success swaps the placeholder for the real record. */
+    createContactLog: build.mutation<ContactLog, { guestId: string } & CreateContactLogInput>({
+      query: ({ guestId, ...body }) => ({
+        url: `/guests/${guestId}/contact-logs`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_log, _error, { guestId }) => [{ type: 'ContactLog', id: guestId }],
+    }),
+
+    updateContactLog: build.mutation<
+      ContactLog,
+      { guestId: string; logId: string } & UpdateContactLogInput
+    >({
+      query: ({ guestId, logId, ...body }) => ({
+        url: `/guests/${guestId}/contact-logs/${logId}`,
+        method: 'PATCH',
+        body,
+      }),
+      onQueryStarted: async ({ guestId, logId, ...changes }, { dispatch, queryFulfilled }) => {
+        const patch = dispatch(
+          toastlyApi.util.updateQueryData('getContactLogs', guestId, (draft) => {
+            const entry = draft.find((log) => log.id === logId);
+            if (entry) Object.assign(entry, changes);
+          }),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+      invalidatesTags: (_log, _error, { guestId }) => [{ type: 'ContactLog', id: guestId }],
+    }),
+
+    deleteContactLog: build.mutation<null, { guestId: string; logId: string }>({
+      query: ({ guestId, logId }) => ({
+        url: `/guests/${guestId}/contact-logs/${logId}`,
+        method: 'DELETE',
+      }),
+      onQueryStarted: async ({ guestId, logId }, { dispatch, queryFulfilled }) => {
+        const patch = dispatch(
+          toastlyApi.util.updateQueryData('getContactLogs', guestId, (draft) =>
+            draft.filter((entry) => entry.id !== logId),
+          ),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+      invalidatesTags: (_log, _error, { guestId }) => [{ type: 'ContactLog', id: guestId }],
+    }),
+
+    /* Same shape as the contact-log endpoints — one cache entry per guest,
+     * server sorts newest meeting first so the client maps straight through. */
+    getVisitLogs: build.query<VisitLog[], string>({
+      query: (guestId) => ({ url: `/guests/${guestId}/visit-logs`, method: 'GET' }),
+      providesTags: (_logs, _error, guestId) => [{ type: 'VisitLog', id: guestId }],
+    }),
+
+    createVisitLog: build.mutation<VisitLog, { guestId: string } & CreateVisitLogInput>({
+      query: ({ guestId, ...body }) => ({
+        url: `/guests/${guestId}/visit-logs`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_log, _error, { guestId }) => [{ type: 'VisitLog', id: guestId }],
+    }),
+
+    updateVisitLog: build.mutation<
+      VisitLog,
+      { guestId: string; logId: string } & UpdateVisitLogInput
+    >({
+      query: ({ guestId, logId, ...body }) => ({
+        url: `/guests/${guestId}/visit-logs/${logId}`,
+        method: 'PATCH',
+        body,
+      }),
+      onQueryStarted: async ({ guestId, logId, ...changes }, { dispatch, queryFulfilled }) => {
+        const patch = dispatch(
+          toastlyApi.util.updateQueryData('getVisitLogs', guestId, (draft) => {
+            const entry = draft.find((log) => log.id === logId);
+            if (entry) Object.assign(entry, changes);
+          }),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+      invalidatesTags: (_log, _error, { guestId }) => [{ type: 'VisitLog', id: guestId }],
+    }),
+
+    deleteVisitLog: build.mutation<null, { guestId: string; logId: string }>({
+      query: ({ guestId, logId }) => ({
+        url: `/guests/${guestId}/visit-logs/${logId}`,
+        method: 'DELETE',
+      }),
+      onQueryStarted: async ({ guestId, logId }, { dispatch, queryFulfilled }) => {
+        const patch = dispatch(
+          toastlyApi.util.updateQueryData('getVisitLogs', guestId, (draft) =>
+            draft.filter((entry) => entry.id !== logId),
+          ),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+      invalidatesTags: (_log, _error, { guestId }) => [{ type: 'VisitLog', id: guestId }],
+    }),
   }),
 });
 
@@ -155,4 +309,13 @@ export const {
   useGetGuestsQuery,
   useGetGuestQuery,
   useUpdateGuestMutation,
+  useDeleteGuestMutation,
+  useGetContactLogsQuery,
+  useCreateContactLogMutation,
+  useUpdateContactLogMutation,
+  useDeleteContactLogMutation,
+  useGetVisitLogsQuery,
+  useCreateVisitLogMutation,
+  useUpdateVisitLogMutation,
+  useDeleteVisitLogMutation,
 } = toastlyApi;

@@ -9,8 +9,12 @@ import type { Member } from '@/lib/education/members';
 import { SEED_MEMBERS } from '@/lib/education/members';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { SEED_MEETINGS } from '@/lib/meetings/meetings';
+import type { ContactLog } from '@/lib/people/contact-logs';
+import { SEED_CONTACT_LOGS } from '@/lib/people/contact-logs';
 import type { Guest } from '@/lib/people/guests';
 import { SEED_GUESTS } from '@/lib/people/guests';
+import type { VisitLog } from '@/lib/people/visit-logs';
+import { SEED_VISIT_LOGS } from '@/lib/people/visit-logs';
 
 /**
  * The stand-in persistence layer. Until the Nest API exists, every write the UI
@@ -27,8 +31,10 @@ import { SEED_GUESTS } from '@/lib/people/guests';
 /* v2 added `stage` to the guest table — a v1 payload would leave every guest
  * out of the Kanban columns.
  * v3 replaced the fixed social fields with the `socials` array shape and added
- * avatarUrl / whatsapp / notes to Guest. */
-const SCHEMA_VERSION = 'v3';
+ * avatarUrl / whatsapp / notes to Guest.
+ * v4 introduced the contact-logs table backing the Contact logs drawer.
+ * v5 introduced the visit-logs table backing the Visit logs drawer. */
+const SCHEMA_VERSION = 'v5';
 
 export const DB_KEYS = {
   members: `toastly.db.${SCHEMA_VERSION}.members`,
@@ -36,6 +42,8 @@ export const DB_KEYS = {
   memberExtras: `toastly.db.${SCHEMA_VERSION}.member-extras`,
   meetings: `toastly.db.${SCHEMA_VERSION}.meetings`,
   guests: `toastly.db.${SCHEMA_VERSION}.guests`,
+  contactLogs: `toastly.db.${SCHEMA_VERSION}.contact-logs`,
+  visitLogs: `toastly.db.${SCHEMA_VERSION}.visit-logs`,
 } as const;
 
 /** Used by the cross-tab sync listener to tell our writes apart from any other
@@ -63,6 +71,14 @@ function seedMeetings(): Meeting[] {
 
 function seedGuests(): Guest[] {
   return SEED_GUESTS;
+}
+
+function seedContactLogs(): ContactLog[] {
+  return SEED_CONTACT_LOGS;
+}
+
+function seedVisitLogs(): VisitLog[] {
+  return SEED_VISIT_LOGS;
 }
 
 function seedMemberExtras(): MemberExtrasTable {
@@ -128,6 +144,22 @@ export function readGuests(): Guest[] {
 
 export function writeGuests(guests: Guest[]): void {
   writeTable(DB_KEYS.guests, guests);
+}
+
+export function readContactLogs(): ContactLog[] {
+  return readTable(DB_KEYS.contactLogs, seedContactLogs);
+}
+
+export function writeContactLogs(logs: ContactLog[]): void {
+  writeTable(DB_KEYS.contactLogs, logs);
+}
+
+export function readVisitLogs(): VisitLog[] {
+  return readTable(DB_KEYS.visitLogs, seedVisitLogs);
+}
+
+export function writeVisitLogs(logs: VisitLog[]): void {
+  writeTable(DB_KEYS.visitLogs, logs);
 }
 
 export function readMemberExtras(): MemberExtrasTable {

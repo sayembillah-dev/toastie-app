@@ -214,7 +214,7 @@ export function GuestEditPanel({ guest, open, onClose }: GuestEditPanelProps) {
       placement="right"
       /* Wider than the default so the socials row can fit a select + URL side
        * by side; capped at the viewport so a phone gets the whole screen. */
-      width="min(520px, 100vw)"
+      size="min(520px, 100vw)"
       title={
         <div className="min-w-0">
           <div className="truncate text-base font-semibold text-ink">Edit {fullName}</div>
