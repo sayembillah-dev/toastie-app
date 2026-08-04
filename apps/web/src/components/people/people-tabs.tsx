@@ -42,7 +42,7 @@ export function PeopleTabs() {
                 Members
               </span>
             ),
-            children: <MembersDirectory />,
+            children: <MembersDirectory variant="engagement" />,
           },
         ]}
       />

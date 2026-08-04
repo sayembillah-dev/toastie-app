@@ -4,7 +4,7 @@ import { MagnifyingGlass, WarningCircle } from '@phosphor-icons/react/dist/ssr';
 import { Input } from 'antd';
 import { useMemo } from 'react';
 
-import { MemberCard } from '@/components/education/member-card';
+import { MemberCard, type MemberCardVariant } from '@/components/education/member-card';
 import type { Member } from '@/lib/education/members';
 import { useGetMembersQuery } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
@@ -44,12 +44,30 @@ function DirectorySkeleton() {
   );
 }
 
+interface MembersDirectoryProps {
+  /** Controls which stats each card leads with — Pathways progress or roster
+   * health. Defaults to the Education variant. */
+  variant?: MemberCardVariant;
+}
+
+const COPY: Record<MemberCardVariant, { blurb: string; searchPlaceholder: string }> = {
+  education: {
+    blurb: "Toastmasters club roster with each member's Pathways progress.",
+    searchPlaceholder: 'Search members, roles, pathways',
+  },
+  engagement: {
+    blurb: 'How the roster is doing — recent speeches and who might need a nudge.',
+    searchPlaceholder: 'Search members or roles',
+  },
+};
+
 /** Renders the members grid with a filter input. The roster comes from RTK Query
  * — today the base query serves it out of localStorage, later out of the API. */
-export function MembersDirectory() {
+export function MembersDirectory({ variant = 'education' }: MembersDirectoryProps = {}) {
   const { data: members, isLoading, isError, error } = useGetMembersQuery();
   const dispatch = useAppDispatch();
   const query = useAppSelector(selectMemberSearchQuery);
+  const copy = COPY[variant];
 
   const trimmed = query.trim().toLowerCase();
   const filtered = useMemo(() => {
@@ -60,14 +78,12 @@ export function MembersDirectory() {
   return (
     <div>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-ink-soft">
-          Toastmasters club roster with each member&apos;s Pathways progress.
-        </p>
+        <p className="text-sm text-ink-soft">{copy.blurb}</p>
         <div className="w-full sm:w-72">
           <Input
             allowClear
             size="middle"
-            placeholder="Search members, roles, pathways"
+            placeholder={copy.searchPlaceholder}
             aria-label="Search members"
             value={query}
             onChange={(event) => dispatch(memberSearchQueryChanged(event.target.value))}
@@ -117,7 +133,7 @@ export function MembersDirectory() {
         ) : (
           <div className={GRID_CLASSES}>
             {filtered.map((member) => (
-              <MemberCard key={member.id} member={member} />
+              <MemberCard key={member.id} member={member} variant={variant} />
             ))}
           </div>
         )
