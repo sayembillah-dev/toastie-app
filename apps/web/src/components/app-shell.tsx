@@ -8,6 +8,7 @@ import {
   BookOpen,
   CaretRight,
   ClipboardText,
+  ClockCounterClockwise,
   DotsThree,
   Gear,
   GraduationCap,
@@ -31,12 +32,14 @@ import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import {
   mobileNavClosed,
   mobileNavOpened,
+  selectActiveUnit,
   selectMobileNavOpen,
   selectSidebarCollapsed,
   sidebarToggled,
 } from '@/store/ui-slice';
 
 import toastieLogo from '../../assets/toastie.svg';
+import { UnitSwitcher } from './unit-switcher';
 
 /* Only Sider comes from antd — the header and content live inside the content
  * panel below, so antd's Header/Content wrappers would only fight the layout. */
@@ -72,6 +75,7 @@ const primaryNav: NavEntry[] = [
   { href: '/inventory', title: 'Inventory & checklist', Icon: ClipboardText },
   { href: '/finance', title: 'Finance', Icon: Wallet },
   { href: '/records', title: 'Records', Icon: Archive },
+  { href: '/activity-logs', title: 'Activity Logs', Icon: ClockCounterClockwise },
   { href: '/me', title: 'Me', Icon: UserCircle },
 ];
 
@@ -130,6 +134,10 @@ interface SidebarBodyProps {
   brandAction: React.ReactNode;
   /** Fires when a nav entry is followed, so the drawer can dismiss itself. */
   onNavigate?: () => void;
+  /** When false, the nav column is deliberately blank — used by placeholder
+   * scopes (Area, Division, District, admin tiers) while their surfaces are
+   * still being built. */
+  showNav: boolean;
 }
 
 /** The sidebar's contents, independent of what is holding them — the desktop
@@ -141,6 +149,7 @@ function SidebarBody({
   account,
   brandAction,
   onNavigate,
+  showNav,
 }: SidebarBodyProps) {
   return (
     /* pt-2 matches the content panel's inset so the brand row and the
@@ -161,60 +170,87 @@ function SidebarBody({
         <span className={collapsed ? '' : 'ml-auto'}>{brandAction}</span>
       </div>
 
-      <div className="shrink-0 px-2 pb-2">
-        {collapsed ? (
-          <SideRow Icon={MagnifyingGlass} label="Search" collapsed />
-        ) : (
-          <Input
-            variant="filled"
-            placeholder="Search"
-            aria-label="Search"
-            prefix={<MagnifyingGlass size={16} className="text-ink-muted" />}
-          />
-        )}
-      </div>
-
-      <Menu
-        mode="inline"
-        selectedKeys={[pathname]}
-        style={{ borderInlineEnd: 'none', background: 'transparent' }}
-        items={primaryNav.map((entry) => ({
-          key: entry.href,
-          icon: <entry.Icon size={18} />,
-          label: (
-            <Link
-              href={entry.href}
-              onClick={onNavigate}
-              className="flex items-center justify-between gap-2"
-            >
-              <span className="truncate">{entry.title}</span>
-              {entry.meta ? <span className="text-xs text-ink-muted">{entry.meta}</span> : null}
-            </Link>
-          ),
-        }))}
-      />
-
-      {/* Everything past this point is pinned to the bottom of the sidebar. */}
-      <div className="mt-auto shrink-0 px-2 pb-3">
-        <SideRow Icon={Question} label="Help center" collapsed={collapsed} />
-        <SideRow
-          Icon={Bell}
-          label="Notifications"
-          collapsed={collapsed}
-          trailing={notificationCount > 0 ? <Badge count={notificationCount} size="small" /> : null}
-        />
-        {account ? (
-          <div
-            className={`mt-2 flex h-9 items-center rounded-lg ${
-              collapsed ? 'justify-center' : 'gap-2.5 px-2.5'
-            }`}
-          >
-            <Avatar size={22} src={account.avatarUrl}>
-              {account.name.charAt(0).toUpperCase()}
-            </Avatar>
-            {collapsed ? null : <span className="truncate text-sm text-ink">{account.name}</span>}
+      {showNav ? (
+        <>
+          <div className="shrink-0 px-2 pb-2">
+            {collapsed ? (
+              <SideRow Icon={MagnifyingGlass} label="Search" collapsed />
+            ) : (
+              <Input
+                variant="filled"
+                placeholder="Search"
+                aria-label="Search"
+                prefix={<MagnifyingGlass size={16} className="text-ink-muted" />}
+              />
+            )}
           </div>
-        ) : null}
+
+          <Menu
+            mode="inline"
+            selectedKeys={[pathname]}
+            style={{ borderInlineEnd: 'none', background: 'transparent' }}
+            items={primaryNav.map((entry) => ({
+              key: entry.href,
+              icon: <entry.Icon size={18} />,
+              label: (
+                <Link
+                  href={entry.href}
+                  onClick={onNavigate}
+                  className="flex items-center justify-between gap-2"
+                >
+                  <span className="truncate">{entry.title}</span>
+                  {entry.meta ? <span className="text-xs text-ink-muted">{entry.meta}</span> : null}
+                </Link>
+              ),
+            }))}
+          />
+
+          {/* Everything past this point is pinned to the bottom of the sidebar. */}
+          <div className="mt-auto shrink-0 px-2 pb-3">
+            <SideRow Icon={Question} label="Help center" collapsed={collapsed} />
+            <SideRow
+              Icon={Bell}
+              label="Notifications"
+              collapsed={collapsed}
+              trailing={
+                notificationCount > 0 ? <Badge count={notificationCount} size="small" /> : null
+              }
+            />
+            {account ? (
+              <div
+                className={`mt-2 flex h-9 items-center rounded-lg ${
+                  collapsed ? 'justify-center' : 'gap-2.5 px-2.5'
+                }`}
+              >
+                <Avatar size={22} src={account.avatarUrl}>
+                  {account.name.charAt(0).toUpperCase()}
+                </Avatar>
+                {collapsed ? null : (
+                  <span className="truncate text-sm text-ink">{account.name}</span>
+                )}
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/** Placeholder for scopes whose surfaces do not exist yet. Centred vertically
+ * and horizontally in the main area so it reads as a deliberate empty state
+ * rather than a broken page. */
+function ComingSoonPanel() {
+  return (
+    <div className="flex h-full min-h-[24rem] items-center justify-center">
+      <div className="flex flex-col items-center gap-2 text-center">
+        <span className="rounded-full border border-line px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+          In progress
+        </span>
+        <h2 className="text-lg font-semibold text-ink">Coming soon</h2>
+        <p className="max-w-sm text-sm text-ink-soft">
+          This scope is still being built. Switch back to Club from the header to keep working.
+        </p>
       </div>
     </div>
   );
@@ -246,8 +282,14 @@ export function AppShell({
    * across route changes — every page mounts its own AppShell. */
   const collapsed = useAppSelector(selectSidebarCollapsed);
   const mobileNavOpen = useAppSelector(selectMobileNavOpen);
+  const activeUnit = useAppSelector(selectActiveUnit);
   const dispatch = useAppDispatch();
   const closeMobileNav = () => dispatch(mobileNavClosed());
+
+  /* Only the `club` scope has real surfaces today. Every other tier renders a
+   * "coming soon" placeholder and an empty nav so the switch reads as an
+   * intentional swap rather than a broken view. */
+  const showClubShell = activeUnit === 'club';
 
   const rawTrail = buildTrail(pathname);
   const trail = breadcrumbLabel
@@ -273,6 +315,7 @@ export function AppShell({
           pathname={pathname}
           notificationCount={notificationCount}
           account={account}
+          showNav={showClubShell}
           brandAction={
             <Button
               type="text"
@@ -301,6 +344,7 @@ export function AppShell({
           pathname={pathname}
           notificationCount={notificationCount}
           account={account}
+          showNav={showClubShell}
           onNavigate={closeMobileNav}
           brandAction={
             <Button
@@ -364,6 +408,8 @@ export function AppShell({
             </nav>
 
             <div className="ml-auto flex shrink-0 items-center gap-1">
+              <UnitSwitcher />
+              <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-line-strong" />
               {actions ?? (
                 <>
                   <Button
@@ -383,7 +429,9 @@ export function AppShell({
             </div>
           </header>
 
-          <main className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
+          <main className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
+            {showClubShell ? children : <ComingSoonPanel />}
+          </main>
         </div>
       </div>
     </Layout>

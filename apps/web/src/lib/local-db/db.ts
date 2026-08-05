@@ -1,3 +1,5 @@
+import type { ActivityLog } from '@/lib/activity/activity-log';
+import { SEED_ACTIVITY_LOGS } from '@/lib/activity/activity-log';
 import type { Evaluation } from '@/lib/education/evaluations';
 import { EVALUATION_SEED } from '@/lib/education/evaluations';
 import type { HistoryEvent, MemberProfileExtras } from '@/lib/education/history';
@@ -64,8 +66,9 @@ import { SEED_TASKS } from '@/lib/tasks/tasks';
  * v9 introduced the transactions, dues-records and budget-lines tables
  *    backing the Finance (treasurer) page.
  * v10 introduced the evaluations, timer-entries, ah-counter-entries,
- *    speech-slot-requests and tasks tables backing the Me page. */
-const SCHEMA_VERSION = 'v10';
+ *    speech-slot-requests and tasks tables backing the Me page.
+ * v11 introduced the activity-logs table backing the Activity Logs page. */
+const SCHEMA_VERSION = 'v11';
 
 export const DB_KEYS = {
   members: `toastly.db.${SCHEMA_VERSION}.members`,
@@ -87,6 +90,7 @@ export const DB_KEYS = {
   ahCounterEntries: `toastly.db.${SCHEMA_VERSION}.ah-counter-entries`,
   speechSlotRequests: `toastly.db.${SCHEMA_VERSION}.speech-slot-requests`,
   tasks: `toastly.db.${SCHEMA_VERSION}.tasks`,
+  activityLogs: `toastly.db.${SCHEMA_VERSION}.activity-logs`,
 } as const;
 
 /** Used by the cross-tab sync listener to tell our writes apart from any other
@@ -177,6 +181,10 @@ function seedSpeechSlotRequests(): SpeechSlotRequest[] {
 
 function seedTasks(): Task[] {
   return SEED_TASKS;
+}
+
+function seedActivityLogs(): ActivityLog[] {
+  return SEED_ACTIVITY_LOGS;
 }
 
 function seedMemberExtras(): MemberExtrasTable {
@@ -342,6 +350,14 @@ export function readTasks(): Task[] {
 
 export function writeTasks(tasks: Task[]): void {
   writeTable(DB_KEYS.tasks, tasks);
+}
+
+export function readActivityLogs(): ActivityLog[] {
+  return readTable(DB_KEYS.activityLogs, seedActivityLogs);
+}
+
+export function writeActivityLogs(logs: ActivityLog[]): void {
+  writeTable(DB_KEYS.activityLogs, logs);
 }
 
 export function readMemberExtras(): MemberExtrasTable {

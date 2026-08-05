@@ -1,3 +1,5 @@
+import type { ActivityCategory, ActivityLog } from '@/lib/activity/activity-log';
+import { sortActivityLogsNewestFirst } from '@/lib/activity/activity-log';
 import type { Evaluation } from '@/lib/education/evaluations';
 import type { HistoryEvent, MemberStats } from '@/lib/education/history';
 import { computeMemberStats, sortEvents } from '@/lib/education/history';
@@ -73,6 +75,7 @@ import {
   matchesDocumentQuery,
   sortDocumentsNewestFirst,
 } from '@/lib/library/documents';
+import { CURRENT_MEMBER_ID } from '@/lib/me/current-member';
 import type { AhCounterEntry } from '@/lib/meetings/ah-counter-reports';
 import type { CreateMeetingInput, Meeting, UpdateMeetingInput } from '@/lib/meetings/meetings';
 import { MEETING_STATUSES } from '@/lib/meetings/meetings';
@@ -90,6 +93,7 @@ import { VISIT_LOG_NOTES_MAX, VISIT_LOG_ROLE_MAX } from '@/lib/people/visit-logs
 import type { Task, UpdateTaskInput } from '@/lib/tasks/tasks';
 
 import {
+  readActivityLogs,
   readAhCounterEntries,
   readAssets,
   readBudgetLines,
@@ -109,6 +113,7 @@ import {
   readTimerEntries,
   readTransactions,
   readVisitLogs,
+  writeActivityLogs,
   writeAssets,
   writeBudgetLines,
   writeChecklists,
@@ -179,6 +184,30 @@ function eventsForMember(memberId: string): HistoryEvent[] {
  * descending tie-break, so an event added today leads the day it lands on. */
 function createEventId(memberId: string): string {
   return `${memberId}-z${Date.now().toString(36)}`;
+}
+
+function createActivityLogId(): string {
+  return `act-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+}
+
+/** Appends one row to the activity feed. Called from the tail of every
+ * mutating handler below — there is no auth yet, so every entry is
+ * attributed to `CURRENT_MEMBER_ID`, same stand-in the rest of the app uses. */
+function recordActivity(entry: {
+  category: ActivityCategory;
+  action: string;
+  summary: string;
+  entityType?: string;
+  entityId?: string;
+}): void {
+  const log: ActivityLog = {
+    ...entry,
+    id: createActivityLogId(),
+    actorMemberId: CURRENT_MEMBER_ID,
+    points: 0,
+    createdAt: new Date().toISOString(),
+  };
+  writeActivityLogs([log, ...readActivityLogs()]);
 }
 
 /** Stands in for the Nest ValidationPipe: the body has to name a real pathway
@@ -381,6 +410,14 @@ function startPathway({ params, body }: RouteContext): Member {
   };
   writeHistoryEvents([...readHistoryEvents(), startedEvent]);
 
+  recordActivity({
+    category: 'education',
+    action: 'started a pathway',
+    summary: `Started the ${input.pathway} pathway at Level ${input.level}`,
+    entityType: 'member',
+    entityId: member.id,
+  });
+
   return updated;
 }
 
@@ -406,6 +443,13 @@ function createMeeting({ body }: RouteContext): Meeting {
   const input = parseCreateMeetingBody(body);
   const meeting: Meeting = { id: createMeetingId(), ...input, status: 'draft' };
   writeMeetings([...readMeetings(), meeting]);
+  recordActivity({
+    category: 'meeting',
+    action: 'created a meeting',
+    summary: `Created the agenda for Meeting ${meeting.meetingNumber}`,
+    entityType: 'meeting',
+    entityId: meeting.id,
+  });
   return meeting;
 }
 
@@ -415,6 +459,13 @@ function updateMeeting({ params, query, body }: RouteContext): Meeting {
   const existing = getMeeting({ params, query, body });
   const updated: Meeting = { ...existing, ...parseUpdateMeetingBody(body) };
   writeMeetings(readMeetings().map((entry) => (entry.id === existing.id ? updated : entry)));
+  recordActivity({
+    category: 'meeting',
+    action: updated.status === 'published' ? 'published a meeting' : 'updated a meeting',
+    summary: `${updated.status === 'published' ? 'Published' : 'Updated'} Meeting ${updated.meetingNumber} — ${updated.theme}`,
+    entityType: 'meeting',
+    entityId: updated.id,
+  });
   return updated;
 }
 
@@ -438,6 +489,13 @@ function updateGuest({ params, body }: RouteContext): Guest {
 
   const updated: Guest = { ...existing, ...parseUpdateGuestBody(body) };
   writeGuests(guests.map((entry) => (entry.id === updated.id ? updated : entry)));
+  recordActivity({
+    category: 'people',
+    action: 'updated a guest',
+    summary: `Updated guest profile — ${updated.firstName} ${updated.lastName}`,
+    entityType: 'guest',
+    entityId: updated.id,
+  });
   return updated;
 }
 
@@ -454,6 +512,13 @@ function deleteGuest({ params }: RouteContext): null {
    * rows. */
   writeContactLogs(readContactLogs().filter((entry) => entry.guestId !== params.guestId));
   writeVisitLogs(readVisitLogs().filter((entry) => entry.guestId !== params.guestId));
+  recordActivity({
+    category: 'people',
+    action: 'deleted a guest',
+    summary: `Deleted guest — ${existing.firstName} ${existing.lastName}`,
+    entityType: 'guest',
+    entityId: existing.id,
+  });
   return null;
 }
 
@@ -462,6 +527,14 @@ function deleteGuest({ params }: RouteContext): null {
 function requireGuestExists(guestId: string): void {
   const guest = readGuests().find((entry) => entry.id === guestId);
   if (!guest) throw new LocalApiError(404, `No guest with id "${guestId}"`);
+}
+
+/** Best-effort label for activity summaries — falls back to the id rather
+ * than throwing, since the guest is already known to exist by the time this
+ * is called. */
+function guestNameFor(guestId: string): string {
+  const guest = readGuests().find((entry) => entry.id === guestId);
+  return guest ? `${guest.firstName} ${guest.lastName}` : guestId;
 }
 
 function parseCreateContactLogBody(body: unknown): CreateContactLogInput {
@@ -542,6 +615,13 @@ function createContactLog({ params, body }: RouteContext): ContactLog {
     createdAt: new Date().toISOString(),
   };
   writeContactLogs([...readContactLogs(), log]);
+  recordActivity({
+    category: 'people',
+    action: 'logged a contact',
+    summary: `Logged a ${log.method} contact with ${guestNameFor(params.guestId)}`,
+    entityType: 'contactLog',
+    entityId: log.id,
+  });
   return log;
 }
 
@@ -555,14 +635,28 @@ function updateContactLog({ params, body }: RouteContext): ContactLog {
     updatedAt: new Date().toISOString(),
   };
   writeContactLogs(logs.map((entry) => (entry.id === updated.id ? updated : entry)));
+  recordActivity({
+    category: 'people',
+    action: 'updated a contact log',
+    summary: `Updated a contact log for ${guestNameFor(params.guestId)}`,
+    entityType: 'contactLog',
+    entityId: updated.id,
+  });
   return updated;
 }
 
 function deleteContactLog({ params }: RouteContext): null {
   requireGuestExists(params.guestId);
   const logs = readContactLogs();
-  findContactLog(params.guestId, params.logId, logs);
+  const existing = findContactLog(params.guestId, params.logId, logs);
   writeContactLogs(logs.filter((entry) => entry.id !== params.logId));
+  recordActivity({
+    category: 'people',
+    action: 'deleted a contact log',
+    summary: `Deleted a contact log for ${guestNameFor(params.guestId)}`,
+    entityType: 'contactLog',
+    entityId: existing.id,
+  });
   return null;
 }
 
@@ -682,6 +776,13 @@ function createVisitLog({ params, body }: RouteContext): VisitLog {
     createdAt: new Date().toISOString(),
   };
   writeVisitLogs([...readVisitLogs(), log]);
+  recordActivity({
+    category: 'people',
+    action: 'logged a guest visit',
+    summary: `Logged a visit — ${guestNameFor(params.guestId)}${log.role ? ` as ${log.role}` : ''}`,
+    entityType: 'visitLog',
+    entityId: log.id,
+  });
   return log;
 }
 
@@ -699,14 +800,28 @@ function updateVisitLog({ params, body }: RouteContext): VisitLog {
     updatedAt: new Date().toISOString(),
   };
   writeVisitLogs(logs.map((entry) => (entry.id === updated.id ? updated : entry)));
+  recordActivity({
+    category: 'people',
+    action: 'updated a guest visit',
+    summary: `Updated a visit log for ${guestNameFor(params.guestId)}`,
+    entityType: 'visitLog',
+    entityId: updated.id,
+  });
   return updated;
 }
 
 function deleteVisitLog({ params }: RouteContext): null {
   requireGuestExists(params.guestId);
   const logs = readVisitLogs();
-  findVisitLog(params.guestId, params.logId, logs);
+  const existing = findVisitLog(params.guestId, params.logId, logs);
   writeVisitLogs(logs.filter((entry) => entry.id !== params.logId));
+  recordActivity({
+    category: 'people',
+    action: 'deleted a guest visit',
+    summary: `Deleted a visit log for ${guestNameFor(params.guestId)}`,
+    entityType: 'visitLog',
+    entityId: existing.id,
+  });
   return null;
 }
 
@@ -812,6 +927,13 @@ function createAsset({ body }: RouteContext): Asset {
     createdAt: new Date().toISOString(),
   };
   writeAssets([...readAssets(), asset]);
+  recordActivity({
+    category: 'library',
+    action: 'added an asset',
+    summary: `Added "${asset.title}" to the asset register`,
+    entityType: 'asset',
+    entityId: asset.id,
+  });
   return asset;
 }
 
@@ -825,6 +947,13 @@ function updateAsset({ params, body }: RouteContext): Asset {
     updatedAt: new Date().toISOString(),
   };
   writeAssets(assets.map((entry) => (entry.id === updated.id ? updated : entry)));
+  recordActivity({
+    category: 'library',
+    action: 'updated an asset',
+    summary: `Renamed an asset to "${updated.title}"`,
+    entityType: 'asset',
+    entityId: updated.id,
+  });
   return updated;
 }
 
@@ -833,6 +962,13 @@ function deleteAsset({ params }: RouteContext): null {
   const existing = assets.find((entry) => entry.id === params.assetId);
   if (!existing) throw new LocalApiError(404, `No asset with id "${params.assetId}"`);
   writeAssets(assets.filter((entry) => entry.id !== params.assetId));
+  recordActivity({
+    category: 'library',
+    action: 'deleted an asset',
+    summary: `Deleted asset "${existing.title}"`,
+    entityType: 'asset',
+    entityId: existing.id,
+  });
   return null;
 }
 
@@ -932,6 +1068,13 @@ function createDocument({ body }: RouteContext): LibraryDocument {
     createdAt: new Date().toISOString(),
   };
   writeDocuments([...readDocuments(), doc]);
+  recordActivity({
+    category: 'library',
+    action: 'uploaded a document',
+    summary: `Uploaded "${doc.title}" to the library`,
+    entityType: 'document',
+    entityId: doc.id,
+  });
   return doc;
 }
 
@@ -945,6 +1088,13 @@ function updateDocument({ params, body }: RouteContext): LibraryDocument {
     updatedAt: new Date().toISOString(),
   };
   writeDocuments(docs.map((entry) => (entry.id === updated.id ? updated : entry)));
+  recordActivity({
+    category: 'library',
+    action: 'updated a document',
+    summary: `Renamed a document to "${updated.title}"`,
+    entityType: 'document',
+    entityId: updated.id,
+  });
   return updated;
 }
 
@@ -953,6 +1103,13 @@ function deleteDocument({ params }: RouteContext): null {
   const existing = docs.find((entry) => entry.id === params.documentId);
   if (!existing) throw new LocalApiError(404, `No document with id "${params.documentId}"`);
   writeDocuments(docs.filter((entry) => entry.id !== params.documentId));
+  recordActivity({
+    category: 'library',
+    action: 'deleted a document',
+    summary: `Deleted document "${existing.title}"`,
+    entityType: 'document',
+    entityId: existing.id,
+  });
   return null;
 }
 
@@ -961,6 +1118,14 @@ function deleteDocument({ params }: RouteContext): null {
 function requireMeetingExists(meetingId: string): void {
   const meeting = readMeetings().find((entry) => entry.id === meetingId);
   if (!meeting) throw new LocalApiError(404, `No meeting with id "${meetingId}"`);
+}
+
+/** Best-effort label for activity summaries — falls back to the id rather
+ * than throwing, since the meeting is already known to exist by the time
+ * this is called. */
+function meetingLabelFor(meetingId: string): string {
+  const meeting = readMeetings().find((entry) => entry.id === meetingId);
+  return meeting ? `Meeting ${meeting.meetingNumber}` : meetingId;
 }
 
 function createChecklistItemId(meetingId: string): string {
@@ -1047,6 +1212,13 @@ function createChecklistItem({ params, body }: RouteContext): ChecklistItem {
   };
   const current = loadChecklistFor(params.meetingId);
   saveChecklistFor(params.meetingId, [...current, item]);
+  recordActivity({
+    category: 'inventory',
+    action: 'added a checklist item',
+    summary: `Added "${item.text}" to the ${meetingLabelFor(params.meetingId)} checklist`,
+    entityType: 'checklistItem',
+    entityId: item.id,
+  });
   return item;
 }
 
@@ -1060,19 +1232,36 @@ function updateChecklistItem({ params, body }: RouteContext): ChecklistItem {
     params.meetingId,
     current.map((entry) => (entry.id === updated.id ? updated : entry)),
   );
+  if (updated.done !== existing.done) {
+    recordActivity({
+      category: 'inventory',
+      action: updated.done ? 'checked off a checklist item' : 'unchecked a checklist item',
+      summary: `${updated.done ? 'Checked off' : 'Unchecked'} "${updated.text}" for ${meetingLabelFor(params.meetingId)}`,
+      entityType: 'checklistItem',
+      entityId: updated.id,
+    });
+  }
   return updated;
 }
 
 function deleteChecklistItem({ params }: RouteContext): null {
   requireMeetingExists(params.meetingId);
   const current = loadChecklistFor(params.meetingId);
-  if (!current.some((entry) => entry.id === params.itemId)) {
+  const existing = current.find((entry) => entry.id === params.itemId);
+  if (!existing) {
     throw new LocalApiError(404, `No checklist item with id "${params.itemId}"`);
   }
   saveChecklistFor(
     params.meetingId,
     current.filter((entry) => entry.id !== params.itemId),
   );
+  recordActivity({
+    category: 'inventory',
+    action: 'deleted a checklist item',
+    summary: `Deleted "${existing.text}" from the ${meetingLabelFor(params.meetingId)} checklist`,
+    entityType: 'checklistItem',
+    entityId: existing.id,
+  });
   return null;
 }
 
@@ -1215,6 +1404,13 @@ function createInventoryItem({ body }: RouteContext): InventoryItem {
     createdAt: new Date().toISOString(),
   };
   writeInventoryItems([...readInventoryItems(), item]);
+  recordActivity({
+    category: 'inventory',
+    action: 'added an inventory item',
+    summary: `Added "${item.title}" to the inventory`,
+    entityType: 'inventoryItem',
+    entityId: item.id,
+  });
   return item;
 }
 
@@ -1238,6 +1434,13 @@ function updateInventoryItem({ params, body }: RouteContext): InventoryItem {
   }
 
   writeInventoryItems(items.map((entry) => (entry.id === updated.id ? updated : entry)));
+  recordActivity({
+    category: 'inventory',
+    action: 'updated an inventory item',
+    summary: `Updated inventory item "${updated.title}"`,
+    entityType: 'inventoryItem',
+    entityId: updated.id,
+  });
   return updated;
 }
 
@@ -1246,6 +1449,13 @@ function deleteInventoryItem({ params }: RouteContext): null {
   const existing = items.find((entry) => entry.id === params.itemId);
   if (!existing) throw new LocalApiError(404, `No inventory item with id "${params.itemId}"`);
   writeInventoryItems(items.filter((entry) => entry.id !== params.itemId));
+  recordActivity({
+    category: 'inventory',
+    action: 'deleted an inventory item',
+    summary: `Deleted inventory item "${existing.title}"`,
+    entityType: 'inventoryItem',
+    entityId: existing.id,
+  });
   return null;
 }
 
@@ -1410,6 +1620,13 @@ function createTransaction({ body }: RouteContext): Transaction {
     createdAt: new Date().toISOString(),
   };
   writeTransactions([...readTransactions(), tx]);
+  recordActivity({
+    category: 'finance',
+    action: 'logged a transaction',
+    summary: `Logged ${tx.direction === 'in' ? 'income' : 'an expense'} — ${tx.description}`,
+    entityType: 'transaction',
+    entityId: tx.id,
+  });
   return tx;
 }
 
@@ -1438,13 +1655,27 @@ function updateTransaction({ params, body }: RouteContext): Transaction {
   const changes = parseUpdateTransactionBody(body);
   const updated: Transaction = { ...existing, ...changes, updatedAt: new Date().toISOString() };
   writeTransactions(transactions.map((entry) => (entry.id === updated.id ? updated : entry)));
+  recordActivity({
+    category: 'finance',
+    action: 'updated a transaction',
+    summary: `Updated a transaction — ${updated.description}`,
+    entityType: 'transaction',
+    entityId: updated.id,
+  });
   return updated;
 }
 
 function deleteTransaction({ params }: RouteContext): null {
   const transactions = readTransactions();
-  requireEditableTransaction(transactions, params.transactionId);
+  const existing = requireEditableTransaction(transactions, params.transactionId);
   writeTransactions(transactions.filter((entry) => entry.id !== params.transactionId));
+  recordActivity({
+    category: 'finance',
+    action: 'deleted a transaction',
+    summary: `Deleted a transaction — ${existing.description}`,
+    entityType: 'transaction',
+    entityId: existing.id,
+  });
   return null;
 }
 
@@ -1604,6 +1835,17 @@ function updateDuesRecord({ params, body }: RouteContext): DuesRecord {
     writeTransactions(transactions.filter((tx) => tx.id !== linked.id));
   }
 
+  const memberName = member ? `${member.firstName} ${member.lastName}` : updated.memberId;
+  recordActivity({
+    category: 'finance',
+    action: updated.waived ? 'waived a dues payment' : 'recorded a dues payment',
+    summary: updated.waived
+      ? `Waived dues for ${memberName}`
+      : `Recorded a dues payment from ${memberName}`,
+    entityType: 'duesRecord',
+    entityId: updated.id,
+  });
+
   return updated;
 }
 
@@ -1699,6 +1941,13 @@ function createBudgetLine({ body }: RouteContext): BudgetLine {
     createdAt: new Date().toISOString(),
   };
   writeBudgetLines([...readBudgetLines(), line]);
+  recordActivity({
+    category: 'finance',
+    action: 'added a budget line',
+    summary: `Added a ${line.fiscalYear} budget line — ${CATEGORY_LABELS[line.category]}`,
+    entityType: 'budgetLine',
+    entityId: line.id,
+  });
   return line;
 }
 
@@ -1718,6 +1967,13 @@ function updateBudgetLine({ params, body }: RouteContext): BudgetLine {
   if ('note' in changes) updated.note = changes.note ?? undefined;
 
   writeBudgetLines(lines.map((entry) => (entry.id === updated.id ? updated : entry)));
+  recordActivity({
+    category: 'finance',
+    action: 'updated a budget line',
+    summary: `Updated the ${updated.fiscalYear} budget line — ${CATEGORY_LABELS[updated.category]}`,
+    entityType: 'budgetLine',
+    entityId: updated.id,
+  });
   return updated;
 }
 
@@ -1726,6 +1982,13 @@ function deleteBudgetLine({ params }: RouteContext): null {
   const existing = lines.find((entry) => entry.id === params.lineId);
   if (!existing) throw new LocalApiError(404, `No budget line with id "${params.lineId}"`);
   writeBudgetLines(lines.filter((entry) => entry.id !== params.lineId));
+  recordActivity({
+    category: 'finance',
+    action: 'deleted a budget line',
+    summary: `Deleted the ${existing.fiscalYear} budget line — ${CATEGORY_LABELS[existing.category]}`,
+    entityType: 'budgetLine',
+    entityId: existing.id,
+  });
   return null;
 }
 
@@ -1805,6 +2068,13 @@ function createSpeechSlotRequest({ params, body }: RouteContext): SpeechSlotRequ
     requestedAt: new Date().toISOString(),
   };
   writeSpeechSlotRequests([...readSpeechSlotRequests(), request]);
+  recordActivity({
+    category: 'education',
+    action: 'requested a speech slot',
+    summary: `Requested a speech slot for ${meetingLabelFor(input.meetingId)}`,
+    entityType: 'speechSlotRequest',
+    entityId: request.id,
+  });
   return request;
 }
 
@@ -1832,7 +2102,20 @@ function updateTask({ params, body }: RouteContext): Task {
   if (!existing) throw new LocalApiError(404, `No task with id "${params.taskId}"`);
   const updated: Task = { ...existing, ...parseUpdateTaskBody(body) };
   writeTasks(tasks.map((entry) => (entry.id === updated.id ? updated : entry)));
+  recordActivity({
+    category: 'task',
+    action: updated.done ? 'completed a task' : 'reopened a task',
+    summary: `${updated.done ? 'Completed' : 'Reopened'} "${updated.title}"`,
+    entityType: 'task',
+    entityId: updated.id,
+  });
   return updated;
+}
+
+/* -------------------------------------------------------------- activity -- */
+
+function listActivityLogs(): ActivityLog[] {
+  return sortActivityLogsNewestFirst(readActivityLogs());
 }
 
 interface Route {
@@ -1905,6 +2188,7 @@ const ROUTES: Route[] = [
   route('POST', '/members/:memberId/speech-slot-requests', createSpeechSlotRequest),
   route('GET', '/members/:memberId/tasks', listTasks),
   route('PATCH', '/tasks/:taskId', updateTask),
+  route('GET', '/activity-logs', listActivityLogs),
 ];
 
 function toSegments(path: string): string[] {

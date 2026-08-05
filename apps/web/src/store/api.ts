@@ -1,5 +1,6 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 
+import type { ActivityLog } from '@/lib/activity/activity-log';
 import type { Evaluation } from '@/lib/education/evaluations';
 import type { HistoryEvent, MemberStats } from '@/lib/education/history';
 import type { Member, StartPathwayInput } from '@/lib/education/members';
@@ -78,6 +79,7 @@ export const toastlyApi = createApi({
     'AhCounterEntry',
     'SpeechSlotRequest',
     'Task',
+    'ActivityLog',
   ],
   endpoints: (build) => ({
     getMembers: build.query<Member[], void>({
@@ -119,6 +121,7 @@ export const toastlyApi = createApi({
         { type: 'Member', id: memberId },
         { type: 'Member', id: 'LIST' },
         { type: 'History', id: memberId },
+        { type: 'ActivityLog', id: 'LIST' },
       ],
     }),
 
@@ -139,7 +142,10 @@ export const toastlyApi = createApi({
      * to invalidate, and the response seeds one on the way to its page. */
     createMeeting: build.mutation<Meeting, CreateMeetingInput>({
       query: (body) => ({ url: '/meetings', method: 'POST', body }),
-      invalidatesTags: [{ type: 'Meeting', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Meeting', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     /* Backs both Save as Draft and Publish. The roster card carries the status
@@ -154,6 +160,7 @@ export const toastlyApi = createApi({
       invalidatesTags: (_meeting, _error, { meetingId }) => [
         { type: 'Meeting', id: meetingId },
         { type: 'Meeting', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
       ],
     }),
 
@@ -200,7 +207,10 @@ export const toastlyApi = createApi({
           detailPatch.undo();
         }
       },
-      invalidatesTags: (_guest, _error, { guestId }) => [{ type: 'Guest', id: guestId }],
+      invalidatesTags: (_guest, _error, { guestId }) => [
+        { type: 'Guest', id: guestId },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     /* Removes the guest and drops both cache entries — the list patch pulls the
@@ -222,7 +232,10 @@ export const toastlyApi = createApi({
           listPatch.undo();
         }
       },
-      invalidatesTags: [{ type: 'Guest', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Guest', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     /* One cache entry per guest — the drawer scopes every read to a single
@@ -242,7 +255,10 @@ export const toastlyApi = createApi({
         method: 'POST',
         body,
       }),
-      invalidatesTags: (_log, _error, { guestId }) => [{ type: 'ContactLog', id: guestId }],
+      invalidatesTags: (_log, _error, { guestId }) => [
+        { type: 'ContactLog', id: guestId },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     updateContactLog: build.mutation<
@@ -267,7 +283,10 @@ export const toastlyApi = createApi({
           patch.undo();
         }
       },
-      invalidatesTags: (_log, _error, { guestId }) => [{ type: 'ContactLog', id: guestId }],
+      invalidatesTags: (_log, _error, { guestId }) => [
+        { type: 'ContactLog', id: guestId },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     deleteContactLog: build.mutation<null, { guestId: string; logId: string }>({
@@ -287,7 +306,10 @@ export const toastlyApi = createApi({
           patch.undo();
         }
       },
-      invalidatesTags: (_log, _error, { guestId }) => [{ type: 'ContactLog', id: guestId }],
+      invalidatesTags: (_log, _error, { guestId }) => [
+        { type: 'ContactLog', id: guestId },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     /* Same shape as the contact-log endpoints — one cache entry per guest,
@@ -303,7 +325,10 @@ export const toastlyApi = createApi({
         method: 'POST',
         body,
       }),
-      invalidatesTags: (_log, _error, { guestId }) => [{ type: 'VisitLog', id: guestId }],
+      invalidatesTags: (_log, _error, { guestId }) => [
+        { type: 'VisitLog', id: guestId },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     updateVisitLog: build.mutation<
@@ -328,7 +353,10 @@ export const toastlyApi = createApi({
           patch.undo();
         }
       },
-      invalidatesTags: (_log, _error, { guestId }) => [{ type: 'VisitLog', id: guestId }],
+      invalidatesTags: (_log, _error, { guestId }) => [
+        { type: 'VisitLog', id: guestId },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     deleteVisitLog: build.mutation<null, { guestId: string; logId: string }>({
@@ -348,7 +376,10 @@ export const toastlyApi = createApi({
           patch.undo();
         }
       },
-      invalidatesTags: (_log, _error, { guestId }) => [{ type: 'VisitLog', id: guestId }],
+      invalidatesTags: (_log, _error, { guestId }) => [
+        { type: 'VisitLog', id: guestId },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     /* Paginated with a merge strategy: every offset for the same `q` folds
@@ -390,7 +421,10 @@ export const toastlyApi = createApi({
 
     createAsset: build.mutation<Asset, CreateAssetInput>({
       query: (body) => ({ url: '/assets', method: 'POST', body }),
-      invalidatesTags: [{ type: 'Asset', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Asset', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     /* Optimistic title edit against every cached asset list — the record
@@ -426,7 +460,10 @@ export const toastlyApi = createApi({
           for (const patch of patches) patch.undo();
         }
       },
-      invalidatesTags: (_asset, _error, { assetId }) => [{ type: 'Asset', id: assetId }],
+      invalidatesTags: (_asset, _error, { assetId }) => [
+        { type: 'Asset', id: assetId },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     /* Same broadcast pattern as the title edit — drop the row from every
@@ -458,7 +495,10 @@ export const toastlyApi = createApi({
           for (const patch of patches) patch.undo();
         }
       },
-      invalidatesTags: [{ type: 'Asset', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Asset', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     /* Same paginate-and-merge shape as `listAssets`: every offset for a given
@@ -496,7 +536,10 @@ export const toastlyApi = createApi({
 
     createDocument: build.mutation<LibraryDocument, CreateDocumentInput>({
       query: (body) => ({ url: '/documents', method: 'POST', body }),
-      invalidatesTags: [{ type: 'Document', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Document', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     /* Optimistic title edit across every cached document list — a rename
@@ -535,7 +578,10 @@ export const toastlyApi = createApi({
           for (const patch of patches) patch.undo();
         }
       },
-      invalidatesTags: (_doc, _error, { documentId }) => [{ type: 'Document', id: documentId }],
+      invalidatesTags: (_doc, _error, { documentId }) => [
+        { type: 'Document', id: documentId },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     deleteDocument: build.mutation<null, string>({
@@ -564,7 +610,10 @@ export const toastlyApi = createApi({
           for (const patch of patches) patch.undo();
         }
       },
-      invalidatesTags: [{ type: 'Document', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Document', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     /* Checklist is keyed by meeting: the cache entry per meetingId is what the
@@ -584,7 +633,10 @@ export const toastlyApi = createApi({
         method: 'POST',
         body,
       }),
-      invalidatesTags: (_item, _error, { meetingId }) => [{ type: 'Checklist', id: meetingId }],
+      invalidatesTags: (_item, _error, { meetingId }) => [
+        { type: 'Checklist', id: meetingId },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     /* Toggling done is the hot path — an optimistic update keeps the UI
@@ -611,7 +663,10 @@ export const toastlyApi = createApi({
           patch.undo();
         }
       },
-      invalidatesTags: (_item, _error, { meetingId }) => [{ type: 'Checklist', id: meetingId }],
+      invalidatesTags: (_item, _error, { meetingId }) => [
+        { type: 'Checklist', id: meetingId },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     deleteChecklistItem: build.mutation<null, { meetingId: string; itemId: string }>({
@@ -631,7 +686,10 @@ export const toastlyApi = createApi({
           patch.undo();
         }
       },
-      invalidatesTags: (_item, _error, { meetingId }) => [{ type: 'Checklist', id: meetingId }],
+      invalidatesTags: (_item, _error, { meetingId }) => [
+        { type: 'Checklist', id: meetingId },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     /* Inventory items are a small single-list resource — no pagination, no
@@ -647,7 +705,10 @@ export const toastlyApi = createApi({
 
     createInventoryItem: build.mutation<InventoryItem, CreateInventoryItemInput>({
       query: (body) => ({ url: '/inventory-items', method: 'POST', body }),
-      invalidatesTags: [{ type: 'InventoryItem', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'InventoryItem', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     updateInventoryItem: build.mutation<
@@ -662,12 +723,16 @@ export const toastlyApi = createApi({
       invalidatesTags: (_item, _error, { itemId }) => [
         { type: 'InventoryItem', id: itemId },
         { type: 'InventoryItem', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
       ],
     }),
 
     deleteInventoryItem: build.mutation<null, string>({
       query: (itemId) => ({ url: `/inventory-items/${itemId}`, method: 'DELETE' }),
-      invalidatesTags: [{ type: 'InventoryItem', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'InventoryItem', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     /* The whole ledger is a small single-list resource, same shape as
@@ -683,7 +748,10 @@ export const toastlyApi = createApi({
 
     createTransaction: build.mutation<Transaction, CreateTransactionInput>({
       query: (body) => ({ url: '/transactions', method: 'POST', body }),
-      invalidatesTags: [{ type: 'Transaction', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Transaction', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     updateTransaction: build.mutation<
@@ -698,12 +766,16 @@ export const toastlyApi = createApi({
       invalidatesTags: (_tx, _error, { transactionId }) => [
         { type: 'Transaction', id: transactionId },
         { type: 'Transaction', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
       ],
     }),
 
     deleteTransaction: build.mutation<null, string>({
       query: (transactionId) => ({ url: `/transactions/${transactionId}`, method: 'DELETE' }),
-      invalidatesTags: [{ type: 'Transaction', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Transaction', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     /* Keyed by dues period — switching periods on the Dues tab hits a fresh
@@ -732,6 +804,7 @@ export const toastlyApi = createApi({
         { type: 'DuesRecord', id: recordId },
         { type: 'DuesRecord', id: 'LIST' },
         { type: 'Transaction', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
       ],
     }),
 
@@ -748,7 +821,10 @@ export const toastlyApi = createApi({
 
     createBudgetLine: build.mutation<BudgetLine, CreateBudgetLineInput>({
       query: (body) => ({ url: '/budget-lines', method: 'POST', body }),
-      invalidatesTags: [{ type: 'BudgetLine', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'BudgetLine', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     updateBudgetLine: build.mutation<BudgetLine, { lineId: string } & UpdateBudgetLineInput>({
@@ -760,12 +836,16 @@ export const toastlyApi = createApi({
       invalidatesTags: (_line, _error, { lineId }) => [
         { type: 'BudgetLine', id: lineId },
         { type: 'BudgetLine', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
       ],
     }),
 
     deleteBudgetLine: build.mutation<null, string>({
       query: (lineId) => ({ url: `/budget-lines/${lineId}`, method: 'DELETE' }),
-      invalidatesTags: [{ type: 'BudgetLine', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'BudgetLine', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     /* The three speech reports are keyed by member, not by an individual
@@ -802,6 +882,7 @@ export const toastlyApi = createApi({
       }),
       invalidatesTags: (_request, _error, { memberId }) => [
         { type: 'SpeechSlotRequest', id: memberId },
+        { type: 'ActivityLog', id: 'LIST' },
       ],
     }),
 
@@ -838,6 +919,18 @@ export const toastlyApi = createApi({
       invalidatesTags: (_task, _error, { taskId, memberId }) => [
         { type: 'Task', id: taskId },
         { type: 'Task', id: memberId },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    /* The full feed — every officer action across the app, newest first. The
+     * Activity Logs page filters on the client, same as the ledger and the
+     * inventory roster. */
+    getActivityLogs: build.query<ActivityLog[], void>({
+      query: () => ({ url: '/activity-logs', method: 'GET' }),
+      providesTags: (logs) => [
+        { type: 'ActivityLog', id: 'LIST' },
+        ...(logs ?? []).map((log) => ({ type: 'ActivityLog' as const, id: log.id })),
       ],
     }),
   }),
@@ -898,4 +991,5 @@ export const {
   useCreateSpeechSlotRequestMutation,
   useGetTasksQuery,
   useUpdateTaskMutation,
+  useGetActivityLogsQuery,
 } = toastlyApi;

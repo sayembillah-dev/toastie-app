@@ -1,6 +1,19 @@
 import type { PayloadAction } from '@reduxjs/toolkit';
 import { createSlice } from '@reduxjs/toolkit';
 
+/** The scope the user is currently acting inside. `club` is the built-out
+ * experience; the higher tiers are placeholders while their surfaces are
+ * designed. */
+export const UNIT_KEYS = [
+  'club',
+  'club-admin',
+  'area',
+  'division',
+  'district',
+  'super-admin',
+] as const;
+export type UnitKey = (typeof UNIT_KEYS)[number];
+
 /**
  * Client-only view state — the bits of UI that outlive a single component but
  * are not server data. Deliberately *not* persisted: the store is created fresh
@@ -16,12 +29,17 @@ export interface UiState {
   /** Filter text for the members directory. Lives here so a future saved-view or
    * command-palette can drive the same grid. */
   memberSearchQuery: string;
+  /** Which organisational tier the shell is scoped to. Drives the sidebar
+   * contents and the routed page — anything other than `club` is a stub for
+   * now. */
+  activeUnit: UnitKey;
 }
 
 const initialState: UiState = {
   sidebarCollapsed: false,
   mobileNavOpen: false,
   memberSearchQuery: '',
+  activeUnit: 'club',
 };
 
 export const uiSlice = createSlice({
@@ -43,11 +61,15 @@ export const uiSlice = createSlice({
     memberSearchQueryChanged(state, action: PayloadAction<string>) {
       state.memberSearchQuery = action.payload;
     },
+    activeUnitChanged(state, action: PayloadAction<UnitKey>) {
+      state.activeUnit = action.payload;
+    },
   },
   selectors: {
     selectSidebarCollapsed: (state) => state.sidebarCollapsed,
     selectMobileNavOpen: (state) => state.mobileNavOpen,
     selectMemberSearchQuery: (state) => state.memberSearchQuery,
+    selectActiveUnit: (state) => state.activeUnit,
   },
 });
 
@@ -57,6 +79,11 @@ export const {
   mobileNavOpened,
   mobileNavClosed,
   memberSearchQueryChanged,
+  activeUnitChanged,
 } = uiSlice.actions;
-export const { selectSidebarCollapsed, selectMobileNavOpen, selectMemberSearchQuery } =
-  uiSlice.selectors;
+export const {
+  selectSidebarCollapsed,
+  selectMobileNavOpen,
+  selectMemberSearchQuery,
+  selectActiveUnit,
+} = uiSlice.selectors;
