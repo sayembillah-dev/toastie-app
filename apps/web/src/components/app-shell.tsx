@@ -2,6 +2,7 @@
 
 import {
   AddressBook,
+  Archive,
   ArrowLeft,
   Bell,
   BookOpen,
@@ -15,6 +16,7 @@ import {
   Question,
   SidebarSimple,
   SquaresFour,
+  UserCircle,
   Users,
   Wallet,
   X,
@@ -69,6 +71,8 @@ const primaryNav: NavEntry[] = [
   { href: '/people', title: 'People', Icon: AddressBook },
   { href: '/inventory', title: 'Inventory & checklist', Icon: ClipboardText },
   { href: '/finance', title: 'Finance', Icon: Wallet },
+  { href: '/records', title: 'Records', Icon: Archive },
+  { href: '/me', title: 'Me', Icon: UserCircle },
 ];
 
 /** Named routes win; anything deeper falls back to title-cased segments.

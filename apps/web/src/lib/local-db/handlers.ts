@@ -1,8 +1,14 @@
+import type { Evaluation } from '@/lib/education/evaluations';
 import type { HistoryEvent, MemberStats } from '@/lib/education/history';
 import { computeMemberStats, sortEvents } from '@/lib/education/history';
 import type { Member, StartPathwayInput } from '@/lib/education/members';
 import { PATHWAYS } from '@/lib/education/members';
 import { findProject } from '@/lib/education/pathways';
+import type {
+  CreateSpeechSlotRequestInput,
+  SpeechSlotRequest,
+} from '@/lib/education/speech-slot-requests';
+import { SPEECH_SLOT_REQUEST_NOTE_MAX } from '@/lib/education/speech-slot-requests';
 import type {
   BudgetLine,
   CreateBudgetLineInput,
@@ -67,8 +73,10 @@ import {
   matchesDocumentQuery,
   sortDocumentsNewestFirst,
 } from '@/lib/library/documents';
+import type { AhCounterEntry } from '@/lib/meetings/ah-counter-reports';
 import type { CreateMeetingInput, Meeting, UpdateMeetingInput } from '@/lib/meetings/meetings';
 import { MEETING_STATUSES } from '@/lib/meetings/meetings';
+import type { TimerEntry } from '@/lib/meetings/timer-reports';
 import type {
   ContactLog,
   CreateContactLogInput,
@@ -79,20 +87,26 @@ import type { Guest, GuestSocial, UpdateGuestInput } from '@/lib/people/guests';
 import { isGuestStage, isSocialPlatform } from '@/lib/people/guests';
 import type { CreateVisitLogInput, UpdateVisitLogInput, VisitLog } from '@/lib/people/visit-logs';
 import { VISIT_LOG_NOTES_MAX, VISIT_LOG_ROLE_MAX } from '@/lib/people/visit-logs';
+import type { Task, UpdateTaskInput } from '@/lib/tasks/tasks';
 
 import {
+  readAhCounterEntries,
   readAssets,
   readBudgetLines,
   readChecklists,
   readContactLogs,
   readDocuments,
   readDuesRecords,
+  readEvaluations,
   readExtrasFor,
   readGuests,
   readHistoryEvents,
   readInventoryItems,
   readMeetings,
   readMembers,
+  readSpeechSlotRequests,
+  readTasks,
+  readTimerEntries,
   readTransactions,
   readVisitLogs,
   writeAssets,
@@ -106,6 +120,8 @@ import {
   writeInventoryItems,
   writeMeetings,
   writeMembers,
+  writeSpeechSlotRequests,
+  writeTasks,
   writeTransactions,
   writeVisitLogs,
 } from './db';
@@ -1713,6 +1729,112 @@ function deleteBudgetLine({ params }: RouteContext): null {
   return null;
 }
 
+/* -------------------------------------------------------- me: speech reports -- */
+
+/** The three reports a speech collects, all keyed by the `speech-given`
+ * history event they belong to — the Me page joins them back to the event
+ * client-side rather than each report re-storing the speech's own fields. */
+function listEvaluations({ params }: RouteContext): Evaluation[] {
+  requireMember(params.memberId);
+  return readEvaluations().filter((entry) => entry.memberId === params.memberId);
+}
+
+function listTimerEntries({ params }: RouteContext): TimerEntry[] {
+  requireMember(params.memberId);
+  return readTimerEntries().filter((entry) => entry.memberId === params.memberId);
+}
+
+function listAhCounterEntries({ params }: RouteContext): AhCounterEntry[] {
+  requireMember(params.memberId);
+  return readAhCounterEntries().filter((entry) => entry.memberId === params.memberId);
+}
+
+/* ------------------------------------------------------ speech slot requests -- */
+
+function parseCreateSpeechSlotRequestBody(body: unknown): CreateSpeechSlotRequestInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected a create-speech-slot-request body');
+  }
+  const { meetingId, projectName, note } = body as Partial<CreateSpeechSlotRequestInput>;
+
+  if (typeof meetingId !== 'string' || meetingId.trim() === '') {
+    throw new LocalApiError(400, 'meetingId is required');
+  }
+  if (!readMeetings().some((entry) => entry.id === meetingId)) {
+    throw new LocalApiError(400, `No meeting with id "${meetingId}"`);
+  }
+  if (note !== undefined && note !== null) {
+    if (typeof note !== 'string') throw new LocalApiError(400, 'note must be a string');
+    if (note.length > SPEECH_SLOT_REQUEST_NOTE_MAX) {
+      throw new LocalApiError(
+        400,
+        `Please keep the note under ${SPEECH_SLOT_REQUEST_NOTE_MAX} characters`,
+      );
+    }
+  }
+
+  return {
+    meetingId,
+    projectName:
+      typeof projectName === 'string' && projectName.trim() !== '' ? projectName.trim() : undefined,
+    note: typeof note === 'string' && note.trim() !== '' ? note.trim() : undefined,
+  };
+}
+
+/** Latest first — the Me page reads server order rather than sorting on
+ * every render, same convention as the contact/visit log lists. */
+function listSpeechSlotRequests({ params }: RouteContext): SpeechSlotRequest[] {
+  requireMember(params.memberId);
+  return readSpeechSlotRequests()
+    .filter((entry) => entry.memberId === params.memberId)
+    .sort((a, b) => (a.requestedAt < b.requestedAt ? 1 : -1));
+}
+
+/** Always lands as `pending` — only the VPE's own review action (not built
+ * yet) can move the status, so the member-facing form can't self-approve. */
+function createSpeechSlotRequest({ params, body }: RouteContext): SpeechSlotRequest {
+  const member = requireMember(params.memberId);
+  const input = parseCreateSpeechSlotRequestBody(body);
+  const request: SpeechSlotRequest = {
+    id: `ssr-${member.id}-${Date.now().toString(36)}`,
+    memberId: member.id,
+    meetingId: input.meetingId,
+    projectName: input.projectName,
+    note: input.note,
+    status: 'pending',
+    requestedAt: new Date().toISOString(),
+  };
+  writeSpeechSlotRequests([...readSpeechSlotRequests(), request]);
+  return request;
+}
+
+/* ------------------------------------------------------------------- tasks -- */
+
+function listTasks({ params }: RouteContext): Task[] {
+  requireMember(params.memberId);
+  return readTasks()
+    .filter((entry) => entry.memberId === params.memberId)
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+}
+
+function parseUpdateTaskBody(body: unknown): UpdateTaskInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected an update-task body');
+  }
+  const { done } = body as Partial<UpdateTaskInput>;
+  if (typeof done !== 'boolean') throw new LocalApiError(400, 'done must be a boolean');
+  return { done };
+}
+
+function updateTask({ params, body }: RouteContext): Task {
+  const tasks = readTasks();
+  const existing = tasks.find((entry) => entry.id === params.taskId);
+  if (!existing) throw new LocalApiError(404, `No task with id "${params.taskId}"`);
+  const updated: Task = { ...existing, ...parseUpdateTaskBody(body) };
+  writeTasks(tasks.map((entry) => (entry.id === updated.id ? updated : entry)));
+  return updated;
+}
+
 interface Route {
   method: HttpMethod;
   /** Path split on `/`; a `:name` segment captures into `params`. */
@@ -1776,6 +1898,13 @@ const ROUTES: Route[] = [
   route('POST', '/budget-lines', createBudgetLine),
   route('PATCH', '/budget-lines/:lineId', updateBudgetLine),
   route('DELETE', '/budget-lines/:lineId', deleteBudgetLine),
+  route('GET', '/members/:memberId/evaluations', listEvaluations),
+  route('GET', '/members/:memberId/timer-entries', listTimerEntries),
+  route('GET', '/members/:memberId/ah-counter-entries', listAhCounterEntries),
+  route('GET', '/members/:memberId/speech-slot-requests', listSpeechSlotRequests),
+  route('POST', '/members/:memberId/speech-slot-requests', createSpeechSlotRequest),
+  route('GET', '/members/:memberId/tasks', listTasks),
+  route('PATCH', '/tasks/:taskId', updateTask),
 ];
 
 function toSegments(path: string): string[] {

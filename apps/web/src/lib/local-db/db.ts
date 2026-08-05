@@ -1,3 +1,5 @@
+import type { Evaluation } from '@/lib/education/evaluations';
+import { EVALUATION_SEED } from '@/lib/education/evaluations';
 import type { HistoryEvent, MemberProfileExtras } from '@/lib/education/history';
 import {
   DEFAULT_EXTRAS,
@@ -7,6 +9,8 @@ import {
 } from '@/lib/education/history';
 import type { Member } from '@/lib/education/members';
 import { SEED_MEMBERS } from '@/lib/education/members';
+import type { SpeechSlotRequest } from '@/lib/education/speech-slot-requests';
+import { SEED_SPEECH_SLOT_REQUESTS } from '@/lib/education/speech-slot-requests';
 import type { BudgetLine } from '@/lib/finance/budget';
 import { SEED_BUDGET_LINES } from '@/lib/finance/budget';
 import type { DuesRecord } from '@/lib/finance/dues';
@@ -20,14 +24,20 @@ import type { Asset } from '@/lib/library/assets';
 import { SEED_ASSETS } from '@/lib/library/assets';
 import type { LibraryDocument } from '@/lib/library/documents';
 import { SEED_DOCUMENTS } from '@/lib/library/documents';
+import type { AhCounterEntry } from '@/lib/meetings/ah-counter-reports';
+import { AH_COUNTER_ENTRY_SEED } from '@/lib/meetings/ah-counter-reports';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { SEED_MEETINGS } from '@/lib/meetings/meetings';
+import type { TimerEntry } from '@/lib/meetings/timer-reports';
+import { TIMER_ENTRY_SEED } from '@/lib/meetings/timer-reports';
 import type { ContactLog } from '@/lib/people/contact-logs';
 import { SEED_CONTACT_LOGS } from '@/lib/people/contact-logs';
 import type { Guest } from '@/lib/people/guests';
 import { SEED_GUESTS } from '@/lib/people/guests';
 import type { VisitLog } from '@/lib/people/visit-logs';
 import { SEED_VISIT_LOGS } from '@/lib/people/visit-logs';
+import type { Task } from '@/lib/tasks/tasks';
+import { SEED_TASKS } from '@/lib/tasks/tasks';
 
 /**
  * The stand-in persistence layer. Until the Nest API exists, every write the UI
@@ -52,8 +62,10 @@ import { SEED_VISIT_LOGS } from '@/lib/people/visit-logs';
  * v8 introduced the checklists (per meeting) and inventory-items tables
  *    backing the Inventory & checklist page.
  * v9 introduced the transactions, dues-records and budget-lines tables
- *    backing the Finance (treasurer) page. */
-const SCHEMA_VERSION = 'v9';
+ *    backing the Finance (treasurer) page.
+ * v10 introduced the evaluations, timer-entries, ah-counter-entries,
+ *    speech-slot-requests and tasks tables backing the Me page. */
+const SCHEMA_VERSION = 'v10';
 
 export const DB_KEYS = {
   members: `toastly.db.${SCHEMA_VERSION}.members`,
@@ -70,6 +82,11 @@ export const DB_KEYS = {
   transactions: `toastly.db.${SCHEMA_VERSION}.transactions`,
   duesRecords: `toastly.db.${SCHEMA_VERSION}.dues-records`,
   budgetLines: `toastly.db.${SCHEMA_VERSION}.budget-lines`,
+  evaluations: `toastly.db.${SCHEMA_VERSION}.evaluations`,
+  timerEntries: `toastly.db.${SCHEMA_VERSION}.timer-entries`,
+  ahCounterEntries: `toastly.db.${SCHEMA_VERSION}.ah-counter-entries`,
+  speechSlotRequests: `toastly.db.${SCHEMA_VERSION}.speech-slot-requests`,
+  tasks: `toastly.db.${SCHEMA_VERSION}.tasks`,
 } as const;
 
 /** Used by the cross-tab sync listener to tell our writes apart from any other
@@ -140,6 +157,26 @@ function seedDuesRecords(): DuesRecord[] {
 
 function seedBudgetLines(): BudgetLine[] {
   return SEED_BUDGET_LINES;
+}
+
+function seedEvaluations(): Evaluation[] {
+  return SEED_MEMBERS.flatMap((member) => EVALUATION_SEED[member.id] ?? []);
+}
+
+function seedTimerEntries(): TimerEntry[] {
+  return SEED_MEMBERS.flatMap((member) => TIMER_ENTRY_SEED[member.id] ?? []);
+}
+
+function seedAhCounterEntries(): AhCounterEntry[] {
+  return SEED_MEMBERS.flatMap((member) => AH_COUNTER_ENTRY_SEED[member.id] ?? []);
+}
+
+function seedSpeechSlotRequests(): SpeechSlotRequest[] {
+  return SEED_SPEECH_SLOT_REQUESTS;
+}
+
+function seedTasks(): Task[] {
+  return SEED_TASKS;
 }
 
 function seedMemberExtras(): MemberExtrasTable {
@@ -277,6 +314,34 @@ export function readBudgetLines(): BudgetLine[] {
 
 export function writeBudgetLines(lines: BudgetLine[]): void {
   writeTable(DB_KEYS.budgetLines, lines);
+}
+
+export function readEvaluations(): Evaluation[] {
+  return readTable(DB_KEYS.evaluations, seedEvaluations);
+}
+
+export function readTimerEntries(): TimerEntry[] {
+  return readTable(DB_KEYS.timerEntries, seedTimerEntries);
+}
+
+export function readAhCounterEntries(): AhCounterEntry[] {
+  return readTable(DB_KEYS.ahCounterEntries, seedAhCounterEntries);
+}
+
+export function readSpeechSlotRequests(): SpeechSlotRequest[] {
+  return readTable(DB_KEYS.speechSlotRequests, seedSpeechSlotRequests);
+}
+
+export function writeSpeechSlotRequests(requests: SpeechSlotRequest[]): void {
+  writeTable(DB_KEYS.speechSlotRequests, requests);
+}
+
+export function readTasks(): Task[] {
+  return readTable(DB_KEYS.tasks, seedTasks);
+}
+
+export function writeTasks(tasks: Task[]): void {
+  writeTable(DB_KEYS.tasks, tasks);
 }
 
 export function readMemberExtras(): MemberExtrasTable {

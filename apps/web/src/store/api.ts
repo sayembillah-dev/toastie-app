@@ -1,7 +1,12 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 
+import type { Evaluation } from '@/lib/education/evaluations';
 import type { HistoryEvent, MemberStats } from '@/lib/education/history';
 import type { Member, StartPathwayInput } from '@/lib/education/members';
+import type {
+  CreateSpeechSlotRequestInput,
+  SpeechSlotRequest,
+} from '@/lib/education/speech-slot-requests';
 import type {
   BudgetLine,
   CreateBudgetLineInput,
@@ -32,7 +37,9 @@ import type {
   UpdateDocumentInput,
 } from '@/lib/library/documents';
 import { DOCUMENTS_PAGE_SIZE } from '@/lib/library/documents';
+import type { AhCounterEntry } from '@/lib/meetings/ah-counter-reports';
 import type { CreateMeetingInput, Meeting, UpdateMeetingInput } from '@/lib/meetings/meetings';
+import type { TimerEntry } from '@/lib/meetings/timer-reports';
 import type {
   ContactLog,
   CreateContactLogInput,
@@ -40,6 +47,7 @@ import type {
 } from '@/lib/people/contact-logs';
 import type { Guest, UpdateGuestInput } from '@/lib/people/guests';
 import type { CreateVisitLogInput, UpdateVisitLogInput, VisitLog } from '@/lib/people/visit-logs';
+import type { Task, UpdateTaskInput } from '@/lib/tasks/tasks';
 
 import { localBaseQuery } from './local-base-query';
 
@@ -65,6 +73,11 @@ export const toastlyApi = createApi({
     'Transaction',
     'DuesRecord',
     'BudgetLine',
+    'Evaluation',
+    'TimerEntry',
+    'AhCounterEntry',
+    'SpeechSlotRequest',
+    'Task',
   ],
   endpoints: (build) => ({
     getMembers: build.query<Member[], void>({
@@ -754,6 +767,79 @@ export const toastlyApi = createApi({
       query: (lineId) => ({ url: `/budget-lines/${lineId}`, method: 'DELETE' }),
       invalidatesTags: [{ type: 'BudgetLine', id: 'LIST' }],
     }),
+
+    /* The three speech reports are keyed by member, not by an individual
+     * speech — the Me page joins each report back to its `speech-given`
+     * history event client-side via `speechEventId`. */
+    getMemberEvaluations: build.query<Evaluation[], string>({
+      query: (memberId) => ({ url: `/members/${memberId}/evaluations`, method: 'GET' }),
+      providesTags: (_evals, _error, memberId) => [{ type: 'Evaluation', id: memberId }],
+    }),
+
+    getMemberTimerEntries: build.query<TimerEntry[], string>({
+      query: (memberId) => ({ url: `/members/${memberId}/timer-entries`, method: 'GET' }),
+      providesTags: (_entries, _error, memberId) => [{ type: 'TimerEntry', id: memberId }],
+    }),
+
+    getMemberAhCounterEntries: build.query<AhCounterEntry[], string>({
+      query: (memberId) => ({ url: `/members/${memberId}/ah-counter-entries`, method: 'GET' }),
+      providesTags: (_entries, _error, memberId) => [{ type: 'AhCounterEntry', id: memberId }],
+    }),
+
+    getSpeechSlotRequests: build.query<SpeechSlotRequest[], string>({
+      query: (memberId) => ({ url: `/members/${memberId}/speech-slot-requests`, method: 'GET' }),
+      providesTags: (_requests, _error, memberId) => [{ type: 'SpeechSlotRequest', id: memberId }],
+    }),
+
+    createSpeechSlotRequest: build.mutation<
+      SpeechSlotRequest,
+      { memberId: string } & CreateSpeechSlotRequestInput
+    >({
+      query: ({ memberId, ...body }) => ({
+        url: `/members/${memberId}/speech-slot-requests`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_request, _error, { memberId }) => [
+        { type: 'SpeechSlotRequest', id: memberId },
+      ],
+    }),
+
+    getTasks: build.query<Task[], string>({
+      query: (memberId) => ({ url: `/members/${memberId}/tasks`, method: 'GET' }),
+      providesTags: (tasks, _error, memberId) => [
+        { type: 'Task', id: memberId },
+        ...(tasks ?? []).map((task) => ({ type: 'Task' as const, id: task.id })),
+      ],
+    }),
+
+    /* Toggling done is the hot path — an optimistic update keeps the checkbox
+     * feeling instant while the round trip finishes, same pattern as the
+     * meeting checklist's `updateChecklistItem`. */
+    updateTask: build.mutation<Task, { taskId: string; memberId: string } & UpdateTaskInput>({
+      query: ({ taskId, memberId: _memberId, ...body }) => ({
+        url: `/tasks/${taskId}`,
+        method: 'PATCH',
+        body,
+      }),
+      onQueryStarted: async ({ taskId, memberId, done }, { dispatch, queryFulfilled }) => {
+        const patch = dispatch(
+          toastlyApi.util.updateQueryData('getTasks', memberId, (draft) => {
+            const task = draft.find((entry) => entry.id === taskId);
+            if (task) task.done = done;
+          }),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+      invalidatesTags: (_task, _error, { taskId, memberId }) => [
+        { type: 'Task', id: taskId },
+        { type: 'Task', id: memberId },
+      ],
+    }),
   }),
 });
 
@@ -805,4 +891,11 @@ export const {
   useCreateBudgetLineMutation,
   useUpdateBudgetLineMutation,
   useDeleteBudgetLineMutation,
+  useGetMemberEvaluationsQuery,
+  useGetMemberTimerEntriesQuery,
+  useGetMemberAhCounterEntriesQuery,
+  useGetSpeechSlotRequestsQuery,
+  useCreateSpeechSlotRequestMutation,
+  useGetTasksQuery,
+  useUpdateTaskMutation,
 } = toastlyApi;

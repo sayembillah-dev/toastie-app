@@ -134,6 +134,42 @@ export function findProject(name: string, pathway?: Pathway): ProjectDefinition 
   return undefined;
 }
 
+/** How many projects (required + the electives the level asks for) it takes
+ * to clear a level — the denominator for a "speeches left" countdown. */
+export function getLevelRequiredCount(pathway: Pathway, level: Level): number {
+  const levelEntry = getPathwayCatalog(pathway)?.levels.find((entry) => entry.level === level);
+  if (!levelEntry) return 0;
+  return levelEntry.requiredProjects.length + levelEntry.electivesRequiredCount;
+}
+
+/** The project a member should tackle after `currentProjectName` — the next
+ * uncompleted project at the same level (required projects before
+ * electives), or the first required project of the next level once the
+ * current one is exhausted. Used for the Me page's "up next" card. */
+export function getNextProject(
+  pathway: Pathway,
+  level: Level,
+  completedProjectNames: readonly string[],
+  currentProjectName?: string,
+): ProjectDefinition | undefined {
+  const completed = new Set(completedProjectNames);
+  const remaining = getProjectsForPathway(pathway).filter(
+    (project) =>
+      project.level === level &&
+      project.name !== currentProjectName &&
+      !completed.has(project.name),
+  );
+  if (remaining.length > 0) {
+    return remaining.find((project) => project.kind === 'required') ?? remaining[0];
+  }
+
+  if (level >= 5) return undefined;
+  const nextLevel = (level + 1) as Level;
+  return getProjectsForPathway(pathway).find(
+    (project) => project.level === nextLevel && project.kind === 'required',
+  );
+}
+
 /** Parses the catalog's free-text `speechTime` (e.g. "5–7 minutes") into
  * numeric minute bounds for the duration input. Entries that describe a role
  * or format rather than a timed speech (e.g. "Serve as Topicsmaster during a
