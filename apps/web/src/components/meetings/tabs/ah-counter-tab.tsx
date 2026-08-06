@@ -2,35 +2,24 @@
 
 import { CaretDown, Minus, Plus, Tag, TrashSimple, X } from '@phosphor-icons/react/dist/ssr';
 import { AutoComplete, Button, Input, Popover, Tabs } from 'antd';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 
+import { ShareRoleButton } from '@/components/meetings/tabs/share-role-button';
+import {
+  type AhSpeakerCount,
+  parseRoleState,
+  readRoleStateRaw,
+  subscribeToRoleState,
+  updateRoleState,
+} from '@/lib/meetings/role-state';
 import { useGetMembersQuery } from '@/store/api';
 
-/** Filler-word categories the club tracks by default. Users can add and
- * remove entries after mount — this is just the starting set. */
-const DEFAULT_CATEGORIES = ['AH', 'UM', 'ERR', 'THE'];
-
-interface SpeakerCount {
-  id: string;
-  /** Linked member — undefined for guest speakers typed by hand. */
-  memberId?: string;
-  /** Display name captured at add time (member's full name or the guest
-   * name the user typed). Cached so a member rename doesn't drift the log. */
-  name: string;
-  /** Per-category counts. Missing keys read as 0. Data is preserved even
-   * after a category is removed, so re-adding restores the prior tally. */
-  counts: Record<string, number>;
-  expanded: boolean;
-}
-
-function totalOf(speaker: SpeakerCount, categories: readonly string[]): number {
+function totalOf(speaker: AhSpeakerCount, categories: readonly string[]): number {
   let sum = 0;
   for (const category of categories) sum += speaker.counts[category] ?? 0;
   return sum;
 }
 
-/** Card labels are all-caps; table labels are title-case. The user types
- * whatever casing they want and we normalize at render time. */
 function cardLabel(category: string): string {
   return category.toUpperCase();
 }
@@ -83,7 +72,7 @@ function CountCell({ label, value, onIncrement, onDecrement }: CountCellProps) {
 }
 
 interface SpeakerCardProps {
-  speaker: SpeakerCount;
+  speaker: AhSpeakerCount;
   categories: string[];
   onDelete: () => void;
   onAdjust: (category: string, delta: number) => void;
@@ -104,9 +93,6 @@ function SpeakerCard({ speaker, categories, onDelete, onAdjust, onToggle }: Spea
           aria-controls={bodyId}
           className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
         >
-          {/* Design intent from the reference: chevron points up when expanded
-           * (i.e. tap it to fold the card away). Rotate the default `Down`
-           * icon rather than swap components so the transition stays smooth. */}
           <CaretDown
             size={14}
             weight="bold"
@@ -260,8 +246,6 @@ interface SpeakerPickerProps {
 function SpeakerPicker({ availableOptions, onCommit, onCancel }: SpeakerPickerProps) {
   const [draft, setDraft] = useState('');
 
-  /* Look for an exact (case-insensitive) match against the roster — if it
-   * hits, we link to that member; otherwise the string becomes a guest name. */
   function commit(value: string) {
     const trimmed = value.trim();
     if (!trimmed) return;
@@ -294,9 +278,6 @@ function SpeakerPicker({ availableOptions, onCommit, onCancel }: SpeakerPickerPr
               .toLowerCase()
               .includes(input.toLowerCase())
           }
-          /* Turning off the first-option highlight means Enter on a
-           * no-match query commits the typed text as a guest name instead
-           * of jumping to whatever suggestion was on top. */
           defaultActiveFirstOption={false}
           placeholder="Search a member or type a guest name"
           autoFocus
@@ -316,7 +297,7 @@ function SpeakerPicker({ availableOptions, onCommit, onCancel }: SpeakerPickerPr
 }
 
 interface SpeakersViewProps {
-  speakers: SpeakerCount[];
+  speakers: AhSpeakerCount[];
   categories: string[];
   availableOptions: MemberOption[];
   adding: boolean;
@@ -328,6 +309,7 @@ interface SpeakersViewProps {
   onToggle: (id: string) => void;
   onAddCategory: (label: string) => boolean;
   onRemoveCategory: (label: string) => void;
+  shareSlot: React.ReactNode;
 }
 
 function SpeakersView({
@@ -343,6 +325,7 @@ function SpeakersView({
   onToggle,
   onAddCategory,
   onRemoveCategory,
+  shareSlot,
 }: SpeakersViewProps) {
   return (
     <div className="rounded-2xl border border-line bg-canvas p-4 sm:p-6">
@@ -365,6 +348,7 @@ function SpeakersView({
           >
             Add Speaker
           </Button>
+          {shareSlot}
         </div>
       </header>
 
@@ -402,7 +386,7 @@ function SpeakersView({
 }
 
 interface ResultViewProps {
-  speakers: SpeakerCount[];
+  speakers: AhSpeakerCount[];
   categories: string[];
 }
 
@@ -420,8 +404,6 @@ function ResultView({ speakers, categories }: ResultViewProps) {
 
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-canvas">
-      {/* Horizontal scroll on narrow screens keeps the columns readable
-       * without shrinking each cell into unreadable ellipses. */}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[520px] text-sm">
           <thead>
@@ -464,15 +446,28 @@ function ResultView({ speakers, categories }: ResultViewProps) {
   );
 }
 
-/** Ah Counter tab — two sub-tabs sharing the same state. Speakers holds the
- * per-speaker counter cards with +/− controls, Result shows the same data as
- * a compact tabular summary. Both categories and speakers persist to local
- * state for now. Categories are user-configurable (add / remove) and apply to
- * every speaker; speakers can be either roster members or free-typed guests. */
-export function AhCounterTab() {
+interface AhCounterViewProps {
+  meetingId: string;
+  showShare: boolean;
+}
+
+/** Shared Ah Counter view — used by the in-app tab and the public share page.
+ * State is persisted per meeting so both surfaces stay in sync. */
+export function AhCounterView({ meetingId, showShare }: AhCounterViewProps) {
   const { data: members } = useGetMembersQuery();
-  const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
-  const [speakers, setSpeakers] = useState<SpeakerCount[]>([]);
+
+  const subscribe = useCallback(
+    (notify: () => void) => subscribeToRoleState('ah-counter', meetingId, notify),
+    [meetingId],
+  );
+  const raw = useSyncExternalStore(
+    subscribe,
+    () => readRoleStateRaw('ah-counter', meetingId),
+    () => null,
+  );
+  const state = parseRoleState('ah-counter', raw);
+  const { categories, speakers } = state;
+
   const [adding, setAdding] = useState(false);
 
   const memberOptions = useMemo<MemberOption[]>(
@@ -486,9 +481,6 @@ export function AhCounterTab() {
     [members],
   );
 
-  /* Filter out members already listed so the same person can't be added
-   * twice by mistake. Guests (no memberId) don't affect the filter — you
-   * can add "Guest speaker" as many times as needed. */
   const availableOptions = useMemo(() => {
     const usedIds = new Set(
       speakers.map((speaker) => speaker.memberId).filter((id): id is string => Boolean(id)),
@@ -497,57 +489,75 @@ export function AhCounterTab() {
   }, [memberOptions, speakers]);
 
   function handleAdd(draft: { memberId?: string; name: string }) {
-    setSpeakers((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        memberId: draft.memberId,
-        name: draft.name,
-        counts: {},
-        expanded: true,
-      },
-    ]);
+    const speaker: AhSpeakerCount = {
+      id: crypto.randomUUID(),
+      memberId: draft.memberId,
+      name: draft.name,
+      counts: {},
+      expanded: true,
+    };
+    updateRoleState('ah-counter', meetingId, (previous) => ({
+      ...previous,
+      speakers: [...previous.speakers, speaker],
+    }));
     setAdding(false);
   }
 
   function handleDelete(id: string) {
-    setSpeakers((prev) => prev.filter((speaker) => speaker.id !== id));
+    updateRoleState('ah-counter', meetingId, (previous) => ({
+      ...previous,
+      speakers: previous.speakers.filter((speaker) => speaker.id !== id),
+    }));
   }
 
   function handleAdjust(id: string, category: string, delta: number) {
-    setSpeakers((prev) =>
-      prev.map((speaker) => {
+    updateRoleState('ah-counter', meetingId, (previous) => ({
+      ...previous,
+      speakers: previous.speakers.map((speaker) => {
         if (speaker.id !== id) return speaker;
         const current = speaker.counts[category] ?? 0;
         const next = Math.max(0, current + delta);
         return { ...speaker, counts: { ...speaker.counts, [category]: next } };
       }),
-    );
+    }));
   }
 
   function handleToggle(id: string) {
-    setSpeakers((prev) =>
-      prev.map((speaker) =>
+    updateRoleState('ah-counter', meetingId, (previous) => ({
+      ...previous,
+      speakers: previous.speakers.map((speaker) =>
         speaker.id === id ? { ...speaker, expanded: !speaker.expanded } : speaker,
       ),
-    );
+    }));
   }
 
-  /** Returns true if the category was added; false if it collides with an
-   * existing one (case-insensitive). Popover uses the return to show an
-   * inline error instead of silently dropping the input. */
   function handleAddCategory(label: string): boolean {
     const trimmed = label.trim();
     if (!trimmed) return false;
     const exists = categories.some((existing) => existing.toLowerCase() === trimmed.toLowerCase());
     if (exists) return false;
-    setCategories((prev) => [...prev, trimmed]);
+    updateRoleState('ah-counter', meetingId, (previous) => ({
+      ...previous,
+      categories: [...previous.categories, trimmed],
+    }));
     return true;
   }
 
   function handleRemoveCategory(label: string) {
-    setCategories((prev) => prev.filter((category) => category !== label));
+    updateRoleState('ah-counter', meetingId, (previous) => ({
+      ...previous,
+      categories: previous.categories.filter((category) => category !== label),
+    }));
   }
+
+  const shareSlot = showShare ? (
+    <ShareRoleButton
+      meetingId={meetingId}
+      kind="ah-counter"
+      roleLabel="Ah Counter"
+      ariaLabel="Share Ah Counter role"
+    />
+  ) : null;
 
   return (
     <section className="mx-auto max-w-4xl">
@@ -572,6 +582,7 @@ export function AhCounterTab() {
                 onToggle={handleToggle}
                 onAddCategory={handleAddCategory}
                 onRemoveCategory={handleRemoveCategory}
+                shareSlot={shareSlot}
               />
             ),
           },
@@ -584,4 +595,14 @@ export function AhCounterTab() {
       />
     </section>
   );
+}
+
+interface AhCounterTabProps {
+  meetingId: string;
+}
+
+/** Ah Counter tab — shows the share button so meeting hosts can hand out the
+ * public link. The public role page renders the same view without the button. */
+export function AhCounterTab({ meetingId }: AhCounterTabProps) {
+  return <AhCounterView meetingId={meetingId} showShare />;
 }

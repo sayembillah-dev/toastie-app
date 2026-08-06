@@ -85,19 +85,19 @@ function buildTabs(meeting: Meeting): TabDef[] {
       key: 'ah-counter',
       label: 'Ah Counter',
       Icon: SpeakerHigh,
-      content: <AhCounterTab />,
+      content: <AhCounterTab meetingId={meeting.id} />,
     },
     {
       key: 'timer',
       label: 'Timer',
       Icon: Timer,
-      content: <TimerTab />,
+      content: <TimerTab meetingId={meeting.id} />,
     },
     {
       key: 'grammarian',
       label: 'Grammarian',
       Icon: TextAa,
-      content: <GrammarianTab />,
+      content: <GrammarianTab meetingId={meeting.id} />,
     },
     {
       key: 'attendance',

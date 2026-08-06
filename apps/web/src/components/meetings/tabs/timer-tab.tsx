@@ -11,19 +11,19 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 import type { InputRef } from 'antd';
 import { AutoComplete, Button, Dropdown, Input, Select, Tabs } from 'antd';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
+import { ShareRoleButton } from '@/components/meetings/tabs/share-role-button';
+import {
+  parseRoleState,
+  readRoleStateRaw,
+  subscribeToRoleState,
+  TIMER_SPEAKER_TYPES,
+  type TimerSpeaker,
+  type TimerSpeakerType,
+  updateRoleState,
+} from '@/lib/meetings/role-state';
 import { useGetMembersQuery } from '@/store/api';
-
-const SPEAKER_TYPES = [
-  'Prepared Speaker',
-  'Ice Breaker',
-  'Table Topic',
-  'Speech Evaluator',
-  'TT Evaluator',
-  'General Evaluator',
-] as const;
-type SpeakerType = (typeof SPEAKER_TYPES)[number];
 
 interface Bracket {
   green: number;
@@ -31,9 +31,7 @@ interface Bracket {
   red: number;
 }
 
-/** Standard Toastmasters timing brackets in seconds. Table Topic and the
- * evaluator slots run short; prepared/general slots get the full window. */
-const TYPE_BRACKETS: Record<SpeakerType, Bracket> = {
+const TYPE_BRACKETS: Record<TimerSpeakerType, Bracket> = {
   'Prepared Speaker': { green: 5 * 60, yellow: 6 * 60, red: 7 * 60 },
   'Ice Breaker': { green: 4 * 60, yellow: 5 * 60, red: 6 * 60 },
   'Table Topic': { green: 60, yellow: 90, red: 2 * 60 },
@@ -42,27 +40,11 @@ const TYPE_BRACKETS: Record<SpeakerType, Bracket> = {
   'General Evaluator': { green: 5 * 60, yellow: 6 * 60, red: 7 * 60 },
 };
 
-type TimerStatus = 'idle' | 'running' | 'done';
-
-interface TimerSpeaker {
-  id: string;
-  memberId?: string;
-  name: string;
-  type: SpeakerType;
-  status: TimerStatus;
-  /** Committed elapsed seconds — what we render for stopped speakers and the
-   * base value for a resumed timer. */
-  elapsed: number;
-  /** Wall-clock ms at the last Start. Undefined unless status === 'running'. */
-  startedAt?: number;
-}
-
 interface MemberOption {
   value: string;
   label: string;
 }
 
-/** Zero-padded MM:SS, used in the large countdown display. */
 function formatTime(seconds: number): string {
   const total = Math.max(0, Math.floor(seconds));
   const mm = Math.floor(total / 60);
@@ -70,7 +52,6 @@ function formatTime(seconds: number): string {
   return `${mm.toString().padStart(2, '0')}:${ss.toString().padStart(2, '0')}`;
 }
 
-/** Un-padded M:SS, matches the bracket chips and the list-row time column. */
 function formatShortTime(seconds: number): string {
   const total = Math.max(0, Math.floor(seconds));
   const mm = Math.floor(total / 60);
@@ -80,9 +61,6 @@ function formatShortTime(seconds: number): string {
 
 type TimingResult = 'Under time' | 'In time' | 'Over time';
 
-/** Toastmasters convention: a speech qualifies if it lands between the green
- * signal and 30 seconds past the red. Under / over that window disqualifies
- * the speaker from the evaluation ballot. */
 function classifyResult(elapsed: number, brackets: Bracket): TimingResult {
   if (elapsed < brackets.green) return 'Under time';
   if (elapsed <= brackets.red + 30) return 'In time';
@@ -112,9 +90,6 @@ interface BracketCardProps {
   active: boolean;
 }
 
-/** Bracket chip — three of them sit under the timer to show the green /
- * yellow / red thresholds for the current speaker type. The chip lights up
- * with a ring when the elapsed time crosses into its window. */
 function BracketCard({ label, seconds, color, active }: BracketCardProps) {
   const styles = {
     green: {
@@ -247,16 +222,27 @@ function TimerCard({ speaker, elapsed, onStart, onStop, onReset }: TimerCardProp
 
 interface AddSpeakerFormProps {
   memberOptions: MemberOption[];
-  onCommit: (draft: { memberId?: string; name: string; type: SpeakerType }) => void;
+  onCommit: (draft: { memberId?: string; name: string; type: TimerSpeakerType }) => void;
   onCancel: () => void;
 }
 
 function AddSpeakerForm({ memberOptions, onCommit, onCancel }: AddSpeakerFormProps) {
-  const [type, setType] = useState<SpeakerType>('Prepared Speaker');
+  const [type, setType] = useState<TimerSpeakerType>('Prepared Speaker');
   const [draftName, setDraftName] = useState('');
 
   function commit() {
     const trimmed = draftName.trim();
+    if (!trimmed) return;
+    const matched = memberOptions.find(
+      (option) => option.label.toLowerCase() === trimmed.toLowerCase(),
+    );
+    if (matched) onCommit({ memberId: matched.value, name: matched.label, type });
+    else onCommit({ name: trimmed, type });
+    setDraftName('');
+  }
+
+  function commitWith(value: string) {
+    const trimmed = value.trim();
     if (!trimmed) return;
     const matched = memberOptions.find(
       (option) => option.label.toLowerCase() === trimmed.toLowerCase(),
@@ -273,8 +259,8 @@ function AddSpeakerForm({ memberOptions, onCommit, onCancel }: AddSpeakerFormPro
           size="large"
           className="sm:w-52"
           value={type}
-          onChange={(value: SpeakerType) => setType(value)}
-          options={SPEAKER_TYPES.map((entry) => ({ value: entry, label: entry }))}
+          onChange={(value: TimerSpeakerType) => setType(value)}
+          options={TIMER_SPEAKER_TYPES.map((entry) => ({ value: entry, label: entry }))}
         />
         <AutoComplete
           className="min-w-0 flex-1"
@@ -315,19 +301,6 @@ function AddSpeakerForm({ memberOptions, onCommit, onCancel }: AddSpeakerFormPro
       </div>
     </div>
   );
-
-  /* Inner helper — needed only so `onSelect` can commit with the just-picked
-   * option label without waiting for state to settle. */
-  function commitWith(value: string) {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    const matched = memberOptions.find(
-      (option) => option.label.toLowerCase() === trimmed.toLowerCase(),
-    );
-    if (matched) onCommit({ memberId: matched.value, name: matched.label, type });
-    else onCommit({ name: trimmed, type });
-    setDraftName('');
-  }
 }
 
 interface SpeakerListRowProps {
@@ -459,7 +432,7 @@ interface SpeakerViewProps {
   editingName: string;
   onStartAdd: () => void;
   onCancelAdd: () => void;
-  onAdd: (draft: { memberId?: string; name: string; type: SpeakerType }) => void;
+  onAdd: (draft: { memberId?: string; name: string; type: TimerSpeakerType }) => void;
   onSelect: (id: string) => void;
   onRename: (id: string) => void;
   onDelete: (id: string) => void;
@@ -469,6 +442,7 @@ interface SpeakerViewProps {
   onStart: () => void;
   onStop: () => void;
   onReset: () => void;
+  shareSlot: React.ReactNode;
 }
 
 function SpeakerView({
@@ -491,12 +465,15 @@ function SpeakerView({
   onStart,
   onStop,
   onReset,
+  shareSlot,
 }: SpeakerViewProps) {
   const active = speakers.find((speaker) => speaker.id === activeId) ?? null;
   const elapsed = active ? computeElapsed(active, now) : 0;
 
   return (
     <div className="flex flex-col gap-4">
+      {shareSlot ? <div className="flex justify-end">{shareSlot}</div> : null}
+
       {active ? (
         <TimerCard
           speaker={active}
@@ -612,20 +589,31 @@ function ReportView({ speakers }: { speakers: TimerSpeaker[] }) {
   );
 }
 
-/** Timer tab — two sub-tabs sharing the same state. Speaker holds the active
- * timer card, the add form, and the ordered list of speakers with rename /
- * delete actions. Report reflects everyone who has been timed to completion
- * with their result classification. State is local for now. */
-export function TimerTab() {
+interface TimerViewProps {
+  meetingId: string;
+  showShare: boolean;
+}
+
+/** Shared Timer view — used by both the in-app tab and the public share page.
+ * State is persisted per meeting so both surfaces stay in sync. */
+export function TimerView({ meetingId, showShare }: TimerViewProps) {
   const { data: members } = useGetMembersQuery();
-  const [speakers, setSpeakers] = useState<TimerSpeaker[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const subscribe = useCallback(
+    (notify: () => void) => subscribeToRoleState('timer', meetingId, notify),
+    [meetingId],
+  );
+  const raw = useSyncExternalStore(
+    subscribe,
+    () => readRoleStateRaw('timer', meetingId),
+    () => null,
+  );
+  const state = parseRoleState('timer', raw);
+  const { speakers, activeId } = state;
+
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
-  /* `now` drives the live timer display. Initialized to 0 so the first server
-   * render is deterministic; a useEffect populates the real value on mount so
-   * a running timer starts ticking as soon as it's the active one. */
   const [now, setNow] = useState(0);
 
   const memberOptions = useMemo<MemberOption[]>(
@@ -642,39 +630,36 @@ export function TimerTab() {
   const activeSpeaker = speakers.find((speaker) => speaker.id === activeId) ?? null;
   const isRunning = activeSpeaker?.status === 'running';
 
-  /* Only tick while the active speaker is running — the interval unmounts as
-   * soon as the timer stops, so an idle tab isn't paying for a re-render 4×
-   * per second forever. `computeElapsed` clamps to 0 when `now` is behind
-   * `startedAt`, so the first 250ms after Start shows 00:00 rather than a
-   * negative jump — no need to seed `now` from the effect body. */
   useEffect(() => {
     if (!isRunning) return;
     const interval = window.setInterval(() => setNow(Date.now()), 250);
     return () => window.clearInterval(interval);
   }, [isRunning, activeId]);
 
-  function handleAdd(draft: { memberId?: string; name: string; type: SpeakerType }) {
+  function handleAdd(draft: { memberId?: string; name: string; type: TimerSpeakerType }) {
     const id = crypto.randomUUID();
-    setSpeakers((prev) => [
-      ...prev,
-      {
-        id,
-        memberId: draft.memberId,
-        name: draft.name,
-        type: draft.type,
-        status: 'idle',
-        elapsed: 0,
-      },
-    ]);
-    /* New speakers auto-select — the timer card jumps to them so the user can
-     * hit Start immediately without a follow-up tap. */
-    setActiveId(id);
+    updateRoleState('timer', meetingId, (previous) => ({
+      activeId: id,
+      speakers: [
+        ...previous.speakers,
+        {
+          id,
+          memberId: draft.memberId,
+          name: draft.name,
+          type: draft.type,
+          status: 'idle',
+          elapsed: 0,
+        },
+      ],
+    }));
     setAdding(false);
   }
 
   function handleDelete(id: string) {
-    setSpeakers((prev) => prev.filter((speaker) => speaker.id !== id));
-    if (activeId === id) setActiveId(null);
+    updateRoleState('timer', meetingId, (previous) => ({
+      speakers: previous.speakers.filter((speaker) => speaker.id !== id),
+      activeId: previous.activeId === id ? null : previous.activeId,
+    }));
     if (editingId === id) {
       setEditingId(null);
       setEditingName('');
@@ -682,19 +667,20 @@ export function TimerTab() {
   }
 
   function handleSelect(id: string) {
-    setActiveId(id);
+    updateRoleState('timer', meetingId, (previous) => ({ ...previous, activeId: id }));
   }
 
   function handleStart() {
     if (!activeId) return;
     const startedAt = Date.now();
-    setSpeakers((prev) =>
-      prev.map((speaker) => {
-        if (speaker.id === activeId) {
+    updateRoleState('timer', meetingId, (previous) => ({
+      ...previous,
+      speakers: previous.speakers.map<TimerSpeaker>((speaker) => {
+        if (speaker.id === previous.activeId) {
           return { ...speaker, status: 'running', startedAt };
         }
-        /* Any other running timer commits to `done` — one speaker can be on
-         * the clock at a time, no phantom counters in the background. */
+        /* Any other running timer commits to `done` — one speaker on the clock
+         * at a time. */
         if (speaker.status === 'running' && speaker.startedAt !== undefined) {
           const nextElapsed = speaker.elapsed + (startedAt - speaker.startedAt) / 1000;
           return {
@@ -706,31 +692,33 @@ export function TimerTab() {
         }
         return speaker;
       }),
-    );
+    }));
   }
 
   function handleStop() {
     if (!activeId) return;
     const stoppedAt = Date.now();
-    setSpeakers((prev) =>
-      prev.map((speaker) => {
-        if (speaker.id !== activeId) return speaker;
+    updateRoleState('timer', meetingId, (previous) => ({
+      ...previous,
+      speakers: previous.speakers.map<TimerSpeaker>((speaker) => {
+        if (speaker.id !== previous.activeId) return speaker;
         if (speaker.status !== 'running' || speaker.startedAt === undefined) return speaker;
         const nextElapsed = speaker.elapsed + (stoppedAt - speaker.startedAt) / 1000;
         return { ...speaker, status: 'done', elapsed: nextElapsed, startedAt: undefined };
       }),
-    );
+    }));
   }
 
   function handleReset() {
     if (!activeId) return;
-    setSpeakers((prev) =>
-      prev.map((speaker) =>
-        speaker.id === activeId
+    updateRoleState('timer', meetingId, (previous) => ({
+      ...previous,
+      speakers: previous.speakers.map<TimerSpeaker>((speaker) =>
+        speaker.id === previous.activeId
           ? { ...speaker, status: 'idle', elapsed: 0, startedAt: undefined }
           : speaker,
       ),
-    );
+    }));
   }
 
   function handleRename(id: string) {
@@ -744,9 +732,12 @@ export function TimerTab() {
     if (!editingId) return;
     const trimmed = editingName.trim();
     if (!trimmed) return;
-    setSpeakers((prev) =>
-      prev.map((speaker) => (speaker.id === editingId ? { ...speaker, name: trimmed } : speaker)),
-    );
+    updateRoleState('timer', meetingId, (previous) => ({
+      ...previous,
+      speakers: previous.speakers.map((speaker) =>
+        speaker.id === editingId ? { ...speaker, name: trimmed } : speaker,
+      ),
+    }));
     setEditingId(null);
     setEditingName('');
   }
@@ -755,6 +746,15 @@ export function TimerTab() {
     setEditingId(null);
     setEditingName('');
   }
+
+  const shareSlot = showShare ? (
+    <ShareRoleButton
+      meetingId={meetingId}
+      kind="timer"
+      roleLabel="Timer"
+      ariaLabel="Share Timer role"
+    />
+  ) : null;
 
   return (
     <section className="mx-auto max-w-4xl">
@@ -786,6 +786,7 @@ export function TimerTab() {
                 onStart={handleStart}
                 onStop={handleStop}
                 onReset={handleReset}
+                shareSlot={shareSlot}
               />
             ),
           },
@@ -798,4 +799,14 @@ export function TimerTab() {
       />
     </section>
   );
+}
+
+interface TimerTabProps {
+  meetingId: string;
+}
+
+/** Timer tab — shows the share button so the meeting host can hand the QR link
+ * to the timer role. Public role page renders the same view without it. */
+export function TimerTab({ meetingId }: TimerTabProps) {
+  return <TimerView meetingId={meetingId} showShare />;
 }
