@@ -9,6 +9,8 @@ export type InviteStatus = (typeof INVITE_STATUSES)[number];
  * actually joins, convert it into a real `Member` via `convertInviteToMember`. */
 export interface Invite {
   id: string;
+  /** Tenant boundary — the club this invite is for. */
+  clubId: string;
   email: string;
   firstName?: string;
   lastName?: string;
@@ -22,4 +24,4 @@ export interface Invite {
 
 export type CreateInviteInput = Pick<Invite, 'email' | 'firstName' | 'lastName' | 'roles'>;
 
-export const SEED_INVITES: Invite[] = [];
+export const SEED_INVITES: Omit<Invite, 'clubId'>[] = [];

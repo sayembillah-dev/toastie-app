@@ -12,7 +12,6 @@ import {
   getDuesPeriod,
 } from '@/lib/finance/dues';
 import { formatMoney } from '@/lib/finance/money';
-import { CURRENT_MEMBER_ID } from '@/lib/me/current-member';
 import { useListDuesRecordsQuery } from '@/store/api';
 
 const STATUS_TAG_COLOR: Record<DuesStatus, string> = {
@@ -24,9 +23,9 @@ const STATUS_TAG_COLOR: Record<DuesStatus, string> = {
 
 /** Your own line in the treasurer's ledger — same records the Finance tab
  * manages, just filtered down to one member and read-only here. */
-export function FinanceCard() {
+export function FinanceCard({ memberId }: { memberId: string }) {
   const { data: records, isLoading } = useListDuesRecordsQuery(CURRENT_DUES_PERIOD_ID);
-  const record = records?.find((entry) => entry.memberId === CURRENT_MEMBER_ID);
+  const record = records?.find((entry) => entry.memberId === memberId);
   const period = getDuesPeriod(CURRENT_DUES_PERIOD_ID);
   const status = record ? deriveDuesStatus(record) : undefined;
 

@@ -40,6 +40,8 @@ export const DOCUMENTS_PAGE_SIZE = 12;
 
 export interface LibraryDocument {
   id: string;
+  /** Tenant boundary — the club this document belongs to. */
+  clubId: string;
   title: string;
   /** Original filename as picked from the OS. Kept alongside `title` so a
    * rename in the app does not lose the on-disk name and its extension. */
@@ -154,7 +156,7 @@ const SEED_PDF =
   'data:application/pdf;base64,JVBERi0xLjQKJcOkw7zDtsO4CjIgMCBvYmoKPDwvTGVuZ3RoIDMgMCBSL0ZpbHRlci9GbGF0ZURlY29kZT4+CnN0cmVhbQp4nDPQM1Qw0DPUUwjJLC5RcM4vzStRcMksLlEIzUsuUggN0dEHKw4A/vwLTAplbmRzdHJlYW0KZW5kb2JqCjMgMCBvYmoKNDcKZW5kb2JqCjEgMCBvYmoKPDwvVHlwZS9QYWdlL01lZGlhQm94WzAgMCAxMDAgMTAwXS9SZXNvdXJjZXM8PD4+L0NvbnRlbnRzIDIgMCBSL1BhcmVudCA0IDAgUj4+CmVuZG9iago0IDAgb2JqCjw8L1R5cGUvUGFnZXMvS2lkc1sxIDAgUl0vQ291bnQgMT4+CmVuZG9iago1IDAgb2JqCjw8L1R5cGUvQ2F0YWxvZy9QYWdlcyA0IDAgUj4+CmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYNCjAwMDAwMDAxMzcgMDAwMDAgbg0KMDAwMDAwMDAxNSAwMDAwMCBuDQowMDAwMDAwMTE4IDAwMDAwIG4NCjAwMDAwMDAyMTggMDAwMDAgbg0KMDAwMDAwMDI2MyAwMDAwMCBuDQp0cmFpbGVyCjw8L1NpemUgNi9Sb290IDUgMCBSPj4Kc3RhcnR4cmVmCjMxMAolJUVPRgo=';
 const SEED_TEXT = 'data:text/plain;base64,VG9hc3RpZSBjbHViIHN0dWIgZmlsZS4=';
 
-export const SEED_DOCUMENTS: LibraryDocument[] = [
+export const SEED_DOCUMENTS: Omit<LibraryDocument, 'clubId'>[] = [
   {
     id: 'd-01',
     title: 'Club bylaws — 2026 revision',

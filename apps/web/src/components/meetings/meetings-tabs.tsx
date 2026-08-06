@@ -14,7 +14,7 @@ import { MeetingCard } from '@/components/meetings/meeting-card';
 import { NewMeetingModal } from '@/components/meetings/new-meeting-modal';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { nextMeetingNumber, partitionMeetings } from '@/lib/meetings/meetings';
-import { usePermission } from '@/lib/permissions/use-permission';
+import { useCan } from '@/lib/permissions/use-can';
 import { useGetMeetingsQuery } from '@/store/api';
 
 /* `useSyncExternalStore` compares snapshots with `Object.is` — a fresh
@@ -162,7 +162,8 @@ export function MeetingsTabs() {
    * defer the actual partition until the clock is trustworthy. */
   const now = useClientNow();
   const { data: meetings } = useGetMeetingsQuery();
-  const { mutate: canMutate } = usePermission('meetings');
+  const { can } = useCan();
+  const canMutate = can('update', 'meeting');
   const [isCreateOpen, setCreateOpen] = useState(false);
   const router = useRouter();
 

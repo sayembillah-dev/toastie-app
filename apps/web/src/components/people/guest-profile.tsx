@@ -12,10 +12,10 @@ import { Button } from 'antd';
 import Link from 'next/link';
 import { notFound, useParams } from 'next/navigation';
 
-import { AppShell } from '@/components/app-shell';
+import { PageBreadcrumb } from '@/components/page-breadcrumb';
 import { GuestActions } from '@/components/people/guest-actions';
 import { GuestInfo } from '@/components/people/guest-info';
-import { ModuleAccessGate } from '@/components/permissions/module-access-gate';
+import { AccessGate } from '@/components/permissions/access-gate';
 import type { Guest } from '@/lib/people/guests';
 import { getGuestInitials, getGuestStage, getGuestSwatch } from '@/lib/people/guests';
 import { useGetGuestQuery } from '@/store/api';
@@ -243,34 +243,29 @@ export function GuestProfileScreen() {
     if (isNotFoundError(error)) notFound();
 
     return (
-      <AppShell>
-        <div className="mx-auto max-w-md rounded-xl border border-dashed border-line-strong px-6 py-16 text-center">
-          <span
-            aria-hidden
-            className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-fill text-ink-soft"
-          >
-            <WarningCircle size={18} weight="bold" />
-          </span>
-          <p className="text-sm font-medium text-ink">Could not load this guest</p>
-          <p className="mt-1 text-xs text-ink-muted">{getApiErrorMessage(error)}</p>
-        </div>
-      </AppShell>
+      <div className="mx-auto max-w-md rounded-xl border border-dashed border-line-strong px-6 py-16 text-center">
+        <span
+          aria-hidden
+          className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-fill text-ink-soft"
+        >
+          <WarningCircle size={18} weight="bold" />
+        </span>
+        <p className="text-sm font-medium text-ink">Could not load this guest</p>
+        <p className="mt-1 text-xs text-ink-muted">{getApiErrorMessage(error)}</p>
+      </div>
     );
   }
 
   if (!guest) {
-    return (
-      <AppShell>
-        <ProfileSkeleton />
-      </AppShell>
-    );
+    return <ProfileSkeleton />;
   }
 
   return (
-    <AppShell breadcrumbLabel={`${guest.firstName} ${guest.lastName}`}>
-      <ModuleAccessGate module="people">
+    <>
+      <PageBreadcrumb label={`${guest.firstName} ${guest.lastName}`} />
+      <AccessGate resource="guest">
         <ProfileContent guest={guest} />
-      </ModuleAccessGate>
-    </AppShell>
+      </AccessGate>
+    </>
   );
 }

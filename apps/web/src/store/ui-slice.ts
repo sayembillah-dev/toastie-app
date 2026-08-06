@@ -20,6 +20,20 @@ export type UnitKey = (typeof UNIT_KEYS)[number];
  * on every render pass, so anything read from localStorage at init time would
  * differ between the server and client trees and trip a hydration mismatch.
  */
+export interface BreadcrumbCrumb {
+  href: string;
+  title: string;
+}
+
+/** A screen-supplied breadcrumb — either a full `trail` (for routes with more
+ * than one dynamic segment) or a `label` overriding the last computed crumb
+ * (for routes with a single dynamic id whose human name lives in data).
+ * `null` means the shell falls back to computing the trail from the pathname. */
+export interface BreadcrumbSlot {
+  trail: BreadcrumbCrumb[] | null;
+  label: string | null;
+}
+
 export interface UiState {
   sidebarCollapsed: boolean;
   /** Whether the mobile nav drawer is open. Separate from `sidebarCollapsed`:
@@ -33,6 +47,10 @@ export interface UiState {
    * contents and the routed page — anything other than `club` is a stub for
    * now. */
   activeUnit: UnitKey;
+  /** Screen-supplied breadcrumb slot. Written by `PageBreadcrumb`, read by
+   * `AppShell`. Kept in the store rather than passed as a prop because the
+   * shell is now mounted by `app/(app)/layout.tsx` rather than by each page. */
+  breadcrumb: BreadcrumbSlot;
 }
 
 const initialState: UiState = {
@@ -40,6 +58,7 @@ const initialState: UiState = {
   mobileNavOpen: false,
   memberSearchQuery: '',
   activeUnit: 'club',
+  breadcrumb: { trail: null, label: null },
 };
 
 export const uiSlice = createSlice({
@@ -64,12 +83,19 @@ export const uiSlice = createSlice({
     activeUnitChanged(state, action: PayloadAction<UnitKey>) {
       state.activeUnit = action.payload;
     },
+    breadcrumbSet(state, action: PayloadAction<BreadcrumbSlot>) {
+      state.breadcrumb = action.payload;
+    },
+    breadcrumbCleared(state) {
+      state.breadcrumb = { trail: null, label: null };
+    },
   },
   selectors: {
     selectSidebarCollapsed: (state) => state.sidebarCollapsed,
     selectMobileNavOpen: (state) => state.mobileNavOpen,
     selectMemberSearchQuery: (state) => state.memberSearchQuery,
     selectActiveUnit: (state) => state.activeUnit,
+    selectBreadcrumb: (state) => state.breadcrumb,
   },
 });
 
@@ -80,10 +106,13 @@ export const {
   mobileNavClosed,
   memberSearchQueryChanged,
   activeUnitChanged,
+  breadcrumbSet,
+  breadcrumbCleared,
 } = uiSlice.actions;
 export const {
   selectSidebarCollapsed,
   selectMobileNavOpen,
   selectMemberSearchQuery,
   selectActiveUnit,
+  selectBreadcrumb,
 } = uiSlice.selectors;

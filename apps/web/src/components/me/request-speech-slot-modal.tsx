@@ -3,7 +3,6 @@
 import { App, Input, Modal, Select } from 'antd';
 import { useState, useSyncExternalStore } from 'react';
 import { SPEECH_SLOT_REQUEST_NOTE_MAX } from '@/lib/education/speech-slot-requests';
-import { CURRENT_MEMBER_ID } from '@/lib/me/current-member';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { useCreateSpeechSlotRequestMutation, useGetMeetingsQuery } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
@@ -36,6 +35,7 @@ function formatMeetingOption(dateTime: string, theme: string): string {
 }
 
 interface RequestSpeechSlotModalProps {
+  memberId: string;
   open: boolean;
   onClose: () => void;
   /** Pre-fills the project field with whatever the pathway card says is next,
@@ -44,6 +44,7 @@ interface RequestSpeechSlotModalProps {
 }
 
 export function RequestSpeechSlotModal({
+  memberId,
   open,
   onClose,
   defaultProjectName,
@@ -88,7 +89,7 @@ export function RequestSpeechSlotModal({
     }
     try {
       await createRequest({
-        memberId: CURRENT_MEMBER_ID,
+        memberId,
         meetingId,
         projectName: projectName.trim() || undefined,
         note: note.trim() || undefined,

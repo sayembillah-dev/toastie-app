@@ -1,5 +1,5 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
-
+import type { SessionResponse } from '@toastly/access';
 import type { ActivityLog } from '@/lib/activity/activity-log';
 import type { CreateInviteInput, Invite } from '@/lib/club-admin/invites';
 import type { Evaluation } from '@/lib/education/evaluations';
@@ -45,7 +45,12 @@ import type {
 } from '@/lib/library/documents';
 import { DOCUMENTS_PAGE_SIZE } from '@/lib/library/documents';
 import type { AhCounterEntry } from '@/lib/meetings/ah-counter-reports';
-import type { CreateMeetingInput, Meeting, UpdateMeetingInput } from '@/lib/meetings/meetings';
+import type {
+  CreateMeetingInput,
+  Meeting,
+  PublicMeeting,
+  UpdateMeetingInput,
+} from '@/lib/meetings/meetings';
 import type { TimerEntry } from '@/lib/meetings/timer-reports';
 import type {
   Area,
@@ -68,19 +73,43 @@ import type {
 } from '@/lib/people/contact-logs';
 import type { Guest, UpdateGuestInput } from '@/lib/people/guests';
 import type { CreateVisitLogInput, UpdateVisitLogInput, VisitLog } from '@/lib/people/visit-logs';
-import type { ModuleKey, ModulePermission } from '@/lib/permissions/permissions';
 import type { Task, UpdateTaskInput } from '@/lib/tasks/tasks';
 
-import { localBaseQuery } from './local-base-query';
+import { routedBaseQuery } from './routed-base-query';
+
+interface AuthTokensResponse {
+  accessToken: string;
+  accessTokenExpiresAt: string;
+  refreshToken: string;
+  refreshTokenExpiresAt: string;
+}
+
+export interface AuthResponse {
+  tokens: AuthTokensResponse;
+  session: SessionResponse;
+}
+
+export interface LoginInput {
+  email: string;
+  password: string;
+}
+
+export interface RegisterInput {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+}
 
 /**
- * The single data-access surface for the app. Every endpoint is written as if it
- * were already talking to the Nest API — real paths, real methods, real cache
- * invalidation. Only `baseQuery` knows the data currently lives in localStorage.
+ * The single data-access surface for the app. Every endpoint targets the live
+ * Nest API through `routedBaseQuery`, which handles token attach + refresh +
+ * cross-tab sign-out. Cache invalidation is written per-mutation so a
+ * successful write refetches only what it actually touched.
  */
 export const toastlyApi = createApi({
   reducerPath: 'toastlyApi',
-  baseQuery: localBaseQuery,
+  baseQuery: routedBaseQuery,
   tagTypes: [
     'Member',
     'History',
@@ -172,12 +201,12 @@ export const toastlyApi = createApi({
 
     setMemberPermissions: build.mutation<
       Member,
-      { memberId: string; permissions: Partial<Record<ModuleKey, ModulePermission>> }
+      { memberId: string; overrides: Record<string, 'allow' | 'deny' | 'default'> }
     >({
-      query: ({ memberId, permissions }) => ({
+      query: ({ memberId, overrides }) => ({
         url: `/members/${memberId}/permissions`,
         method: 'PATCH',
-        body: permissions,
+        body: overrides,
       }),
       invalidatesTags: (_member, _error, { memberId }) => [
         { type: 'Member', id: memberId },
@@ -279,6 +308,18 @@ export const toastlyApi = createApi({
     getMeeting: build.query<Meeting, string>({
       query: (meetingId) => ({ url: `/meetings/${meetingId}`, method: 'GET' }),
       providesTags: (_meeting, _error, meetingId) => [{ type: 'Meeting', id: meetingId }],
+    }),
+
+    /* Anonymous share endpoint — matched by `isPublicUrl` in
+     * `routed-base-query.ts`, so no `Authorization` header goes out and a
+     * 401 doesn't trigger the refresh dance. The token is the credential;
+     * a wrong or missing token surfaces as 404, deliberately opaque about
+     * whether the meeting itself exists. */
+    getPublicMeeting: build.query<PublicMeeting, { meetingId: string; token: string }>({
+      query: ({ meetingId, token }) => ({
+        url: `/public/meetings/${meetingId}?t=${encodeURIComponent(token)}`,
+        method: 'GET',
+      }),
     }),
 
     /* Only the roster changes — a brand-new meeting has no detail cache entry
@@ -936,7 +977,7 @@ export const toastlyApi = createApi({
 
     /* Recording (or clearing) a payment writes the linked ledger entry
      * server-side, so this also invalidates the transaction list — see
-     * `updateDuesRecord` in `local-db/handlers.ts`. */
+     * `updateDuesRecord` in `apps/api/src/finance/finance.service.ts`. */
     updateDuesRecord: build.mutation<DuesRecord, { recordId: string } & UpdateDuesRecordInput>({
       query: ({ recordId, ...body }) => ({
         url: `/dues-records/${recordId}`,
@@ -1242,6 +1283,19 @@ export const toastlyApi = createApi({
         { type: 'ActivityLog', id: 'LIST' },
       ],
     }),
+
+    authLogin: build.mutation<AuthResponse, LoginInput>({
+      query: (body) => ({ url: '/auth/login', method: 'POST', body }),
+    }),
+    authRegister: build.mutation<AuthResponse, RegisterInput>({
+      query: (body) => ({ url: '/auth/register', method: 'POST', body }),
+    }),
+    authLogout: build.mutation<void, { refreshToken: string }>({
+      query: (body) => ({ url: '/auth/logout', method: 'POST', body }),
+    }),
+    getAuthSession: build.query<SessionResponse, void>({
+      query: () => ({ url: '/auth/session', method: 'GET' }),
+    }),
   }),
 });
 
@@ -1258,6 +1312,7 @@ export const {
   useSetMemberPermissionsMutation,
   useGetMeetingsQuery,
   useGetMeetingQuery,
+  useGetPublicMeetingQuery,
   useCreateMeetingMutation,
   useUpdateMeetingMutation,
   useGetGuestsQuery,
@@ -1327,4 +1382,9 @@ export const {
   useCreateInviteMutation,
   useRevokeInviteMutation,
   useConvertInviteToMemberMutation,
+  useAuthLoginMutation,
+  useAuthRegisterMutation,
+  useAuthLogoutMutation,
+  useGetAuthSessionQuery,
+  useLazyGetAuthSessionQuery,
 } = toastlyApi;

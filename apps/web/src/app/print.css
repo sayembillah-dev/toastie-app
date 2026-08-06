@@ -12,6 +12,14 @@
   }
 }
 
+/* Preserve the navy header, blue band, and rule colours when printed. Browsers
+ * strip backgrounds by default in print; this opts the agenda sheet in. */
+.agenda-page,
+.agenda-page * {
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+
 @media print {
   @page {
     size: A4 portrait;

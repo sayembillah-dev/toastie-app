@@ -7,7 +7,6 @@ import {
   SPEECH_SLOT_REQUEST_STATUS_LABELS,
   type SpeechSlotRequestStatus,
 } from '@/lib/education/speech-slot-requests';
-import { CURRENT_MEMBER_ID } from '@/lib/me/current-member';
 import { useGetMeetingsQuery, useGetSpeechSlotRequestsQuery } from '@/store/api';
 
 const STATUS_TAG_COLOR: Record<SpeechSlotRequestStatus, string> = {
@@ -22,14 +21,15 @@ function formatMeetingDate(iso: string): string {
 }
 
 interface SpeechSlotCardProps {
+  memberId: string;
   onNewRequest: () => void;
 }
 
 /** History of asks sent to the VPE for a speaking slot — the member-facing
  * half of agenda building. Approving/declining happens on the VPE's side,
  * which isn't part of this page. */
-export function SpeechSlotCard({ onNewRequest }: SpeechSlotCardProps) {
-  const { data: requests, isLoading } = useGetSpeechSlotRequestsQuery(CURRENT_MEMBER_ID);
+export function SpeechSlotCard({ memberId, onNewRequest }: SpeechSlotCardProps) {
+  const { data: requests, isLoading } = useGetSpeechSlotRequestsQuery(memberId);
   const { data: meetings } = useGetMeetingsQuery();
   const meetingById = new Map((meetings ?? []).map((meeting) => [meeting.id, meeting]));
 

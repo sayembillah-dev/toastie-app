@@ -13,7 +13,7 @@ import { useMemo, useState } from 'react';
 
 import { InventoryItemModal } from '@/components/inventory/inventory-item-modal';
 import type { InventoryItem } from '@/lib/inventory/inventory-items';
-import { usePermission } from '@/lib/permissions/use-permission';
+import { useCan } from '@/lib/permissions/use-can';
 import { useListInventoryItemsQuery } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -28,7 +28,8 @@ function matchesQuery(item: InventoryItem, needle: string): boolean {
  * owns. Each row has a title, an optional description and an optional image.
  * The list is small enough to fit in one endpoint and filter on the client. */
 export function InventoryTab() {
-  const { mutate: canMutate } = usePermission('inventory');
+  const { can } = useCan();
+  const canMutate = can('update', 'inventory');
   const [query, setQuery] = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);

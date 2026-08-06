@@ -16,7 +16,7 @@ import { InviteModal } from '@/components/club-admin/invite-modal';
 import { MemberFormModal } from '@/components/club-admin/member-form-modal';
 import type { Member } from '@/lib/education/members';
 import { formatRoles, getInitials } from '@/lib/education/members';
-import { usePermission } from '@/lib/permissions/use-permission';
+import { useCan } from '@/lib/permissions/use-can';
 import {
   useConvertInviteToMemberMutation,
   useGetInvitesQuery,
@@ -40,7 +40,8 @@ function matchesQuery(member: Member, needle: string): boolean {
  * changes all live here; per-module permission editing is its own tab. */
 export function MembersTab() {
   const { message } = App.useApp();
-  const { mutate: canMutate } = usePermission('clubAdmin');
+  const { can } = useCan();
+  const canMutate = can('update', 'memberRole');
   const {
     data: members,
     isLoading,

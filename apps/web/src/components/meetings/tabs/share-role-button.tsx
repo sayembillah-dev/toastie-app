@@ -5,6 +5,7 @@ import { App, Button, Input, Modal, QRCode, Tooltip } from 'antd';
 import { useMemo, useRef, useState } from 'react';
 
 import type { RoleKind } from '@/lib/meetings/role-state';
+import { useGetMeetingQuery } from '@/store/api';
 
 interface ShareRoleButtonProps {
   meetingId: string;
@@ -16,18 +17,26 @@ interface ShareRoleButtonProps {
 
 /** QR + copy-link button used from each role tab. Mirrors the evaluation QR
  * button on Prepared Speakers — same modal shape and canvas → PNG download so
- * the share affordance reads the same across the app. */
+ * the share affordance reads the same across the app.
+ *
+ * The link carries the meeting's `shareToken` — anonymous visitors hit
+ * `/public/meetings/:id?t=<token>` for the header data, and a bare id
+ * without the token is a 404. The token IS the capability. */
 export function ShareRoleButton({ meetingId, kind, roleLabel, ariaLabel }: ShareRoleButtonProps) {
   const { message } = App.useApp();
   const [open, setOpen] = useState(false);
   const qrWrapRef = useRef<HTMLDivElement>(null);
+  const { data: meeting } = useGetMeetingQuery(meetingId, { skip: !meetingId });
 
   const url = useMemo(() => {
     const origin = typeof window !== 'undefined' && window.location ? window.location.origin : '';
-    return `${origin}/meetings/${meetingId}/roles/${kind}`;
-  }, [meetingId, kind]);
+    if (!meeting) return '';
+    const token = encodeURIComponent(meeting.shareToken);
+    return `${origin}/meetings/${meetingId}/roles/${kind}?t=${token}`;
+  }, [meetingId, kind, meeting]);
 
   async function handleCopy() {
+    if (!url) return;
     try {
       await navigator.clipboard.writeText(url);
       message.success(`${roleLabel} link copied`);

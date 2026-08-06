@@ -30,6 +30,8 @@ export function getFiscalYearForDate(dateIso: string): string {
 
 export interface BudgetLine {
   id: string;
+  /** Tenant boundary — the club this budget line belongs to. */
+  clubId: string;
   fiscalYear: string;
   kind: 'income' | 'expense';
   category: TransactionCategory;
@@ -67,7 +69,7 @@ export function computeActuals(
   return actuals;
 }
 
-export const SEED_BUDGET_LINES: BudgetLine[] = [
+export const SEED_BUDGET_LINES: Omit<BudgetLine, 'clubId'>[] = [
   {
     id: 'bud-2026-27-dues',
     fiscalYear: '2026-27',

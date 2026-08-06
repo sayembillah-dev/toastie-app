@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AssetPreviewModal } from '@/components/library/asset-preview-modal';
 import { AssetUploadModal } from '@/components/library/asset-upload-modal';
 import type { Asset } from '@/lib/library/assets';
-import { usePermission } from '@/lib/permissions/use-permission';
+import { useCan } from '@/lib/permissions/use-can';
 import { useListAssetsQuery } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -32,7 +32,8 @@ interface AssetsTabProps {
  * fills the rest. Infinite scroll uses an IntersectionObserver on a sentinel
  * so the grid keeps fetching as long as the sentinel is on-screen. */
 export function AssetsTab({ className }: AssetsTabProps) {
-  const { mutate: canMutate } = usePermission('library');
+  const { can } = useCan();
+  const canMutate = can('update', 'library');
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [offset, setOffset] = useState(0);

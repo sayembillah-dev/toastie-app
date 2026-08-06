@@ -236,6 +236,7 @@ function FeedbackBadge({ meetingId, speakerId }: { meetingId: string; speakerId:
 interface SpeakerCardProps {
   index: number;
   meetingId: string;
+  shareToken: string;
   speaker: DraftSpeaker;
   memberOptions: MemberOption[];
   membersLoading: boolean;
@@ -248,6 +249,7 @@ interface SpeakerCardProps {
 function SpeakerCard({
   index,
   meetingId,
+  shareToken,
   speaker,
   memberOptions,
   membersLoading,
@@ -289,8 +291,10 @@ function SpeakerCard({
   const [qrOpen, setQrOpen] = useState(false);
   const evaluationUrl = useMemo(() => {
     const origin = typeof window !== 'undefined' && window.location ? window.location.origin : '';
-    return `${origin}/meetings/${meetingId}/evaluate/${speaker.id}`;
-  }, [meetingId, speaker.id]);
+    if (!shareToken) return '';
+    const token = encodeURIComponent(shareToken);
+    return `${origin}/meetings/${meetingId}/evaluate/${speaker.id}?t=${token}`;
+  }, [meetingId, speaker.id, shareToken]);
 
   return (
     <article className="overflow-hidden rounded-xl border border-line bg-sidebar">
@@ -590,6 +594,7 @@ export function PreparedSpeakersTab({ meeting }: PreparedSpeakersTabProps) {
                 key={speaker.id}
                 index={index + 1}
                 meetingId={meeting.id}
+                shareToken={meeting.shareToken}
                 speaker={speaker}
                 memberOptions={memberOptions}
                 membersLoading={membersLoading}

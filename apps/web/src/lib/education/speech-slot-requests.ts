@@ -16,6 +16,8 @@ export const SPEECH_SLOT_REQUEST_NOTE_MAX = 240;
 
 export interface SpeechSlotRequest {
   id: string;
+  /** Tenant boundary — copied from the requesting member's club. */
+  clubId: string;
   memberId: string;
   meetingId: string;
   projectName?: string;
@@ -32,7 +34,7 @@ export interface CreateSpeechSlotRequestInput {
   note?: string;
 }
 
-export const SEED_SPEECH_SLOT_REQUESTS: SpeechSlotRequest[] = [
+export const SEED_SPEECH_SLOT_REQUESTS: Omit<SpeechSlotRequest, 'clubId'>[] = [
   {
     id: 'ssr-m-01-1',
     memberId: 'm-01',

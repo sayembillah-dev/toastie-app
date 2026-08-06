@@ -6,6 +6,8 @@ export const TASK_TITLE_MAX = 120;
 
 export interface Task {
   id: string;
+  /** Tenant boundary — copied from the assigned member's club. */
+  clubId: string;
   memberId: string;
   title: string;
   /** Free-text "who asked" — a role and a name, e.g. "SAA · Yara Ibrahim". */
@@ -21,7 +23,7 @@ export interface UpdateTaskInput {
   done: boolean;
 }
 
-export const SEED_TASKS: Task[] = [
+export const SEED_TASKS: Omit<Task, 'clubId'>[] = [
   {
     id: 'task-m-01-1',
     memberId: 'm-01',

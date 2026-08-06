@@ -24,7 +24,7 @@ import {
   sortTransactionsNewestFirst,
   sumTransactions,
 } from '@/lib/finance/transactions';
-import { usePermission } from '@/lib/permissions/use-permission';
+import { useCan } from '@/lib/permissions/use-can';
 import { useListTransactionsQuery } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -52,7 +52,8 @@ const CATEGORY_OPTIONS = [
  * first, with a running balance column. */
 export function TransactionsTab() {
   const { data: transactions, isLoading, isError, error, refetch } = useListTransactionsQuery();
-  const { mutate: canMutate } = usePermission('finance');
+  const { can } = useCan();
+  const canMutate = can('update', 'transaction');
 
   const [query, setQuery] = useState('');
   const [direction, setDirection] = useState<DirectionFilter>('all');

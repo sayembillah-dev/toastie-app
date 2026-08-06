@@ -65,6 +65,8 @@ export interface GuestSocial {
 
 export interface Guest {
   id: string;
+  /** Tenant boundary — the club this guest is in the pipeline for. */
+  clubId: string;
   firstName: string;
   lastName: string;
   email?: string;
@@ -130,7 +132,7 @@ export function groupGuestsByStage(guests: readonly Guest[]): Record<GuestStage,
   return grouped;
 }
 
-export const SEED_GUESTS: Guest[] = [
+export const SEED_GUESTS: Omit<Guest, 'clubId'>[] = [
   {
     id: 'g-01',
     firstName: 'Elena',

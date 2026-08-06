@@ -1,13 +1,13 @@
 'use client';
 
 import { WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import { skipToken } from '@reduxjs/toolkit/query/react';
 import { useState } from 'react';
 
-import { AppShell } from '@/components/app-shell';
 import { computeEngagement } from '@/lib/education/engagement';
 import type { HistoryEvent } from '@/lib/education/history';
 import { getNextProject } from '@/lib/education/pathways';
-import { CURRENT_MEMBER_ID } from '@/lib/me/current-member';
+import { useCurrentMemberId } from '@/lib/me/current-member';
 import {
   useGetMeetingsQuery,
   useGetMemberAhCounterEntriesQuery,
@@ -62,17 +62,17 @@ function isSpeechGiven(
   return event.type === 'speech-given';
 }
 
-function MeContent() {
+function MeContent({ memberId }: { memberId: string }) {
   const [requestModalOpen, setRequestModalOpen] = useState(false);
 
-  const { data: member } = useGetMemberQuery(CURRENT_MEMBER_ID);
-  const { data: stats } = useGetMemberStatsQuery(CURRENT_MEMBER_ID);
-  const { data: history } = useGetMemberHistoryQuery(CURRENT_MEMBER_ID);
+  const { data: member } = useGetMemberQuery(memberId);
+  const { data: stats } = useGetMemberStatsQuery(memberId);
+  const { data: history } = useGetMemberHistoryQuery(memberId);
   const { data: meetings } = useGetMeetingsQuery();
   const { data: members } = useGetMembersQuery();
-  const { data: evaluations } = useGetMemberEvaluationsQuery(CURRENT_MEMBER_ID);
-  const { data: timerEntries } = useGetMemberTimerEntriesQuery(CURRENT_MEMBER_ID);
-  const { data: ahCounterEntries } = useGetMemberAhCounterEntriesQuery(CURRENT_MEMBER_ID);
+  const { data: evaluations } = useGetMemberEvaluationsQuery(memberId);
+  const { data: timerEntries } = useGetMemberTimerEntriesQuery(memberId);
+  const { data: ahCounterEntries } = useGetMemberAhCounterEntriesQuery(memberId);
 
   if (!member || !stats || !history || !meetings) return <MeSkeleton />;
 
@@ -115,18 +115,19 @@ function MeContent() {
             ahCounterEntries={ahCounterEntries ?? []}
             membersById={membersById}
           />
-          <PublicFeedbackFeed memberId={CURRENT_MEMBER_ID} />
+          <PublicFeedbackFeed memberId={memberId} />
         </div>
 
         <div className="flex flex-col gap-4">
           <ClubStandingCard stats={stats} engagement={engagement} />
-          <SpeechSlotCard onNewRequest={() => setRequestModalOpen(true)} />
-          <TasksCard />
-          <FinanceCard />
+          <SpeechSlotCard memberId={memberId} onNewRequest={() => setRequestModalOpen(true)} />
+          <TasksCard memberId={memberId} />
+          <FinanceCard memberId={memberId} />
         </div>
       </div>
 
       <RequestSpeechSlotModal
+        memberId={memberId}
         open={requestModalOpen}
         onClose={() => setRequestModalOpen(false)}
         defaultProjectName={nextProjectName}
@@ -135,33 +136,35 @@ function MeContent() {
   );
 }
 
-/** Top-level screen for the Me page. There is no sign-in flow yet, so this
- * always renders `CURRENT_MEMBER_ID`'s data — every child reads that same
- * constant rather than taking a memberId prop, so swapping in a real session
- * later is a one-file change. */
+/** Top-level screen for the Me page. Reads the acting membership from the
+ * session slice — a user with no club-context sees an empty state; a user
+ * in a club sees that club's membership data. */
 export function MeScreen() {
-  const { isError, error } = useGetMemberQuery(CURRENT_MEMBER_ID);
+  const memberId = useCurrentMemberId();
+  const { isError, error } = useGetMemberQuery(memberId ?? skipToken);
 
-  if (isError) {
+  if (!memberId) {
     return (
-      <AppShell>
-        <div className="mx-auto max-w-md rounded-xl border border-dashed border-line-strong px-6 py-16 text-center">
-          <span
-            aria-hidden
-            className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-fill text-ink-soft"
-          >
-            <WarningCircle size={18} weight="bold" />
-          </span>
-          <p className="text-sm font-medium text-ink">Could not load your profile</p>
-          <p className="mt-1 text-xs text-ink-muted">{getApiErrorMessage(error)}</p>
-        </div>
-      </AppShell>
+      <div className="mx-auto max-w-md rounded-xl border border-dashed border-line-strong px-6 py-16 text-center">
+        <p className="text-sm text-ink">Switch to a club context to view your profile.</p>
+      </div>
     );
   }
 
-  return (
-    <AppShell>
-      <MeContent />
-    </AppShell>
-  );
+  if (isError) {
+    return (
+      <div className="mx-auto max-w-md rounded-xl border border-dashed border-line-strong px-6 py-16 text-center">
+        <span
+          aria-hidden
+          className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-fill text-ink-soft"
+        >
+          <WarningCircle size={18} weight="bold" />
+        </span>
+        <p className="text-sm font-medium text-ink">Could not load your profile</p>
+        <p className="mt-1 text-xs text-ink-muted">{getApiErrorMessage(error)}</p>
+      </div>
+    );
+  }
+
+  return <MeContent memberId={memberId} />;
 }

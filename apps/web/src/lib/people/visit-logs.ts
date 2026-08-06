@@ -13,6 +13,8 @@ export function isVisitLogOrigin(value: unknown): value is VisitLogOrigin {
 
 export interface VisitLog {
   id: string;
+  /** Tenant boundary — copied from the owning guest's club at creation. */
+  clubId: string;
   guestId: string;
   /** The meeting the guest attended. Deleting the meeting doesn't cascade — the
    * drawer falls back to a "meeting no longer on file" line so historical
@@ -71,7 +73,7 @@ export const COMMON_VISIT_ROLES: readonly string[] = [
  * entries in `SEED_MEETINGS` so the drawer can render real dates and themes on
  * first load. All origins are 'meeting' — these stand in for the automatic
  * agenda-driven writes that will land once meeting agendas track named guests. */
-export const SEED_VISIT_LOGS: VisitLog[] = [
+export const SEED_VISIT_LOGS: Omit<VisitLog, 'clubId'>[] = [
   // Elena Vasquez — 2 visits, warming toward Presentation Mastery.
   {
     id: 'g-01-visit-a',

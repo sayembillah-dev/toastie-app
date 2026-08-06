@@ -28,6 +28,8 @@ export const ASSETS_PAGE_SIZE = 12;
 
 export interface Asset {
   id: string;
+  /** Tenant boundary — the club this asset belongs to. */
+  clubId: string;
   title: string;
   /** Data-URL (`data:image/...;base64,...`). The local-db backend keeps the
    * bytes inline; when the real backend arrives this flips to an https URL. */
@@ -87,7 +89,7 @@ export function sortAssetsNewestFirst(assets: readonly Asset[]): Asset[] {
 const SEED_PIXEL_PNG =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
-export const SEED_ASSETS: Asset[] = [
+export const SEED_ASSETS: Omit<Asset, 'clubId'>[] = [
   {
     id: 'a-01',
     title: 'Spring open house flyer',

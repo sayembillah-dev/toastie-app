@@ -1,6 +1,6 @@
 'use client';
 
-import { AppShell } from '@/components/app-shell';
+import { PageBreadcrumb } from '@/components/page-breadcrumb';
 import { CURRENT_AREA_ID } from '@/lib/org/current-scope';
 import { useListAreasQuery } from '@/store/api';
 
@@ -18,7 +18,8 @@ export function AreaScreen() {
   const moveOptions = siblingAreas.map((entry) => ({ value: entry.id, label: entry.name }));
 
   return (
-    <AppShell breadcrumbTrail={[{ href: '/area', title: area?.name ?? 'Area' }]}>
+    <>
+      <PageBreadcrumb trail={[{ href: '/area', title: area?.name ?? 'Area' }]} />
       <ClubsList
         title={area ? `${area.name} — Clubs` : 'Clubs'}
         subtitle="Create, rename or move a club to a different area."
@@ -26,6 +27,6 @@ export function AreaScreen() {
         canDelete={false}
         moveOptions={moveOptions}
       />
-    </AppShell>
+    </>
   );
 }

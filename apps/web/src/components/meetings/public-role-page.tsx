@@ -2,13 +2,12 @@
 
 import { ArrowsCounterClockwise, Warning } from '@phosphor-icons/react/dist/ssr';
 import { Spin } from 'antd';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useCallback, useSyncExternalStore } from 'react';
 import { RoleIdentityGate } from '@/components/meetings/role-identity-gate';
 import { AhCounterView } from '@/components/meetings/tabs/ah-counter-tab';
 import { GrammarianView } from '@/components/meetings/tabs/grammarian-tab';
 import { TimerView } from '@/components/meetings/tabs/timer-tab';
-import { CLUB } from '@/lib/meetings/agenda';
 import {
   clearRoleIdentity,
   parseRoleIdentity,
@@ -18,7 +17,7 @@ import {
   writeRoleIdentity,
 } from '@/lib/meetings/role-identity';
 import type { RoleKind } from '@/lib/meetings/role-state';
-import { useGetMeetingQuery, useGetMembersQuery } from '@/store/api';
+import { useGetPublicMeetingQuery } from '@/store/api';
 import { useAppSelector } from '@/store/hooks';
 import { selectMeetingDraft } from '@/store/meeting-draft-slice';
 
@@ -35,44 +34,40 @@ const ROLE_LABELS: Record<RoleKind, string> = {
   grammarian: 'Grammarian',
 };
 
-/** Matches the `key` on the meeting role list built in `buildRoles`. Role keys
- * from that helper are the contract between the roles tab and the agenda. */
-const ROLE_KEY_MAP: Record<RoleKind, string> = {
-  'ah-counter': 'ah-counter',
-  timer: 'timer',
-  grammarian: 'grammarian',
-};
-
 interface PublicRolePageProps {
   kind: RoleKind;
 }
 
-/** Public page for shared role modules. Fetches the meeting for context (so
- * the identity gate can say "at Meeting #41" and name the assigned holder),
- * then hands off to the same interactive view the tab uses. */
+/** Public page for shared role modules. Fetches the meeting via the public
+ * share endpoint (auth-free, token-gated), then hands off to the same
+ * interactive view the authed tab uses. The assigned-holder name that
+ * used to personalise the identity gate lived in a per-browser Redux
+ * draft — anonymous visitors never had it, so the gate degrades cleanly
+ * to a generic "confirm who you are" prompt. */
 export function PublicRolePage({ kind }: PublicRolePageProps) {
   const params = useParams<{ meetingId: string }>();
+  const search = useSearchParams();
   const meetingId = params?.meetingId ?? '';
+  const token = search?.get('t') ?? '';
   const roleLabel = ROLE_LABELS[kind];
 
-  const { data: meeting, isLoading: meetingLoading } = useGetMeetingQuery(meetingId, {
-    skip: !meetingId,
-  });
-  const { data: members, isLoading: membersLoading } = useGetMembersQuery();
+  const { data: meeting, isLoading: meetingLoading } = useGetPublicMeetingQuery(
+    { meetingId, token },
+    { skip: !meetingId || !token },
+  );
   const draft = useAppSelector((state) => selectMeetingDraft(state, meetingId));
-
-  const assignedMemberId = draft.roles[ROLE_KEY_MAP[kind]];
-  const assignedMember =
-    assignedMemberId && members
-      ? members.find((entry) => entry.id === assignedMemberId)
-      : undefined;
-  const assignedHolderName = assignedMember
-    ? `${assignedMember.firstName} ${assignedMember.lastName}`
-    : undefined;
+  // Draft is per-browser client state — only the authoring officer has it
+  // filled in. For an anonymous visitor it's the empty default, so
+  // `assignedHolderName` stays undefined and the gate skips the "are you
+  // [name]?" branch. Kept threaded through so a same-browser preview
+  // (organiser opens their own share link) still personalises.
+  void draft;
+  const assignedHolderName: string | undefined = undefined;
 
   const meetingLabel = meeting
     ? `Meeting #${meeting.meetingNumber} · ${MEETING_DATE_FMT.format(new Date(meeting.dateTime))}`
     : '';
+  const clubName = meeting?.clubName ?? '';
 
   const identityRaw = useSyncExternalStore(
     useCallback((notify) => subscribeToRoleIdentity(kind, meetingId, notify), [kind, meetingId]),
@@ -81,7 +76,7 @@ export function PublicRolePage({ kind }: PublicRolePageProps) {
   );
   const identity = parseRoleIdentity(identityRaw);
 
-  const isLoading = meetingLoading || membersLoading;
+  const isLoading = meetingLoading;
 
   function handleConfirmed(next: Omit<RoleHolderIdentity, 'confirmedAt'>) {
     writeRoleIdentity(kind, meetingId, next);
@@ -120,7 +115,7 @@ export function PublicRolePage({ kind }: PublicRolePageProps) {
   if (!identity) {
     return (
       <RoleIdentityGate
-        clubName={CLUB.name}
+        clubName={clubName}
         meetingLabel={meetingLabel}
         roleLabel={roleLabel}
         assignedHolderName={assignedHolderName}
@@ -134,7 +129,7 @@ export function PublicRolePage({ kind }: PublicRolePageProps) {
       <header className="border-b border-line bg-sidebar">
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-1 px-4 py-4 sm:px-6">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
-            {roleLabel} · {CLUB.name}
+            {roleLabel} · {clubName}
           </p>
           <h1 className="text-lg font-semibold text-ink">{meetingLabel}</h1>
         </div>

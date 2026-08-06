@@ -2,6 +2,7 @@
 
 import { DownloadSimple } from '@phosphor-icons/react/dist/ssr';
 import { Button } from 'antd';
+import Image from 'next/image';
 import { Fragment, useMemo } from 'react';
 
 import type { AgendaRow } from '@/lib/meetings/agenda';
@@ -12,6 +13,7 @@ import { buildRoles } from '@/lib/meetings/roles';
 import { useAppSelector } from '@/store/hooks';
 import { selectMeetingDraft } from '@/store/meeting-draft-slice';
 
+import tmLogo from '../../../assets/tm.png';
 import { useNameOf } from './use-name-of';
 
 /* The printed agenda is its own visual language — navy Toastmasters branding on
@@ -99,9 +101,7 @@ function SheetHeader({ meeting, theme }: { meeting: Meeting; theme: string }) {
         }}
       >
         <HeaderRays />
-        {/* Stands in for the club crest until a logo asset is uploaded. */}
         <div
-          aria-hidden
           style={{
             position: 'relative',
             zIndex: 1,
@@ -111,25 +111,18 @@ function SheetHeader({ meeting, theme }: { meeting: Meeting; theme: string }) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            paddingLeft: 12,
           }}
         >
-          <span
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: '50%',
-              border: '2px solid white',
-              color: 'white',
-              fontSize: 13,
-              fontWeight: 'bold',
-              letterSpacing: 0.5,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            TM
-          </span>
+          <Image
+            src={tmLogo}
+            alt="Toastmasters logo"
+            width={52}
+            height={52}
+            priority
+            unoptimized
+            style={{ width: 52, height: 52, objectFit: 'contain' }}
+          />
         </div>
         <div
           style={{

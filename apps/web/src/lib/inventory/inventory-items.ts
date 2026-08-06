@@ -24,6 +24,8 @@ export function isInventoryImageMimeType(value: unknown): value is InventoryImag
 
 export interface InventoryItem {
   id: string;
+  /** Tenant boundary — the club this item belongs to. */
+  clubId: string;
   title: string;
   description?: string;
   /** Data-URL (`data:image/...;base64,...`) when the user attached a photo.
@@ -56,7 +58,7 @@ export function sortInventoryItemsNewestFirst(items: readonly InventoryItem[]): 
 
 /** A handful of seeded items so a fresh browser lands with something to look at
  * rather than an empty state. */
-export const SEED_INVENTORY_ITEMS: InventoryItem[] = [
+export const SEED_INVENTORY_ITEMS: Omit<InventoryItem, 'clubId'>[] = [
   {
     id: 'inv-01',
     title: 'Club banner',

@@ -3,7 +3,6 @@
 import { CheckCircle, Circle, ClipboardText } from '@phosphor-icons/react/dist/ssr';
 import { App, Progress, Skeleton } from 'antd';
 
-import { CURRENT_MEMBER_ID } from '@/lib/me/current-member';
 import { useGetTasksQuery, useUpdateTaskMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -14,14 +13,14 @@ function formatDueDate(iso: string): string {
 
 /** Committee/officer action items assigned by name — the "what does the club
  * expect of me this week" list, separate from meeting-scoped SAA checklists. */
-export function TasksCard() {
+export function TasksCard({ memberId }: { memberId: string }) {
   const { message } = App.useApp();
-  const { data: tasks, isLoading } = useGetTasksQuery(CURRENT_MEMBER_ID);
+  const { data: tasks, isLoading } = useGetTasksQuery(memberId);
   const [updateTask] = useUpdateTaskMutation();
 
   async function handleToggle(taskId: string, done: boolean) {
     try {
-      await updateTask({ taskId, memberId: CURRENT_MEMBER_ID, done }).unwrap();
+      await updateTask({ taskId, memberId, done }).unwrap();
     } catch (err) {
       message.error(getApiErrorMessage(err, 'Could not update this task'));
     }

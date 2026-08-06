@@ -35,6 +35,8 @@ export const CONTACT_LOG_OUTCOME_MAX = 2000;
 
 export interface ContactLog {
   id: string;
+  /** Tenant boundary — copied from the owning guest's club at creation. */
+  clubId: string;
   guestId: string;
   method: ContactMethod;
   /** "What happened next?" — freeform prose recorded by the officer. */
@@ -64,7 +66,7 @@ export function sortContactLogsNewestFirst(logs: readonly ContactLog[]): Contact
   return [...logs].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
-export const SEED_CONTACT_LOGS: ContactLog[] = [
+export const SEED_CONTACT_LOGS: Omit<ContactLog, 'clubId'>[] = [
   {
     id: 'g-01-log-a',
     guestId: 'g-01',

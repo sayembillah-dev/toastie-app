@@ -93,6 +93,8 @@ export const METHOD_LABELS: Record<PaymentMethod, string> = {
 
 export interface Transaction {
   id: string;
+  /** Tenant boundary — the club this transaction belongs to. */
+  clubId: string;
   /** ISO date (yyyy-mm-dd) the money actually moved. */
   date: string;
   direction: TxDirection;
@@ -178,7 +180,7 @@ export function sumTransactions(txs: readonly Transaction[], direction?: TxDirec
  * when first setting up the ledger. */
 export const OPENING_BALANCE_MINOR = 4_250_000; // ৳42,500.00
 
-export const SEED_TRANSACTIONS: Transaction[] = [
+export const SEED_TRANSACTIONS: Omit<Transaction, 'clubId'>[] = [
   {
     id: 'tx-01',
     date: '2026-02-03',

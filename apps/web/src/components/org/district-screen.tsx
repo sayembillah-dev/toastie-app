@@ -3,7 +3,7 @@
 import { skipToken } from '@reduxjs/toolkit/query';
 import { useParams } from 'next/navigation';
 
-import { AppShell } from '@/components/app-shell';
+import { PageBreadcrumb } from '@/components/page-breadcrumb';
 import { CURRENT_DISTRICT_ID } from '@/lib/org/current-scope';
 import { areaMoveOptions } from '@/lib/org/move-options';
 import { useListAreasQuery, useListDistrictsQuery, useListDivisionsQuery } from '@/store/api';
@@ -20,7 +20,8 @@ export function DistrictDivisionsScreen() {
   const district = districts?.find((entry) => entry.id === CURRENT_DISTRICT_ID);
 
   return (
-    <AppShell breadcrumbTrail={[{ href: '/district', title: district?.name ?? 'District' }]}>
+    <>
+      <PageBreadcrumb trail={[{ href: '/district', title: district?.name ?? 'District' }]} />
       <DivisionsList
         title={district ? `${district.name} — Divisions` : 'Divisions'}
         subtitle="Create, rename or drill into a division to see its areas."
@@ -30,7 +31,7 @@ export function DistrictDivisionsScreen() {
         canMove={false}
         moveOptions={[]}
       />
-    </AppShell>
+    </>
   );
 }
 
@@ -47,12 +48,13 @@ export function DistrictAreasScreen() {
   const division = divisions?.find((entry) => entry.id === divisionId);
 
   return (
-    <AppShell
-      breadcrumbTrail={[
-        { href: '/district', title: district?.name ?? 'District' },
-        { href: `/district/${divisionId}`, title: division?.name ?? 'Division' },
-      ]}
-    >
+    <>
+      <PageBreadcrumb
+        trail={[
+          { href: '/district', title: district?.name ?? 'District' },
+          { href: `/district/${divisionId}`, title: division?.name ?? 'Division' },
+        ]}
+      />
       <AreasList
         title={division ? `${division.name} — Areas` : 'Areas'}
         subtitle="Create, rename or drill into an area to see its clubs."
@@ -62,7 +64,7 @@ export function DistrictAreasScreen() {
         canMove={false}
         moveOptions={[]}
       />
-    </AppShell>
+    </>
   );
 }
 
@@ -89,13 +91,14 @@ export function DistrictClubsScreen() {
   const moveOptions = areaMoveOptions(districtAreas, divisions ?? []);
 
   return (
-    <AppShell
-      breadcrumbTrail={[
-        { href: '/district', title: district?.name ?? 'District' },
-        { href: `/district/${divisionId}`, title: division?.name ?? 'Division' },
-        { href: `/district/${divisionId}/${areaId}`, title: area?.name ?? 'Area' },
-      ]}
-    >
+    <>
+      <PageBreadcrumb
+        trail={[
+          { href: '/district', title: district?.name ?? 'District' },
+          { href: `/district/${divisionId}`, title: division?.name ?? 'Division' },
+          { href: `/district/${divisionId}/${areaId}`, title: area?.name ?? 'Area' },
+        ]}
+      />
       <ClubsList
         title={area ? `${area.name} — Clubs` : 'Clubs'}
         subtitle="Create, rename or move a club to a different area in the district."
@@ -103,6 +106,6 @@ export function DistrictClubsScreen() {
         canDelete={false}
         moveOptions={moveOptions}
       />
-    </AppShell>
+    </>
   );
 }

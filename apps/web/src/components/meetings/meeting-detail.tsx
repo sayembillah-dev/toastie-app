@@ -14,8 +14,6 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 import { Tabs } from 'antd';
 import { notFound, useParams } from 'next/navigation';
-
-import { AppShell } from '@/components/app-shell';
 import { MeetingActions } from '@/components/meetings/meeting-actions';
 import { AhCounterTab } from '@/components/meetings/tabs/ah-counter-tab';
 import { AttendanceTab } from '@/components/meetings/tabs/attendance-tab';
@@ -27,7 +25,8 @@ import { RolesTab } from '@/components/meetings/tabs/roles-tab';
 import { TableTopicsTab } from '@/components/meetings/tabs/table-topics-tab';
 import { ThemeTab } from '@/components/meetings/tabs/theme-tab';
 import { TimerTab } from '@/components/meetings/tabs/timer-tab';
-import { ModuleAccessGate } from '@/components/permissions/module-access-gate';
+import { PageBreadcrumb } from '@/components/page-breadcrumb';
+import { AccessGate } from '@/components/permissions/access-gate';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { useGetMeetingQuery } from '@/store/api';
 import { getApiErrorMessage, isNotFoundError } from '@/store/api-error';
@@ -163,15 +162,17 @@ export function MeetingDetailScreen() {
 
   if (isLoading || (!meeting && !error)) {
     return (
-      <AppShell breadcrumbLabel="Meeting">
+      <>
+        <PageBreadcrumb label="Meeting" />
         <DetailSkeleton />
-      </AppShell>
+      </>
     );
   }
 
   if (!meeting) {
     return (
-      <AppShell breadcrumbLabel="Meeting">
+      <>
+        <PageBreadcrumb label="Meeting" />
         <div
           role="alert"
           className="mx-auto max-w-6xl rounded-xl border border-dashed border-line-strong px-6 py-16 text-center"
@@ -181,15 +182,16 @@ export function MeetingDetailScreen() {
             {getApiErrorMessage(error, 'Please try again in a moment.')}
           </p>
         </div>
-      </AppShell>
+      </>
     );
   }
 
   return (
-    <AppShell breadcrumbLabel={`Meeting #${meeting.meetingNumber}`}>
-      <ModuleAccessGate module="meetings">
+    <>
+      <PageBreadcrumb label={`Meeting #${meeting.meetingNumber}`} />
+      <AccessGate resource="meeting">
         <DetailContent meeting={meeting} />
-      </ModuleAccessGate>
-    </AppShell>
+      </AccessGate>
+    </>
   );
 }

@@ -21,6 +21,8 @@ export type ActivityCategory = (typeof ACTIVITY_CATEGORIES)[number];
 
 export interface ActivityLog {
   id: string;
+  /** Tenant boundary — the club this event happened in. */
+  clubId: string;
   /** The member who performed the action. */
   actorMemberId: string;
   category: ActivityCategory;
@@ -54,9 +56,9 @@ export function matchesActivityLogQuery(log: ActivityLog, needle: string): boole
 /** Realistic spread of activity across every category and a handful of
  * different members, dated across the last couple of months — enough
  * variety to exercise every filter without turning this into a novel. Real
- * usage populates this table through `recordActivity()` in the local-db
- * handlers; this seed just gives a returning user something to look at. */
-export const SEED_ACTIVITY_LOGS: ActivityLog[] = [
+ * usage populates this table through `ActivityService.record()` in the
+ * API; this seed just gives a returning user something to look at. */
+export const SEED_ACTIVITY_LOGS: Omit<ActivityLog, 'clubId'>[] = [
   {
     id: 'act-001',
     actorMemberId: 'm-06',

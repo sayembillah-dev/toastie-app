@@ -3,7 +3,7 @@
 import { skipToken } from '@reduxjs/toolkit/query';
 import { useParams } from 'next/navigation';
 
-import { AppShell } from '@/components/app-shell';
+import { PageBreadcrumb } from '@/components/page-breadcrumb';
 import { areaMoveOptions, divisionMoveOptions } from '@/lib/org/move-options';
 import { useListAreasQuery, useListDistrictsQuery, useListDivisionsQuery } from '@/store/api';
 
@@ -17,13 +17,14 @@ import { DivisionsList } from './divisions-list';
  * only manages its own branch. */
 export function SuperAdminDistrictsScreen() {
   return (
-    <AppShell breadcrumbTrail={[{ href: '/super-admin', title: 'Super Admin' }]}>
+    <>
+      <PageBreadcrumb trail={[{ href: '/super-admin', title: 'Super Admin' }]} />
       <DistrictsList
         title="Districts"
         subtitle="The whole org tree. Drill into a district to manage its divisions."
         hrefFor={(district) => `/super-admin/${district.id}`}
       />
-    </AppShell>
+    </>
   );
 }
 
@@ -38,12 +39,13 @@ export function SuperAdminDivisionsScreen() {
   const moveOptions = (districts ?? []).map((entry) => ({ value: entry.id, label: entry.name }));
 
   return (
-    <AppShell
-      breadcrumbTrail={[
-        { href: '/super-admin', title: 'Super Admin' },
-        { href: `/super-admin/${districtId}`, title: district?.name ?? 'District' },
-      ]}
-    >
+    <>
+      <PageBreadcrumb
+        trail={[
+          { href: '/super-admin', title: 'Super Admin' },
+          { href: `/super-admin/${districtId}`, title: district?.name ?? 'District' },
+        ]}
+      />
       <DivisionsList
         title={district ? `${district.name} — Divisions` : 'Divisions'}
         subtitle="Create, rename, move or delete a division."
@@ -53,7 +55,7 @@ export function SuperAdminDivisionsScreen() {
         canMove
         moveOptions={moveOptions}
       />
-    </AppShell>
+    </>
   );
 }
 
@@ -71,13 +73,14 @@ export function SuperAdminAreasScreen() {
   const moveOptions = divisionMoveOptions(allDivisions ?? [], districts ?? []);
 
   return (
-    <AppShell
-      breadcrumbTrail={[
-        { href: '/super-admin', title: 'Super Admin' },
-        { href: `/super-admin/${districtId}`, title: district?.name ?? 'District' },
-        { href: `/super-admin/${districtId}/${divisionId}`, title: division?.name ?? 'Division' },
-      ]}
-    >
+    <>
+      <PageBreadcrumb
+        trail={[
+          { href: '/super-admin', title: 'Super Admin' },
+          { href: `/super-admin/${districtId}`, title: district?.name ?? 'District' },
+          { href: `/super-admin/${districtId}/${divisionId}`, title: division?.name ?? 'Division' },
+        ]}
+      />
       <AreasList
         title={division ? `${division.name} — Areas` : 'Areas'}
         subtitle="Create, rename, move or delete an area."
@@ -87,7 +90,7 @@ export function SuperAdminAreasScreen() {
         canMove
         moveOptions={moveOptions}
       />
-    </AppShell>
+    </>
   );
 }
 
@@ -109,17 +112,18 @@ export function SuperAdminClubsScreen() {
   const moveOptions = areaMoveOptions(allAreas ?? [], allDivisions ?? []);
 
   return (
-    <AppShell
-      breadcrumbTrail={[
-        { href: '/super-admin', title: 'Super Admin' },
-        { href: `/super-admin/${districtId}`, title: district?.name ?? 'District' },
-        { href: `/super-admin/${districtId}/${divisionId}`, title: division?.name ?? 'Division' },
-        {
-          href: `/super-admin/${districtId}/${divisionId}/${areaId}`,
-          title: area?.name ?? 'Area',
-        },
-      ]}
-    >
+    <>
+      <PageBreadcrumb
+        trail={[
+          { href: '/super-admin', title: 'Super Admin' },
+          { href: `/super-admin/${districtId}`, title: district?.name ?? 'District' },
+          { href: `/super-admin/${districtId}/${divisionId}`, title: division?.name ?? 'Division' },
+          {
+            href: `/super-admin/${districtId}/${divisionId}/${areaId}`,
+            title: area?.name ?? 'Area',
+          },
+        ]}
+      />
       <ClubsList
         title={area ? `${area.name} — Clubs` : 'Clubs'}
         subtitle="Create, rename, move or delete a club."
@@ -127,6 +131,6 @@ export function SuperAdminClubsScreen() {
         canDelete
         moveOptions={moveOptions}
       />
-    </AppShell>
+    </>
   );
 }

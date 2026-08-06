@@ -68,6 +68,8 @@ export type DuesStatus = 'paid' | 'partial' | 'unpaid' | 'waived';
  * rather than stored, so it can never drift out of sync with a payment. */
 export interface DuesRecord {
   id: string;
+  /** Tenant boundary — the club this dues record belongs to. */
+  clubId: string;
   periodId: string;
   memberId: string;
   amountDueMinor: number;
@@ -141,7 +143,7 @@ export function summariseDues(records: readonly DuesRecord[]): DuesSummary {
  * materialises its rows on first request from the live member roster (see
  * `listDuesRecords` in `local-db/handlers.ts`), so this list doesn't need to
  * anticipate every member for every period. */
-export const SEED_DUES_RECORDS: DuesRecord[] = [
+export const SEED_DUES_RECORDS: Omit<DuesRecord, 'clubId'>[] = [
   {
     id: 'dues-2026-apr-m-01',
     periodId: '2026-apr',

@@ -14,8 +14,8 @@ import { Button } from 'antd';
 import Link from 'next/link';
 import { notFound, useParams } from 'next/navigation';
 
-import { AppShell } from '@/components/app-shell';
-import { ModuleAccessGate } from '@/components/permissions/module-access-gate';
+import { PageBreadcrumb } from '@/components/page-breadcrumb';
+import { AccessGate } from '@/components/permissions/access-gate';
 import { computeEngagement } from '@/lib/education/engagement';
 import type { Member } from '@/lib/education/members';
 import { formatRoles, getInitials } from '@/lib/education/members';
@@ -271,34 +271,29 @@ export function MemberEngagementScreen() {
     if (isNotFoundError(error)) notFound();
 
     return (
-      <AppShell>
-        <div className="mx-auto max-w-md rounded-xl border border-dashed border-line-strong px-6 py-16 text-center">
-          <span
-            aria-hidden
-            className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-fill text-ink-soft"
-          >
-            <WarningCircle size={18} weight="bold" />
-          </span>
-          <p className="text-sm font-medium text-ink">Could not load this member</p>
-          <p className="mt-1 text-xs text-ink-muted">{getApiErrorMessage(error)}</p>
-        </div>
-      </AppShell>
+      <div className="mx-auto max-w-md rounded-xl border border-dashed border-line-strong px-6 py-16 text-center">
+        <span
+          aria-hidden
+          className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-fill text-ink-soft"
+        >
+          <WarningCircle size={18} weight="bold" />
+        </span>
+        <p className="text-sm font-medium text-ink">Could not load this member</p>
+        <p className="mt-1 text-xs text-ink-muted">{getApiErrorMessage(error)}</p>
+      </div>
     );
   }
 
   if (!member) {
-    return (
-      <AppShell>
-        <ProfileSkeleton />
-      </AppShell>
-    );
+    return <ProfileSkeleton />;
   }
 
   return (
-    <AppShell breadcrumbLabel={`${member.firstName} ${member.lastName}`}>
-      <ModuleAccessGate module="people">
+    <>
+      <PageBreadcrumb label={`${member.firstName} ${member.lastName}`} />
+      <AccessGate resource="member">
         <ProfileContent member={member} />
-      </ModuleAccessGate>
-    </AppShell>
+      </AccessGate>
+    </>
   );
 }

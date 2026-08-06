@@ -1,4 +1,4 @@
-import type { ModuleKey, ModulePermission } from '@/lib/permissions/permissions';
+import { PRIMARY_CLUB_ID } from '@/lib/tenancy/clubs';
 
 export const OFFICER_ROLES = [
   'President',
@@ -33,6 +33,14 @@ export type Level = 1 | 2 | 3 | 4 | 5;
 
 export interface Member {
   id: string;
+  /** The club this membership belongs to. Every operational row in the app
+   * is scoped by this — a Member in club A cannot appear in club B's roster.
+   * On the DB side this is `Membership.clubId`. */
+  clubId: string;
+  /** The user account this membership is claimed by, once the person signs
+   * up. `undefined` for placeholder roster rows a Club Admin added by hand
+   * before that person had an account. */
+  userId?: string;
   firstName: string;
   lastName: string;
   /** A member can hold more than one officer role at once (e.g. Secretary and
@@ -46,10 +54,12 @@ export interface Member {
   /** `removed` is a soft delete — the record and its history stay put, the
    * member just drops out of the active roster. */
   status: 'active' | 'removed';
-  /** Per-module overrides on top of the role-based default in
-   * `lib/permissions/permissions.ts`. Only modules a Club Admin has
-   * explicitly touched appear here. */
-  permissions?: Partial<Record<ModuleKey, ModulePermission>>;
+  /** Per-`resource:action` overrides on top of the role-based grants in
+   * `@toastly/access`. Keys look like `"transaction:update"` and the value is
+   * either `'allow'` or `'deny'`; only entries a Club Admin has explicitly
+   * touched appear here. Deny wins over the role default *and* over an
+   * allow-override on another assignment, matching the engine's own layering. */
+  overrides?: Record<string, 'allow' | 'deny'>;
   /** Undefined until the member starts a pathway from their profile. */
   pathway?: Pathway;
   /** Current level. Undefined while `pathway` is undefined. */
@@ -78,6 +88,7 @@ export type UpdateMemberInput = Partial<Pick<Member, 'firstName' | 'lastName' | 
 export const SEED_MEMBERS: Member[] = [
   {
     id: 'm-01',
+    clubId: PRIMARY_CLUB_ID,
     firstName: 'Aisha',
     lastName: 'Patel',
     roles: ['President'],
@@ -88,6 +99,7 @@ export const SEED_MEMBERS: Member[] = [
   },
   {
     id: 'm-02',
+    clubId: PRIMARY_CLUB_ID,
     firstName: 'Marcus',
     lastName: 'Chen',
     roles: ['VPE'],
@@ -98,6 +110,7 @@ export const SEED_MEMBERS: Member[] = [
   },
   {
     id: 'm-03',
+    clubId: PRIMARY_CLUB_ID,
     firstName: 'Priya',
     lastName: 'Sharma',
     roles: ['VPM'],
@@ -108,6 +121,7 @@ export const SEED_MEMBERS: Member[] = [
   },
   {
     id: 'm-04',
+    clubId: PRIMARY_CLUB_ID,
     firstName: 'Daniel',
     lastName: 'Ortiz',
     roles: ['VPPR'],
@@ -118,6 +132,7 @@ export const SEED_MEMBERS: Member[] = [
   },
   {
     id: 'm-05',
+    clubId: PRIMARY_CLUB_ID,
     firstName: 'Sophia',
     lastName: 'Nakamura',
     roles: ['Secretary'],
@@ -128,6 +143,7 @@ export const SEED_MEMBERS: Member[] = [
   },
   {
     id: 'm-06',
+    clubId: PRIMARY_CLUB_ID,
     firstName: 'Nathan',
     lastName: 'Brooks',
     roles: ['Treasurer'],
@@ -138,6 +154,7 @@ export const SEED_MEMBERS: Member[] = [
   },
   {
     id: 'm-07',
+    clubId: PRIMARY_CLUB_ID,
     firstName: 'Yara',
     lastName: 'Ibrahim',
     roles: ['SAA'],
@@ -148,6 +165,7 @@ export const SEED_MEMBERS: Member[] = [
   },
   {
     id: 'm-08',
+    clubId: PRIMARY_CLUB_ID,
     firstName: 'Liam',
     lastName: 'Reeves',
     roles: ['Member'],
@@ -158,6 +176,7 @@ export const SEED_MEMBERS: Member[] = [
   },
   {
     id: 'm-09',
+    clubId: PRIMARY_CLUB_ID,
     firstName: 'Grace',
     lastName: 'Okafor',
     roles: ['Member'],
@@ -168,6 +187,7 @@ export const SEED_MEMBERS: Member[] = [
   },
   {
     id: 'm-10',
+    clubId: PRIMARY_CLUB_ID,
     firstName: 'Rafael',
     lastName: 'Mendoza',
     roles: ['Member'],
@@ -178,6 +198,7 @@ export const SEED_MEMBERS: Member[] = [
   },
   {
     id: 'm-11',
+    clubId: PRIMARY_CLUB_ID,
     firstName: 'Hannah',
     lastName: 'Klein',
     roles: ['Member'],
@@ -188,6 +209,7 @@ export const SEED_MEMBERS: Member[] = [
   },
   {
     id: 'm-12',
+    clubId: PRIMARY_CLUB_ID,
     firstName: 'Kenji',
     lastName: 'Watanabe',
     roles: ['Member'],
@@ -198,6 +220,7 @@ export const SEED_MEMBERS: Member[] = [
   },
   {
     id: 'm-13',
+    clubId: PRIMARY_CLUB_ID,
     firstName: 'Zara',
     lastName: 'Ahmed',
     roles: ['Member'],
@@ -208,6 +231,7 @@ export const SEED_MEMBERS: Member[] = [
   },
   {
     id: 'm-14',
+    clubId: PRIMARY_CLUB_ID,
     firstName: 'Ethan',
     lastName: 'Kowalski',
     roles: ['Member'],
@@ -218,6 +242,7 @@ export const SEED_MEMBERS: Member[] = [
   },
   {
     id: 'm-15',
+    clubId: PRIMARY_CLUB_ID,
     firstName: 'Riley',
     lastName: 'Novak',
     roles: ['Member'],
@@ -226,6 +251,7 @@ export const SEED_MEMBERS: Member[] = [
   },
   {
     id: 'm-16',
+    clubId: PRIMARY_CLUB_ID,
     firstName: 'Amelia',
     lastName: 'Fischer',
     roles: ['Member'],
@@ -234,6 +260,7 @@ export const SEED_MEMBERS: Member[] = [
   },
   {
     id: 'm-17',
+    clubId: PRIMARY_CLUB_ID,
     firstName: 'Tomas',
     lastName: 'Rivera',
     roles: ['Member'],
@@ -242,6 +269,7 @@ export const SEED_MEMBERS: Member[] = [
   },
   {
     id: 'm-18',
+    clubId: PRIMARY_CLUB_ID,
     firstName: 'Nadia',
     lastName: 'Haddad',
     roles: ['Member'],
@@ -250,6 +278,7 @@ export const SEED_MEMBERS: Member[] = [
   },
   {
     id: 'm-19',
+    clubId: PRIMARY_CLUB_ID,
     firstName: 'Oliver',
     lastName: 'Bennett',
     roles: ['Member'],
@@ -258,6 +287,7 @@ export const SEED_MEMBERS: Member[] = [
   },
   {
     id: 'm-20',
+    clubId: PRIMARY_CLUB_ID,
     firstName: 'Chloe',
     lastName: 'Dubois',
     roles: ['Member'],

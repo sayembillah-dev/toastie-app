@@ -10,7 +10,7 @@ import {
   Warning,
 } from '@phosphor-icons/react/dist/ssr';
 import { App, Button, Spin, Tabs } from 'antd';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useCallback, useState, useSyncExternalStore } from 'react';
 
 import { AudioTab } from '@/components/evaluation/audio-tab';
@@ -28,8 +28,7 @@ import {
   subscribeToIdentity,
   writeIdentity,
 } from '@/lib/evaluation/storage';
-import { CLUB } from '@/lib/meetings/agenda';
-import { useGetMeetingQuery, useGetMembersQuery } from '@/store/api';
+import { useGetPublicMeetingQuery } from '@/store/api';
 import { useAppSelector } from '@/store/hooks';
 import { selectMeetingDraft } from '@/store/meeting-draft-slice';
 
@@ -44,32 +43,26 @@ type SubmitState = 'idle' | 'submitting' | 'submitted';
 
 export function EvaluatePage() {
   const params = useParams<{ meetingId: string; speakerId: string }>();
+  const search = useSearchParams();
   const meetingId = params?.meetingId ?? '';
   const speakerId = params?.speakerId ?? '';
+  const token = search?.get('t') ?? '';
 
   const { message } = App.useApp();
 
-  const { data: meeting, isLoading: meetingLoading } = useGetMeetingQuery(meetingId, {
-    skip: !meetingId,
-  });
-  const { data: members, isLoading: membersLoading } = useGetMembersQuery();
+  const { data: meeting, isLoading: meetingLoading } = useGetPublicMeetingQuery(
+    { meetingId, token },
+    { skip: !meetingId || !token },
+  );
+  // Speakers/roster live in a per-browser draft — anonymous evaluators
+  // never have them populated. The name lookups gracefully degrade so
+  // the header renders with empty strings and the identity gate falls
+  // back to a generic "tell us who you are" prompt.
   const draft = useAppSelector((state) => selectMeetingDraft(state, meetingId));
 
   const speaker = draft.speakers.find((entry) => entry.id === speakerId);
-
-  const speakerMember =
-    speaker?.memberId && members
-      ? members.find((entry) => entry.id === speaker.memberId)
-      : undefined;
-  const speakerName = speakerMember ? `${speakerMember.firstName} ${speakerMember.lastName}` : '';
-
-  const evaluatorMember =
-    speaker?.evaluatorId && members
-      ? members.find((entry) => entry.id === speaker.evaluatorId)
-      : undefined;
-  const evaluatorName = evaluatorMember
-    ? `${evaluatorMember.firstName} ${evaluatorMember.lastName}`
-    : '';
+  const speakerName = '';
+  const evaluatorName = '';
 
   const project = speaker?.project ? findProject(speaker.project, speaker.pathway) : undefined;
   const duration = speaker ? getProjectDuration(project?.name, speaker.pathway) : undefined;
@@ -77,6 +70,7 @@ export function EvaluatePage() {
   const meetingLabel = meeting
     ? `Meeting #${meeting.meetingNumber} · ${MEETING_DATE_FMT.format(new Date(meeting.dateTime))}`
     : '';
+  const clubName = meeting?.clubName ?? '';
 
   /* Identity is synced from localStorage via useSyncExternalStore so a same-tab
    * write (see `writeIdentity`) notifies subscribers without us needing to
@@ -101,7 +95,7 @@ export function EvaluatePage() {
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
 
   const hasContent = !!audio || images.length > 0 || text.trim().length > 0;
-  const isLoading = meetingLoading || membersLoading;
+  const isLoading = meetingLoading;
 
   function handleIdentityConfirmed(next: Omit<EvaluatorIdentity, 'confirmedAt'>) {
     writeIdentity(meetingId, speakerId, next);
@@ -183,7 +177,7 @@ export function EvaluatePage() {
   if (!identity) {
     return (
       <IdentityGate
-        clubName={CLUB.name}
+        clubName={clubName}
         meetingLabel={meetingLabel}
         speakerName={speakerName}
         speechTitle={speaker.title.trim()}
@@ -198,7 +192,7 @@ export function EvaluatePage() {
   return (
     <div className="flex min-h-screen flex-col bg-canvas">
       <SpeakerHeader
-        clubName={CLUB.name}
+        clubName={clubName}
         meetingLabel={meetingLabel}
         speakerName={speakerName}
         speechTitle={speaker.title.trim()}

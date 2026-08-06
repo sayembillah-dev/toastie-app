@@ -2,7 +2,7 @@
 
 import { useParams } from 'next/navigation';
 
-import { AppShell } from '@/components/app-shell';
+import { PageBreadcrumb } from '@/components/page-breadcrumb';
 import { CURRENT_DIVISION_ID } from '@/lib/org/current-scope';
 import { useListAreasQuery, useListDivisionsQuery } from '@/store/api';
 
@@ -17,7 +17,8 @@ export function DivisionAreasScreen() {
   const division = divisions?.find((entry) => entry.id === CURRENT_DIVISION_ID);
 
   return (
-    <AppShell breadcrumbTrail={[{ href: '/division', title: division?.name ?? 'Division' }]}>
+    <>
+      <PageBreadcrumb trail={[{ href: '/division', title: division?.name ?? 'Division' }]} />
       <AreasList
         title={division ? `${division.name} — Areas` : 'Areas'}
         subtitle="Create, rename or drill into an area to see its clubs."
@@ -27,7 +28,7 @@ export function DivisionAreasScreen() {
         canMove={false}
         moveOptions={[]}
       />
-    </AppShell>
+    </>
   );
 }
 
@@ -45,12 +46,13 @@ export function DivisionClubsScreen() {
   const moveOptions = (areas ?? []).map((entry) => ({ value: entry.id, label: entry.name }));
 
   return (
-    <AppShell
-      breadcrumbTrail={[
-        { href: '/division', title: division?.name ?? 'Division' },
-        { href: `/division/${areaId}`, title: area?.name ?? 'Area' },
-      ]}
-    >
+    <>
+      <PageBreadcrumb
+        trail={[
+          { href: '/division', title: division?.name ?? 'Division' },
+          { href: `/division/${areaId}`, title: area?.name ?? 'Area' },
+        ]}
+      />
       <ClubsList
         title={area ? `${area.name} — Clubs` : 'Clubs'}
         subtitle="Create, rename or move a club to a different area in the division."
@@ -58,6 +60,6 @@ export function DivisionClubsScreen() {
         canDelete={false}
         moveOptions={moveOptions}
       />
-    </AppShell>
+    </>
   );
 }

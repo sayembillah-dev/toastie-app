@@ -7,11 +7,11 @@ import Link from 'next/link';
 import { notFound, useParams } from 'next/navigation';
 import { useState } from 'react';
 
-import { AppShell } from '@/components/app-shell';
 import { HistoryTab } from '@/components/education/history-tab';
 import { ProgressTab } from '@/components/education/progress-tab';
 import { StartPathwayModal } from '@/components/education/start-pathway-modal';
-import { ModuleAccessGate } from '@/components/permissions/module-access-gate';
+import { PageBreadcrumb } from '@/components/page-breadcrumb';
+import { AccessGate } from '@/components/permissions/access-gate';
 import type { Member } from '@/lib/education/members';
 import { formatRoles, getInitials } from '@/lib/education/members';
 import { useGetMemberQuery } from '@/store/api';
@@ -163,34 +163,29 @@ export function MemberProfileScreen() {
     if (isNotFoundError(error)) notFound();
 
     return (
-      <AppShell>
-        <div className="mx-auto max-w-md rounded-xl border border-dashed border-line-strong px-6 py-16 text-center">
-          <span
-            aria-hidden
-            className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-fill text-ink-soft"
-          >
-            <WarningCircle size={18} weight="bold" />
-          </span>
-          <p className="text-sm font-medium text-ink">Could not load this member</p>
-          <p className="mt-1 text-xs text-ink-muted">{getApiErrorMessage(error)}</p>
-        </div>
-      </AppShell>
+      <div className="mx-auto max-w-md rounded-xl border border-dashed border-line-strong px-6 py-16 text-center">
+        <span
+          aria-hidden
+          className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-fill text-ink-soft"
+        >
+          <WarningCircle size={18} weight="bold" />
+        </span>
+        <p className="text-sm font-medium text-ink">Could not load this member</p>
+        <p className="mt-1 text-xs text-ink-muted">{getApiErrorMessage(error)}</p>
+      </div>
     );
   }
 
   if (!member) {
-    return (
-      <AppShell>
-        <ProfileSkeleton />
-      </AppShell>
-    );
+    return <ProfileSkeleton />;
   }
 
   return (
-    <AppShell breadcrumbLabel={`${member.firstName} ${member.lastName}`}>
-      <ModuleAccessGate module="education">
+    <>
+      <PageBreadcrumb label={`${member.firstName} ${member.lastName}`} />
+      <AccessGate resource="education">
         <ProfileContent member={member} />
-      </ModuleAccessGate>
-    </AppShell>
+      </AccessGate>
+    </>
   );
 }

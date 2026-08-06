@@ -4,9 +4,10 @@ import { setupListeners } from '@reduxjs/toolkit/query';
 import { useEffect, useState } from 'react';
 import { Provider } from 'react-redux';
 
-import { DB_KEY_LIST } from '@/lib/local-db/db';
+import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from '@/lib/auth/token-storage';
 import { makeStore } from '@/store';
 import { toastlyApi } from '@/store/api';
+import { sessionUnauthenticated } from '@/store/session-slice';
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   /* Lazy state initialiser rather than a module singleton: the store must be
@@ -17,28 +18,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const teardownListeners = setupListeners(store.dispatch);
 
-    /* Another tab writing to our tables is the local-storage equivalent of a
-     * server-side change: drop the cache and let the active queries refetch.
-     * `event.key` is null when a tab calls `localStorage.clear()`. */
+    /* Cross-tab sign-out: another tab clearing the access token is a
+     * global sign-out. Drop the RTKQ cache (which is tenant-scoped and
+     * would otherwise be readable to the next signed-in user in this
+     * tab) and mark the session unauthenticated. `event.key === null`
+     * means the other tab called `localStorage.clear()`. */
     const handleStorage = (event: StorageEvent) => {
-      if (event.key !== null && !DB_KEY_LIST.includes(event.key)) return;
-      store.dispatch(
-        toastlyApi.util.invalidateTags([
-          'Member',
-          'History',
-          'Meeting',
-          'Guest',
-          'ContactLog',
-          'VisitLog',
-          'Asset',
-          'Document',
-          'Checklist',
-          'InventoryItem',
-          'Transaction',
-          'DuesRecord',
-          'BudgetLine',
-        ]),
-      );
+      const key = event.key;
+      const clearedEverything = key === null;
+      const clearedAuth =
+        (key === ACCESS_TOKEN_KEY || key === REFRESH_TOKEN_KEY) && event.newValue === null;
+      if (!clearedEverything && !clearedAuth) return;
+      store.dispatch(toastlyApi.util.resetApiState());
+      store.dispatch(sessionUnauthenticated());
     };
 
     window.addEventListener('storage', handleStorage);

@@ -8,26 +8,23 @@ import {
   Crown,
   Globe,
   MapPin,
-  ShieldCheck,
 } from '@phosphor-icons/react/dist/ssr';
+import type { ActiveContextKey } from '@toastly/access';
 import { Dropdown } from 'antd';
 import { useRouter } from 'next/navigation';
 
+import { writeStoredContext } from '@/lib/auth/token-storage';
+import { toastlyApi } from '@/store/api';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import {
+  contextChanged,
+  defaultRouteForContext,
+  selectActiveContextKey,
+  selectSessionMemberships,
+  selectSessionOrgAssignments,
+  selectSessionUser,
+} from '@/store/session-slice';
 import { activeUnitChanged, selectActiveUnit, type UnitKey } from '@/store/ui-slice';
-
-/** Root route for every scope. `club` goes to the dashboard home — without
- * an entry here, switching to Club from a scope that hides the sidebar nav
- * (Club Admin, the org tiers) would only flip internal state without
- * actually navigating anywhere, leaving the user stuck on the same page. */
-const UNIT_ROOT_ROUTE: Partial<Record<UnitKey, string>> = {
-  club: '/',
-  'club-admin': '/club-admin',
-  area: '/area',
-  division: '/division',
-  district: '/district',
-  'super-admin': '/super-admin',
-};
 
 type IconComponent = React.ComponentType<{
   size?: number;
@@ -35,37 +32,89 @@ type IconComponent = React.ComponentType<{
   className?: string;
 }>;
 
-interface Unit {
-  key: UnitKey;
+interface UnitEntry {
+  contextKey: ActiveContextKey;
+  /** The nav-shape hint driving `AppShell`'s sidebar contents. Every club
+   * membership maps to `'club'`; every org assignment to its unit tier. */
+  unitKey: UnitKey;
   name: string;
-  /** One-line hint under the name — sets expectations for what the scope shows. */
   description: string;
   Icon: IconComponent;
 }
 
-/** Ordered widest-out: the tier the officer is closest to sits first, then each
- * step up the org tree. `super-admin` is intentionally last so it never sits
- * next to `club` and dilutes the visual hierarchy. */
-const UNITS: Unit[] = [
-  { key: 'club', name: 'Club', description: 'Your home club', Icon: Buildings },
-  { key: 'club-admin', name: 'Club Admin', description: 'Officer view', Icon: ShieldCheck },
-  { key: 'area', name: 'Area', description: 'Area director scope', Icon: MapPin },
-  { key: 'division', name: 'Division', description: 'Division scope', Icon: Compass },
-  { key: 'district', name: 'District', description: 'District scope', Icon: Globe },
-  { key: 'super-admin', name: 'Super Admin', description: 'Full access', Icon: Crown },
-];
+const ORG_ICON: Record<'area' | 'division' | 'district', IconComponent> = {
+  area: MapPin,
+  division: Compass,
+  district: Globe,
+};
+
+const ORG_NAME: Record<'area' | 'division' | 'district', string> = {
+  area: 'Area',
+  division: 'Division',
+  district: 'District',
+};
 
 export function UnitSwitcher() {
-  const activeUnit = useAppSelector(selectActiveUnit);
   const dispatch = useAppDispatch();
   const router = useRouter();
-  const current = UNITS.find((unit) => unit.key === activeUnit) ?? UNITS[0];
+  const activeUnit = useAppSelector(selectActiveUnit);
+  const contextKey = useAppSelector(selectActiveContextKey);
+  const user = useAppSelector(selectSessionUser);
+  const memberships = useAppSelector(selectSessionMemberships);
+  const orgAssignments = useAppSelector(selectSessionOrgAssignments);
+
+  /* Entries are built from the session — one per membership, one per org
+   * assignment, and a Super Admin entry for the corresponding user flag. If
+   * the session hasn't populated yet, fall back to a single Club entry so the
+   * header still renders something recognisable on first paint. */
+  const entries: UnitEntry[] = [
+    ...memberships.map<UnitEntry>((m) => ({
+      contextKey: `club:${m.clubId}` as ActiveContextKey,
+      unitKey: 'club',
+      name: m.clubName,
+      description: 'Club context',
+      Icon: Buildings,
+    })),
+    ...orgAssignments.map<UnitEntry>((a) => ({
+      contextKey: `${a.unitType}:${a.unitId}` as ActiveContextKey,
+      unitKey: a.unitType as UnitKey,
+      name: a.unitName || ORG_NAME[a.unitType],
+      description: `${ORG_NAME[a.unitType]} director scope`,
+      Icon: ORG_ICON[a.unitType],
+    })),
+    ...(user?.isSuperAdmin
+      ? [
+          {
+            contextKey: 'global' as ActiveContextKey,
+            unitKey: 'super-admin' as UnitKey,
+            name: 'Super Admin',
+            description: 'Full access',
+            Icon: Crown,
+          },
+        ]
+      : []),
+  ];
+
+  const fallback: UnitEntry = {
+    contextKey: 'club:local' as ActiveContextKey,
+    unitKey: 'club',
+    name: 'Club',
+    description: 'Your home club',
+    Icon: Buildings,
+  };
+
+  const current = entries.find((e) => e.contextKey === contextKey) ?? entries[0] ?? fallback;
   const CurrentIcon = current.Icon;
 
-  const selectUnit = (unit: UnitKey) => {
-    dispatch(activeUnitChanged(unit));
-    const root = UNIT_ROOT_ROUTE[unit];
-    if (root) router.push(root);
+  /* Context switch: cache reset is the load-bearing part. Every cache entry
+   * is tenant-scoped but RTKQ keys aren't, so anything from the old context
+   * would masquerade as the new one on the next render. */
+  const selectEntry = (entry: UnitEntry) => {
+    dispatch(activeUnitChanged(entry.unitKey));
+    dispatch(contextChanged(entry.contextKey));
+    writeStoredContext(entry.contextKey);
+    dispatch(toastlyApi.util.resetApiState());
+    router.push(defaultRouteForContext(entry.contextKey));
   };
 
   return (
@@ -78,14 +127,14 @@ export function UnitSwitcher() {
             Switch scope
           </div>
           <div className="flex flex-col gap-0.5">
-            {UNITS.map((unit) => {
-              const isActive = unit.key === current.key;
-              const ItemIcon = unit.Icon;
+            {(entries.length > 0 ? entries : [fallback]).map((entry) => {
+              const isActive = entry.contextKey === current.contextKey;
+              const ItemIcon = entry.Icon;
               return (
                 <button
-                  key={unit.key}
+                  key={entry.contextKey}
                   type="button"
-                  onClick={() => selectUnit(unit.key)}
+                  onClick={() => selectEntry(entry)}
                   className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors ${
                     isActive ? 'bg-fill-strong' : 'hover:bg-fill'
                   }`}
@@ -98,8 +147,8 @@ export function UnitSwitcher() {
                     <ItemIcon size={16} weight={isActive ? 'fill' : 'regular'} />
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate text-sm font-medium text-ink">{unit.name}</span>
-                    <span className="truncate text-xs text-ink-muted">{unit.description}</span>
+                    <span className="truncate text-sm font-medium text-ink">{entry.name}</span>
+                    <span className="truncate text-xs text-ink-muted">{entry.description}</span>
                   </span>
                   {isActive ? <Check size={16} className="shrink-0 text-ink" /> : null}
                 </button>

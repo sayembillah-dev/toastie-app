@@ -23,17 +23,21 @@ import {
   Wallet,
   X,
 } from '@phosphor-icons/react/dist/ssr';
+import type { Action, ResourceKey } from '@toastly/access';
 import { Avatar, Badge, Button, Drawer, Input, Layout, Menu } from 'antd';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Fragment } from 'react';
+import { Fragment, useMemo } from 'react';
 
+import { useCan } from '@/lib/permissions/use-can';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { selectSessionUser } from '@/store/session-slice';
 import {
   mobileNavClosed,
   mobileNavOpened,
   selectActiveUnit,
+  selectBreadcrumb,
   selectMobileNavOpen,
   selectSidebarCollapsed,
   sidebarToggled,
@@ -63,27 +67,83 @@ interface NavEntry {
   Icon: IconComponent;
   /** Right-aligned counter or tag, e.g. "17" or a status pill. */
   meta?: React.ReactNode;
+  /** Gate this entry by the client-side `can()`. When absent the entry is
+   * always shown — used for `/`, `/records` and `/me`, which have no
+   * resource of their own. */
+  access?: { resource: ResourceKey; action: Action };
 }
 
 /** Single source of truth for the sidebar — add a route here and the nav,
- * the selected state and the breadcrumb all pick it up. */
+ * the selected state and the breadcrumb all pick it up. Entries with an
+ * `access` clause disappear when `can()` returns false for the active
+ * member, so a plain Member never sees Finance or Club Admin in the rail. */
 const primaryNav: NavEntry[] = [
   { href: '/', title: 'Dashboard', Icon: SquaresFour },
-  { href: '/meetings', title: 'Meetings', Icon: Users },
-  { href: '/education', title: 'Education', Icon: GraduationCap },
-  { href: '/library', title: 'Library', Icon: BookOpen },
-  { href: '/people', title: 'People', Icon: AddressBook },
-  { href: '/inventory', title: 'Inventory & checklist', Icon: ClipboardText },
-  { href: '/finance', title: 'Finance', Icon: Wallet },
+  {
+    href: '/meetings',
+    title: 'Meetings',
+    Icon: Users,
+    access: { resource: 'meeting', action: 'read' },
+  },
+  {
+    href: '/education',
+    title: 'Education',
+    Icon: GraduationCap,
+    access: { resource: 'education', action: 'read' },
+  },
+  {
+    href: '/library',
+    title: 'Library',
+    Icon: BookOpen,
+    access: { resource: 'library', action: 'read' },
+  },
+  {
+    href: '/people',
+    title: 'People',
+    Icon: AddressBook,
+    access: { resource: 'member', action: 'read' },
+  },
+  {
+    href: '/inventory',
+    title: 'Inventory & checklist',
+    Icon: ClipboardText,
+    access: { resource: 'inventory', action: 'read' },
+  },
+  {
+    href: '/finance',
+    title: 'Finance',
+    Icon: Wallet,
+    access: { resource: 'transaction', action: 'read' },
+  },
   { href: '/records', title: 'Records', Icon: Archive },
-  { href: '/activity-logs', title: 'Activity Logs', Icon: ClockCounterClockwise },
+  {
+    href: '/activity-logs',
+    title: 'Activity Logs',
+    Icon: ClockCounterClockwise,
+    access: { resource: 'activityLog', action: 'read' },
+  },
   { href: '/me', title: 'Me', Icon: UserCircle },
 ];
 
 const clubAdminNav: NavEntry[] = [
-  { href: '/club-admin/members', title: 'Members', Icon: Users },
-  { href: '/club-admin/permissions', title: 'Permissions', Icon: ShieldCheck },
-  { href: '/club-admin/audit-trail', title: 'Audit Trail', Icon: ClockCounterClockwise },
+  {
+    href: '/club-admin/members',
+    title: 'Members',
+    Icon: Users,
+    access: { resource: 'memberRole', action: 'read' },
+  },
+  {
+    href: '/club-admin/permissions',
+    title: 'Permissions',
+    Icon: ShieldCheck,
+    access: { resource: 'memberPermission', action: 'read' },
+  },
+  {
+    href: '/club-admin/audit-trail',
+    title: 'Audit Trail',
+    Icon: ClockCounterClockwise,
+    access: { resource: 'activityLog', action: 'read' },
+  },
 ];
 
 /** Named routes win; anything deeper falls back to title-cased segments.
@@ -275,16 +335,6 @@ interface AppShellProps {
   actions?: React.ReactNode;
   /** Unread count on the notifications row; the badge is hidden at zero. */
   notificationCount?: number;
-  /** Signed-in account, rendered at the foot of the sidebar when present. */
-  account?: { name: string; avatarUrl?: string };
-  /** Overrides the label on the last breadcrumb crumb. Useful when the URL
-   * carries an id (e.g. `/education/m-01`) and the human title lives in data. */
-  breadcrumbLabel?: string;
-  /** Replaces the computed trail outright. For routes with more than one
-   * dynamic segment (e.g. `/district/[divisionId]/[areaId]`) the fallback
-   * slug-title logic in `buildTrail` can't know the human names — the screen
-   * fetches them and supplies the exact trail instead. */
-  breadcrumbTrail?: { href: string; title: string }[];
 }
 
 /** Unit-switcher scopes with real, routed dashboards — everything under these
@@ -302,21 +352,19 @@ function isClubAdminRoute(pathname: string): boolean {
   return pathname === '/club-admin' || pathname.startsWith('/club-admin/');
 }
 
-export function AppShell({
-  children,
-  actions,
-  notificationCount = 0,
-  account,
-  breadcrumbLabel,
-  breadcrumbTrail,
-}: AppShellProps) {
+export function AppShell({ children, actions, notificationCount = 0 }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   /* Held in the store rather than local state so the sidebar keeps its width
-   * across route changes — every page mounts its own AppShell. */
+   * across route changes. */
   const collapsed = useAppSelector(selectSidebarCollapsed);
   const mobileNavOpen = useAppSelector(selectMobileNavOpen);
   const activeUnit = useAppSelector(selectActiveUnit);
+  const breadcrumbSlot = useAppSelector(selectBreadcrumb);
+  const sessionUser = useAppSelector(selectSessionUser);
+  const account = sessionUser
+    ? { name: `${sessionUser.firstName} ${sessionUser.lastName}` }
+    : undefined;
   const dispatch = useAppDispatch();
   const closeMobileNav = () => dispatch(mobileNavClosed());
 
@@ -331,18 +379,35 @@ export function AppShell({
   /* Org dashboards navigate by breadcrumb and card drill-down — no sidebar
    * nav needed. Club Admin has its own three-entry nav; the primary nav is
    * club-specific for everything else. */
-  const navEntries: NavEntry[] | null = onClubAdminRoute
+  const rawNavEntries: NavEntry[] | null = onClubAdminRoute
     ? clubAdminNav
     : activeUnit === 'club' && !onOrgRoute
       ? primaryNav
       : null;
 
-  const rawTrail = breadcrumbTrail ?? buildTrail(pathname);
-  const trail = breadcrumbTrail
+  /* Drop entries the current member can't read. `useCan` returns `false`
+   * while loading, so entries with an `access` clause stay hidden until the
+   * subject arrives — better a single frame short than a flash of a link
+   * that 403s on click. Entries without `access` (Dashboard, Records, Me)
+   * are always visible. */
+  const isPrimaryNav = rawNavEntries === primaryNav;
+  const { can, isLoading: canLoading } = useCan();
+  const navEntries = useMemo<NavEntry[] | null>(() => {
+    if (!rawNavEntries) return null;
+    if (canLoading) return rawNavEntries.filter((entry) => !entry.access);
+    return rawNavEntries.filter((entry) =>
+      entry.access ? can(entry.access.action, entry.access.resource) : true,
+    );
+  }, [rawNavEntries, can, canLoading]);
+
+  const rawTrail = breadcrumbSlot.trail ?? buildTrail(pathname);
+  const trail = breadcrumbSlot.trail
     ? rawTrail
-    : breadcrumbLabel
+    : breadcrumbSlot.label
       ? rawTrail.map((crumb, index) =>
-          index === rawTrail.length - 1 ? { ...crumb, title: breadcrumbLabel } : crumb,
+          index === rawTrail.length - 1
+            ? { ...crumb, title: breadcrumbSlot.label as string }
+            : crumb,
         )
       : rawTrail;
 
@@ -364,7 +429,7 @@ export function AppShell({
           notificationCount={notificationCount}
           account={account}
           navEntries={navEntries}
-          showSearch={navEntries === primaryNav}
+          showSearch={isPrimaryNav}
           brandAction={
             <Button
               type="text"
@@ -394,7 +459,7 @@ export function AppShell({
           notificationCount={notificationCount}
           account={account}
           navEntries={navEntries}
-          showSearch={navEntries === primaryNav}
+          showSearch={isPrimaryNav}
           onNavigate={closeMobileNav}
           brandAction={
             <Button

@@ -1,0 +1,830 @@
+// Toastly Postgres schema — the tenancy shape everything else sits on.
+//
+// One `Club` row per tenant, with denormalised lineage (areaId/divisionId/
+// districtId) so scope resolution never runs a recursive CTE. One
+// `Membership` row per (User, Club); `userId` is nullable so a Club Admin
+// can pre-populate the roster before a person signs up. Composite tenant
+// FKs (via `@@unique([clubId, id])`) make cross-tenant references
+// physically impossible on the high-risk operational tables added in
+// S9–S12.
+//
+// Prisma enum values are string-identical to `@toastly/access` unions so a
+// rename is a build error, not a runtime 403 — the compile-time assertion
+// lives in `apps/api/src/access/roles.compat.ts`.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -------------------------------------------------------------- enums --
+
+enum UserStatus {
+  active
+  suspended
+}
+
+enum ClubDirectoryStatus {
+  active
+  low
+  suspended
+}
+
+enum ClubLifecycle {
+  active
+  inactive
+  chartered
+}
+
+enum ClubJoinPolicy {
+  request
+  closed
+  open
+}
+
+enum MembershipStatus {
+  active
+  removed
+}
+
+/// Matches `CLUB_ROLES` in `@toastly/access` exactly.
+enum ClubRole {
+  ClubAdmin
+  Guest
+  IPP
+  Member
+  President
+  Secretary
+  SergeantAtArms
+  Treasurer
+  VPEducation
+  VPMembership
+  VPPR
+}
+
+/// Matches `ORG_ROLES` in `@toastly/access` exactly.
+enum OrgRole {
+  AreaDirector
+  DivisionDirector
+  DistrictDirector
+}
+
+/// Matches `ORG_UNIT_TYPES` in `@toastly/access` exactly.
+enum OrgUnitType {
+  area
+  division
+  district
+}
+
+enum InviteStatus {
+  pending
+  accepted
+  revoked
+  expired
+}
+
+enum JoinRequestStatus {
+  pending
+  approved
+  declined
+  withdrawn
+}
+
+enum MeetingStatus {
+  draft
+  published
+}
+
+/// The 6 shapes of `HistoryEvent` in `lib/education/history.ts`. Kebab-case
+/// on the wire (`level-reached`, `speech-given`, …) — the serializer maps
+/// between the two.
+enum HistoryEventType {
+  joined
+  levelReached
+  speechGiven
+  projectStarted
+  projectCompleted
+  roleTaken
+}
+
+enum SpeechSlotRequestStatus {
+  pending
+  approved
+  declined
+}
+
+// -------------------------------------------------------- identity --
+
+model User {
+  id              String    @id @default(cuid())
+  /// Lowercased at write time. A raw-SQL migration converts this column to
+  /// CITEXT so lookups stay case-insensitive without a functional index.
+  email           String    @unique
+  passwordHash    String
+  firstName       String
+  lastName        String
+  status          UserStatus @default(active)
+  /// Checked first on every permission decision — a join for a singleton
+  /// bypass is waste, so this stays denormalised.
+  isSuperAdmin    Boolean   @default(false)
+  emailVerifiedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  memberships    Membership[]
+  orgAssignments OrgAssignment[]
+  refreshTokens  RefreshToken[]
+  invitesSent    Invite[]        @relation("InviteInvitedBy")
+  joinRequests   JoinRequest[]
+}
+
+/// Refresh tokens are hashed (`sha256`) — the raw value the client holds is
+/// never persisted. `familyId` groups a rotation lineage: replaying a used
+/// token revokes the whole family, catching a stolen refresh token.
+model RefreshToken {
+  id           String    @id @default(cuid())
+  userId       String
+  tokenHash    String    @unique
+  familyId     String
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  replacedById String?
+  createdAt    DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([familyId])
+}
+
+// -------------------------------------------------------- org tree --
+
+model District {
+  id        String   @id @default(cuid())
+  name      String
+  /// Short designator (e.g. "D88"). Toastmasters districts are commonly
+  /// referred to by code rather than full name; nullable so a newly created
+  /// district row can be filled in later without blocking.
+  code      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  divisions      Division[]
+  orgAssignments OrgAssignment[]
+}
+
+model Division {
+  id         String   @id @default(cuid())
+  districtId String
+  name       String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  district       District        @relation(fields: [districtId], references: [id], onDelete: Restrict)
+  areas          Area[]
+  orgAssignments OrgAssignment[]
+
+  @@index([districtId])
+}
+
+model Area {
+  id         String   @id @default(cuid())
+  divisionId String
+  /// Denormalised parent-of-parent so a lookup by district doesn't need to
+  /// hop through Division. Rewritten inside the reparent transaction.
+  districtId String
+  name       String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  division       Division        @relation(fields: [divisionId], references: [id], onDelete: Restrict)
+  clubs          Club[]
+  orgAssignments OrgAssignment[]
+
+  @@index([divisionId])
+  @@index([districtId])
+}
+
+// -------------------------------------------------------- tenant --
+
+model Club {
+  id              String   @id @default(cuid())
+  /// Nullable: a self-registered club exists before a director places it in
+  /// the org tree. Once placed all three fields (`areaId`, `divisionId`,
+  /// `districtId`) are set together inside the reparent transaction.
+  areaId          String?
+  /// Denormalised lineage — scope resolution runs on every request,
+  /// reparenting runs approximately never. Only `area` is a real FK; the
+  /// other two are plain indexed columns kept in sync by the move
+  /// transaction so a Division/District Director's scope filter is one
+  /// indexed scan.
+  divisionId      String?
+  districtId      String?
+  name            String
+  /// URL-safe identifier for the public directory (`/clubs/<slug>`).
+  slug            String   @unique
+  clubNumber      String?  @unique
+  directoryStatus ClubDirectoryStatus @default(active)
+  lifecycle       ClubLifecycle       @default(active)
+  joinPolicy      ClubJoinPolicy      @default(request)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  area Area? @relation(fields: [areaId], references: [id], onDelete: SetNull)
+
+  memberships  Membership[]
+  invites      Invite[]
+  joinRequests JoinRequest[]
+  meetings     Meeting[]
+  prospects    Prospect[]
+  assets       Asset[]
+  libraryDocuments LibraryDocument[]
+  inventoryItems InventoryItem[]
+  transactions Transaction[]
+  budgetLines  BudgetLine[]
+  activityLogs ActivityLog[]
+
+  @@index([areaId])
+  @@index([divisionId])
+  @@index([districtId])
+  @@index([directoryStatus])
+}
+
+model Membership {
+  id               String   @id @default(cuid())
+  clubId           String
+  /// Null until claimed. Postgres treats NULLs as distinct in a UNIQUE
+  /// constraint, so `@@unique([clubId, userId])` allows unlimited
+  /// unclaimed rows AND one claimed row per user per club.
+  userId           String?
+  /// Name is denormalised on the membership: the club owns its roster
+  /// display, `Robert` vs `Bob` can diverge legitimately, and the roster
+  /// keeps working with zero joins on `User`.
+  firstName        String
+  lastName         String
+  email            String?
+  roles            ClubRole[]
+  isClubAdmin      Boolean  @default(false)
+  status           MembershipStatus @default(active)
+  /// Sparse per-`resource:action` overrides on top of role grants:
+  /// `{ "transaction:delete": "deny" }`. Read on every request alongside
+  /// the row; not a join table because 0–10 keys per row × 2,500 rows fits
+  /// in JSON without any join hot path.
+  grantOverrides   Json     @default("{}")
+  /// Toastmasters education profile. Deferred: a `UserEducationProfile`
+  /// following the user between clubs is purely additive.
+  pathway          String?
+  level            Int?
+  startingLevel    Int?
+  startedProject   String?
+  pathwayStartedAt DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  club Club  @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  invitesCreated       Invite[]              @relation("InvitePreCreatedMembership")
+  decidedJoinRequests  JoinRequest[]
+  historyEvents        HistoryEvent[]
+  evaluationsReceived  Evaluation[]          @relation("EvaluationSpeaker")
+  evaluationsGiven     Evaluation[]          @relation("EvaluationEvaluator")
+  timerEntries         TimerEntry[]
+  ahCounterEntries     AhCounterEntry[]
+  speechSlotRequests   SpeechSlotRequest[]
+  duesRecords          DuesRecord[]
+  tasks                Task[]
+
+  @@unique([clubId, userId])
+  /// Enables composite tenant FKs on operational tables: any child row
+  /// pointing at a Membership must reference `(clubId, membershipId)` so a
+  /// cross-tenant reference is a schema error, not a bug caught in review.
+  @@unique([clubId, id])
+  @@index([clubId, status])
+  @@index([userId])
+  @@index([email])
+}
+
+model OrgAssignment {
+  id           String    @id @default(cuid())
+  userId       String
+  role         OrgRole
+  unitType     OrgUnitType
+  /// Exactly one of these is set for a given assignment, matching
+  /// `unitType`. Typed FKs — polymorphic pointers would be a bug factory.
+  areaId       String?
+  divisionId   String?
+  districtId   String?
+  termStartsOn DateTime?
+  termEndsOn   DateTime?
+  createdAt    DateTime  @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  area     Area?     @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  division Division? @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+  district District? @relation(fields: [districtId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role, unitType, areaId, divisionId, districtId])
+  @@index([userId])
+  @@index([areaId])
+  @@index([divisionId])
+  @@index([districtId])
+}
+
+// -------------------------------------------------------- onboarding --
+
+model Invite {
+  id              String       @id @default(cuid())
+  clubId          String
+  email           String
+  /// Optional roster names the admin typed on the invite form. Kept next to
+  /// the invite (rather than pre-created on a placeholder Membership) so an
+  /// invite never doubles the invitee in the members list; convert copies
+  /// them onto the new Membership.
+  firstName       String?
+  lastName        String?
+  roles           ClubRole[]
+  status          InviteStatus @default(pending)
+  /// sha256 of the emailed link token. The raw token is never stored.
+  tokenHash       String       @unique
+  /// Pre-created roster row an admin populated when sending the invite.
+  /// Accepting the invite claims this row (sets `Membership.userId`)
+  /// instead of creating a duplicate. Left null by default — the current
+  /// convert flow creates the Membership on accept.
+  membershipId    String?      @unique
+  invitedByUserId String
+  expiresAt       DateTime
+  createdAt       DateTime     @default(now())
+  acceptedAt      DateTime?
+  revokedAt       DateTime?
+
+  club          Club        @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  invitedBy     User        @relation("InviteInvitedBy", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+  preMembership Membership? @relation("InvitePreCreatedMembership", fields: [membershipId], references: [id], onDelete: SetNull)
+
+  @@index([clubId, status])
+  @@index([email])
+  /// The partial index `invite_one_pending_per_club_email` is added by a
+  /// raw-SQL migration — Prisma cannot express a `WHERE status = 'pending'`
+  /// clause on a UNIQUE index. Without it, double-clicking Invite creates
+  /// two pending rows for the same (club, email).
+}
+
+model JoinRequest {
+  id                    String            @id @default(cuid())
+  clubId                String
+  userId                String
+  message               String?
+  status                JoinRequestStatus @default(pending)
+  decidedByMembershipId String?
+  decidedAt             DateTime?
+  createdAt             DateTime          @default(now())
+
+  club      Club        @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  decidedBy Membership? @relation(fields: [decidedByMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([clubId, status])
+  @@index([userId])
+  /// The partial index `joinreq_one_pending_per_club_user` is added by a
+  /// raw-SQL migration for the same reason as `Invite`'s — Prisma can't
+  /// express `WHERE status = 'pending'` on a UNIQUE index.
+}
+
+// -------------------------------------------------------- meetings --
+
+model Meeting {
+  id            String        @id @default(cuid())
+  clubId        String
+  meetingNumber Int
+  dateTime      DateTime
+  theme         String
+  status        MeetingStatus @default(draft)
+  /// Opaque share credential — the link IS the capability. Rotates on
+  /// demand so a leaked URL can be revoked without breaking the meeting
+  /// itself. Unique globally so `/public/meetings/:id?t=<token>` can look
+  /// up (id, token) without a tenant filter.
+  shareToken    String        @unique
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  club           Club            @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  visitLogs      VisitLog[]
+  checklistItems ChecklistItem[] @relation("MeetingChecklist")
+
+  @@unique([clubId, id])
+  @@unique([clubId, meetingNumber])
+  @@index([clubId, dateTime])
+}
+
+// ------------------------------------------------------- education --
+
+/// Wide single-table encoding of the 6-variant discriminated union in
+/// `lib/education/history.ts`. Nullable columns hold the variant-specific
+/// fields; validated at the DTO layer, not the DB.
+model HistoryEvent {
+  id            String            @id @default(cuid())
+  clubId        String
+  membershipId  String
+  type          HistoryEventType
+  /// Stored as a full timestamp; the wire projects to the `YYYY-MM-DD`
+  /// prefix, matching the existing frontend expectation.
+  date          DateTime
+  meetingNumber Int?
+  /// Meeting role label — one of `MEETING_ROLES` in `lib/education/history.ts`
+  /// (e.g. "Toastmaster of the Day"). Nullable — only set for `roleTaken`.
+  role          String?
+  /// Speech title for `speechGiven`.
+  title         String?
+  /// Project name for `speechGiven`/`projectStarted`/`projectCompleted`.
+  projectName   String?
+  /// Level (1–5) for `levelReached`/`projectStarted`/`projectCompleted`.
+  level         Int?
+  /// Pathway name (one of `PATHWAYS`) for `levelReached`/`projectStarted`/`projectCompleted`.
+  pathway       String?
+  createdAt     DateTime          @default(now())
+
+  membership Membership @relation(fields: [clubId, membershipId], references: [clubId, id], onDelete: Cascade)
+
+  @@index([clubId, membershipId])
+  @@index([clubId, date])
+}
+
+/// Peer evaluation of a prepared speech, one per `speech-given` event.
+/// `speechEventId` is a soft reference — history rows are recreated on
+/// re-seed, so a hard FK would tangle the seed flow; the client joins the
+/// two on the wire.
+model Evaluation {
+  id             String   @id @default(cuid())
+  clubId         String
+  membershipId   String
+  evaluatorMembershipId String
+  speechEventId  String
+  meetingNumber  Int
+  date           DateTime
+  strengths      String
+  improvement    String
+  overallRating  Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  membership Membership @relation("EvaluationSpeaker", fields: [clubId, membershipId], references: [clubId, id], onDelete: Cascade)
+  evaluator  Membership @relation("EvaluationEvaluator", fields: [clubId, evaluatorMembershipId], references: [clubId, id], onDelete: Cascade)
+
+  @@index([clubId, membershipId])
+  @@index([speechEventId])
+}
+
+model TimerEntry {
+  id                String   @id @default(cuid())
+  clubId            String
+  membershipId      String
+  speechEventId     String
+  meetingNumber     Int
+  date              DateTime
+  targetMinMinutes  Int
+  targetMaxMinutes  Int
+  actualSeconds     Int
+  createdAt         DateTime @default(now())
+
+  membership Membership @relation(fields: [clubId, membershipId], references: [clubId, id], onDelete: Cascade)
+
+  @@index([clubId, membershipId])
+  @@index([speechEventId])
+}
+
+model AhCounterEntry {
+  id            String   @id @default(cuid())
+  clubId        String
+  membershipId  String
+  speechEventId String
+  meetingNumber Int
+  date          DateTime
+  /// `{ ah: 4, um: 2, so: 1, like: 0 }` — a small key/value bag whose keys
+  /// vary by club convention. JSON is the right shape; a join table would
+  /// carry a hot-path query for a rarely-mutated map.
+  fillerCounts  Json     @default("{}")
+  createdAt     DateTime @default(now())
+
+  membership Membership @relation(fields: [clubId, membershipId], references: [clubId, id], onDelete: Cascade)
+
+  @@index([clubId, membershipId])
+  @@index([speechEventId])
+}
+
+model SpeechSlotRequest {
+  id           String                  @id @default(cuid())
+  clubId       String
+  membershipId String
+  meetingId    String
+  projectName  String?
+  note         String?
+  status       SpeechSlotRequestStatus @default(pending)
+  requestedAt  DateTime                @default(now())
+
+  membership Membership @relation(fields: [clubId, membershipId], references: [clubId, id], onDelete: Cascade)
+
+  @@index([clubId, membershipId])
+  @@index([clubId, meetingId])
+}
+
+// --------------------------------------------------------- people --
+
+/// The guest-pipeline entity. Named `Prospect` on the DB to sidestep the
+/// clash with the `ClubRole.Guest` enum value; the API path stays `/guests`
+/// and every UI string still reads "Guest" — the rename is DB-only.
+model Prospect {
+  id         String   @id @default(cuid())
+  clubId     String
+  firstName  String
+  lastName   String
+  email      String?
+  phone      String?
+  whatsapp   String?
+  avatarUrl  String?  @db.Text
+  /// `GuestSocial[]` — a small array (0–8 items) embedded rather than
+  /// carried in a separate table. Read on every profile render.
+  socials    Json     @default("[]")
+  bio        String?
+  notes      String?
+  firstVisit DateTime?
+  lastVisit  DateTime?
+  visitCount Int      @default(0)
+  invitedBy  String?
+  /// One of `GUEST_STAGE_IDS` (`new` / `contacted` / `interested` /
+  /// `joined-meetings` / `joined-club` / `not-interested`). Stored as a
+  /// plain string because Prisma enum identifiers cannot contain hyphens;
+  /// the DTO enforces the union.
+  stage      String   @default("new")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  club        Club         @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  contactLogs ContactLog[]
+  visitLogs   VisitLog[]
+
+  @@unique([clubId, id])
+  @@index([clubId, stage])
+}
+
+model ContactLog {
+  id             String   @id @default(cuid())
+  clubId         String
+  prospectId     String
+  /// One of `CONTACT_METHOD_IDS`. `in-person` carries a hyphen, so the
+  /// column stays a plain string (same trade-off as `Prospect.stage`).
+  method         String
+  outcome        String   @db.Text
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime?
+
+  prospect Prospect @relation(fields: [clubId, prospectId], references: [clubId, id], onDelete: Cascade)
+
+  @@index([clubId, prospectId])
+}
+
+model VisitLog {
+  id         String   @id @default(cuid())
+  clubId     String
+  prospectId String
+  /// SetNull on meeting delete — the drawer falls back to a "meeting no
+  /// longer on file" line, matching the local-db behaviour.
+  meetingId  String?
+  role       String?
+  notes      String?  @db.Text
+  /// `meeting` when auto-created from a meeting agenda naming this guest,
+  /// `manual` when added by hand.
+  origin     String   @default("manual")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime?
+
+  prospect Prospect @relation(fields: [clubId, prospectId], references: [clubId, id], onDelete: Cascade)
+  meeting  Meeting? @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+
+  @@index([clubId, prospectId])
+  @@index([meetingId])
+}
+
+// -------------------------------------------------------- library --
+
+/// A single image the club keeps in its shared asset library — flyer, meeting
+/// photo, poster template. Bytes are inlined as a data-URL on the local-db
+/// backend and stay inline here until an object-store backend arrives; the
+/// column is plain `Text` for that reason (Postgres handles a few MB fine).
+model Asset {
+  id        String   @id @default(cuid())
+  clubId    String
+  title     String
+  imageUrl  String   @db.Text
+  mimeType  String
+  width     Int
+  height    Int
+  sizeBytes Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime?
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId, createdAt])
+}
+
+/// A non-image file the club keeps on the shared shelf — minutes, agendas,
+/// spreadsheets, handbooks. Same inline-bytes strategy as `Asset`.
+model LibraryDocument {
+  id        String   @id @default(cuid())
+  clubId    String
+  title     String
+  fileName  String
+  fileUrl   String   @db.Text
+  mimeType  String
+  sizeBytes Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime?
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId, createdAt])
+}
+
+// ------------------------------------------------------- inventory --
+
+/// A physical asset the club owns — banner, timing lights, gavel. Tracked
+/// separately from `Asset` (digital files) because ownership, not
+/// distribution, is what the Inventory tab is about.
+model InventoryItem {
+  id             String   @id @default(cuid())
+  clubId         String
+  title          String
+  description    String?  @db.Text
+  imageUrl       String?  @db.Text
+  imageMimeType  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime?
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId, createdAt])
+}
+
+/// A single line on a meeting's pre-meeting checklist. Meeting-scoped so the
+/// Meeting tab and the Inventory tab read the same rows for the current
+/// meeting — ticking off from either surface updates the other. Composite FK
+/// against `Meeting.(clubId, id)` so a checklist item cannot straddle clubs.
+model ChecklistItem {
+  id        String   @id @default(cuid())
+  clubId    String
+  meetingId String
+  text      String
+  done      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime?
+
+  meeting Meeting @relation("MeetingChecklist", fields: [clubId, meetingId], references: [clubId, id], onDelete: Cascade)
+
+  @@index([clubId, meetingId])
+}
+
+// --------------------------------------------------------- finance --
+
+/// The club's ledger — every taka in or out. Running balances are computed
+/// on the fly from this table, never stored, so they can never drift out of
+/// sync with an edited or deleted row.
+///
+/// `duesRecordId` is set only on the income row auto-created when a dues
+/// payment is recorded; the pair (record ↔ transaction) is maintained by
+/// `updateDuesRecord` inside a `$transaction`. Direct edits to a
+/// dues-linked row return 409 `TRANSACTION_LOCKED_TO_DUES`.
+model Transaction {
+  id           String   @id @default(cuid())
+  clubId       String
+  /// yyyy-mm-dd — the date the money actually moved. Stored as `String`
+  /// (not `DateTime`) because the ledger is a date-only surface and adding
+  /// timezone semantics would make the sort/group logic on the client
+  /// harder for zero gain.
+  date         String
+  direction    String
+  category     String
+  amountMinor  Int
+  description  String
+  method       String
+  counterparty String?
+  reference    String?
+  duesRecordId String?  @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime?
+
+  club        Club         @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  duesRecord  DuesRecord?  @relation(fields: [duesRecordId], references: [id], onDelete: SetNull)
+
+  @@index([clubId, date])
+  @@index([clubId, category])
+}
+
+/// One row per (member, dues period). Status is always derived from the
+/// amounts, never stored, so it can never drift out of sync with a payment.
+/// `DuesPeriod` is a fixed calendar constant (Toastmasters renewals fall on
+/// 1 Oct / 1 Apr) and lives in the web module — no table for that.
+///
+/// Composite FK against `Membership.(clubId, id)` keeps a record's member and
+/// club aligned at the schema level.
+model DuesRecord {
+  id             String   @id @default(cuid())
+  clubId         String
+  /// One of `DUES_PERIODS` in `lib/finance/dues.ts`. Plain string because
+  /// values are compound like `2026-apr`.
+  periodId       String
+  membershipId   String
+  amountDueMinor Int
+  amountPaidMinor Int     @default(0)
+  waived         Boolean  @default(false)
+  paidOn         String?
+  method         String?
+  note           String?  @db.Text
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime?
+
+  membership  Membership   @relation(fields: [clubId, membershipId], references: [clubId, id], onDelete: Cascade)
+  transaction Transaction?
+
+  @@unique([clubId, periodId, membershipId])
+  @@index([clubId, periodId])
+}
+
+/// Treasurer's annual plan — how much each category is expected to bring in
+/// or cost across a fiscal year. Actuals are computed on the fly from the
+/// ledger, never stored.
+model BudgetLine {
+  id           String   @id @default(cuid())
+  clubId       String
+  fiscalYear   String
+  kind         String
+  category     String
+  plannedMinor Int
+  note         String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime?
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@unique([clubId, fiscalYear, category])
+  @@index([clubId, fiscalYear])
+}
+
+// -------------------------------------------------------- tasks --
+
+/// A committee or officer action item assigned to one member by name.
+/// Distinct from `ChecklistItem` (meeting-scoped SAA prep). Composite FK
+/// against `Membership.(clubId, id)` — assignment is club-scoped.
+model Task {
+  id           String   @id @default(cuid())
+  clubId       String
+  membershipId String
+  title        String
+  /// Free-text "who asked" — a role and a name, e.g. "SAA · Yara Ibrahim".
+  assignedBy   String
+  dueDate      String?
+  done         Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime?
+
+  membership Membership @relation(fields: [clubId, membershipId], references: [clubId, id], onDelete: Cascade)
+
+  @@index([clubId, membershipId])
+}
+
+// ------------------------------------------------------- activity --
+
+/// "Who did what, when" — the audit stream. Emitted from write paths that
+/// mutate a domain the user cares about tracking. `entityType`/`entityId`
+/// is a soft polymorphic pointer so rebuilding the referenced entity's
+/// row doesn't tangle the log.
+///
+/// `actorMembershipId` is a **soft reference** to `Membership` — no FK.
+/// When a member is removed the log survives with the pointer dangling; the
+/// feed renders "Removed member" for that row. A composite tenant FK with
+/// `SetNull` doesn't fit (would null the tenant `clubId` too) and `Cascade`
+/// would destroy the audit trail on removal, which defeats the point.
+///
+/// `points` is reserved for a future leaderboard rollup; always 0 today.
+model ActivityLog {
+  id               String   @id @default(cuid())
+  clubId           String
+  actorMembershipId String?
+  category         String
+  action           String
+  summary          String
+  entityType       String?
+  entityId         String?
+  points           Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId, createdAt])
+  @@index([clubId, category])
+  @@index([clubId, actorMembershipId])
+}
