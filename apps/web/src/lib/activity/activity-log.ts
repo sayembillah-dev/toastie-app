@@ -14,6 +14,7 @@ export const ACTIVITY_CATEGORIES = [
   'people',
   'library',
   'task',
+  'org',
 ] as const;
 
 export type ActivityCategory = (typeof ACTIVITY_CATEGORIES)[number];

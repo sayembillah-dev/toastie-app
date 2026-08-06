@@ -134,9 +134,10 @@ interface SidebarBodyProps {
   brandAction: React.ReactNode;
   /** Fires when a nav entry is followed, so the drawer can dismiss itself. */
   onNavigate?: () => void;
-  /** When false, the nav column is deliberately blank — used by placeholder
-   * scopes (Area, Division, District, admin tiers) while their surfaces are
-   * still being built. */
+  /** When false, the nav column is deliberately blank — `primaryNav` is
+   * club-specific, and the org-tree scopes (Area, Division, District, Super
+   * Admin) navigate by breadcrumb and card drill-down instead. Also blank for
+   * `club-admin`, whose surfaces don't exist yet. */
   showNav: boolean;
 }
 
@@ -267,6 +268,22 @@ interface AppShellProps {
   /** Overrides the label on the last breadcrumb crumb. Useful when the URL
    * carries an id (e.g. `/education/m-01`) and the human title lives in data. */
   breadcrumbLabel?: string;
+  /** Replaces the computed trail outright. For routes with more than one
+   * dynamic segment (e.g. `/district/[divisionId]/[areaId]`) the fallback
+   * slug-title logic in `buildTrail` can't know the human names — the screen
+   * fetches them and supplies the exact trail instead. */
+  breadcrumbTrail?: { href: string; title: string }[];
+}
+
+/** Unit-switcher scopes with real, routed dashboards — everything under these
+ * prefixes renders regardless of `activeUnit`, so a bookmarked or
+ * freshly-loaded URL still works before the switcher state catches up. */
+const ORG_ROUTE_PREFIXES = ['/district', '/division', '/area', '/super-admin'];
+
+function isOrgRoute(pathname: string): boolean {
+  return ORG_ROUTE_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
 }
 
 export function AppShell({
@@ -275,6 +292,7 @@ export function AppShell({
   notificationCount = 0,
   account,
   breadcrumbLabel,
+  breadcrumbTrail,
 }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -286,17 +304,26 @@ export function AppShell({
   const dispatch = useAppDispatch();
   const closeMobileNav = () => dispatch(mobileNavClosed());
 
-  /* Only the `club` scope has real surfaces today. Every other tier renders a
-   * "coming soon" placeholder and an empty nav so the switch reads as an
-   * intentional swap rather than a broken view. */
-  const showClubShell = activeUnit === 'club';
+  /* `club` and the org-tree scopes (district/division/area/super-admin) have
+   * real surfaces; `club-admin` is still a placeholder. Content gating reads
+   * the pathname rather than `activeUnit` alone so a bookmarked or
+   * freshly-loaded org URL renders correctly before the switcher state (which
+   * is not persisted) catches up. */
+  const onOrgRoute = isOrgRoute(pathname);
+  const showContent = activeUnit === 'club' || onOrgRoute;
+  /* The primary nav is club-specific (Meetings, Finance, …); the org
+   * dashboards navigate by breadcrumb and card drill-down instead, so their
+   * sidebar stays blank the same way the placeholder scopes' did. */
+  const showNav = activeUnit === 'club' && !onOrgRoute;
 
-  const rawTrail = buildTrail(pathname);
-  const trail = breadcrumbLabel
-    ? rawTrail.map((crumb, index) =>
-        index === rawTrail.length - 1 ? { ...crumb, title: breadcrumbLabel } : crumb,
-      )
-    : rawTrail;
+  const rawTrail = breadcrumbTrail ?? buildTrail(pathname);
+  const trail = breadcrumbTrail
+    ? rawTrail
+    : breadcrumbLabel
+      ? rawTrail.map((crumb, index) =>
+          index === rawTrail.length - 1 ? { ...crumb, title: breadcrumbLabel } : crumb,
+        )
+      : rawTrail;
 
   return (
     <Layout className="h-screen">
@@ -315,7 +342,7 @@ export function AppShell({
           pathname={pathname}
           notificationCount={notificationCount}
           account={account}
-          showNav={showClubShell}
+          showNav={showNav}
           brandAction={
             <Button
               type="text"
@@ -344,7 +371,7 @@ export function AppShell({
           pathname={pathname}
           notificationCount={notificationCount}
           account={account}
-          showNav={showClubShell}
+          showNav={showNav}
           onNavigate={closeMobileNav}
           brandAction={
             <Button
@@ -430,7 +457,7 @@ export function AppShell({
           </header>
 
           <main className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
-            {showClubShell ? children : <ComingSoonPanel />}
+            {showContent ? children : <ComingSoonPanel />}
           </main>
         </div>
       </div>

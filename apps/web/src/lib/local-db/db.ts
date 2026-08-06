@@ -32,6 +32,8 @@ import type { Meeting } from '@/lib/meetings/meetings';
 import { SEED_MEETINGS } from '@/lib/meetings/meetings';
 import type { TimerEntry } from '@/lib/meetings/timer-reports';
 import { TIMER_ENTRY_SEED } from '@/lib/meetings/timer-reports';
+import { SEED_AREAS, SEED_DISTRICTS, SEED_DIVISIONS, SEED_ORG_CLUBS } from '@/lib/org/seed';
+import type { Area, District, Division, OrgClub } from '@/lib/org/types';
 import type { ContactLog } from '@/lib/people/contact-logs';
 import { SEED_CONTACT_LOGS } from '@/lib/people/contact-logs';
 import type { Guest } from '@/lib/people/guests';
@@ -67,8 +69,10 @@ import { SEED_TASKS } from '@/lib/tasks/tasks';
  *    backing the Finance (treasurer) page.
  * v10 introduced the evaluations, timer-entries, ah-counter-entries,
  *    speech-slot-requests and tasks tables backing the Me page.
- * v11 introduced the activity-logs table backing the Activity Logs page. */
-const SCHEMA_VERSION = 'v11';
+ * v11 introduced the activity-logs table backing the Activity Logs page.
+ * v12 introduced the districts, divisions, areas and org-clubs tables backing
+ *     the District/Division/Area/Super Admin unit dashboards. */
+const SCHEMA_VERSION = 'v12';
 
 export const DB_KEYS = {
   members: `toastly.db.${SCHEMA_VERSION}.members`,
@@ -91,6 +95,10 @@ export const DB_KEYS = {
   speechSlotRequests: `toastly.db.${SCHEMA_VERSION}.speech-slot-requests`,
   tasks: `toastly.db.${SCHEMA_VERSION}.tasks`,
   activityLogs: `toastly.db.${SCHEMA_VERSION}.activity-logs`,
+  districts: `toastly.db.${SCHEMA_VERSION}.districts`,
+  divisions: `toastly.db.${SCHEMA_VERSION}.divisions`,
+  areas: `toastly.db.${SCHEMA_VERSION}.areas`,
+  orgClubs: `toastly.db.${SCHEMA_VERSION}.org-clubs`,
 } as const;
 
 /** Used by the cross-tab sync listener to tell our writes apart from any other
@@ -185,6 +193,22 @@ function seedTasks(): Task[] {
 
 function seedActivityLogs(): ActivityLog[] {
   return SEED_ACTIVITY_LOGS;
+}
+
+function seedDistricts(): District[] {
+  return SEED_DISTRICTS;
+}
+
+function seedDivisions(): Division[] {
+  return SEED_DIVISIONS;
+}
+
+function seedAreas(): Area[] {
+  return SEED_AREAS;
+}
+
+function seedOrgClubs(): OrgClub[] {
+  return SEED_ORG_CLUBS;
 }
 
 function seedMemberExtras(): MemberExtrasTable {
@@ -358,6 +382,38 @@ export function readActivityLogs(): ActivityLog[] {
 
 export function writeActivityLogs(logs: ActivityLog[]): void {
   writeTable(DB_KEYS.activityLogs, logs);
+}
+
+export function readDistricts(): District[] {
+  return readTable(DB_KEYS.districts, seedDistricts);
+}
+
+export function writeDistricts(districts: District[]): void {
+  writeTable(DB_KEYS.districts, districts);
+}
+
+export function readDivisions(): Division[] {
+  return readTable(DB_KEYS.divisions, seedDivisions);
+}
+
+export function writeDivisions(divisions: Division[]): void {
+  writeTable(DB_KEYS.divisions, divisions);
+}
+
+export function readAreas(): Area[] {
+  return readTable(DB_KEYS.areas, seedAreas);
+}
+
+export function writeAreas(areas: Area[]): void {
+  writeTable(DB_KEYS.areas, areas);
+}
+
+export function readOrgClubs(): OrgClub[] {
+  return readTable(DB_KEYS.orgClubs, seedOrgClubs);
+}
+
+export function writeOrgClubs(clubs: OrgClub[]): void {
+  writeTable(DB_KEYS.orgClubs, clubs);
 }
 
 export function readMemberExtras(): MemberExtrasTable {

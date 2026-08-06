@@ -42,6 +42,20 @@ import type { AhCounterEntry } from '@/lib/meetings/ah-counter-reports';
 import type { CreateMeetingInput, Meeting, UpdateMeetingInput } from '@/lib/meetings/meetings';
 import type { TimerEntry } from '@/lib/meetings/timer-reports';
 import type {
+  Area,
+  CreateAreaInput,
+  CreateDistrictInput,
+  CreateDivisionInput,
+  CreateOrgClubInput,
+  District,
+  Division,
+  OrgClub,
+  UpdateAreaInput,
+  UpdateDistrictInput,
+  UpdateDivisionInput,
+  UpdateOrgClubInput,
+} from '@/lib/org/types';
+import type {
   ContactLog,
   CreateContactLogInput,
   UpdateContactLogInput,
@@ -80,6 +94,10 @@ export const toastlyApi = createApi({
     'SpeechSlotRequest',
     'Task',
     'ActivityLog',
+    'District',
+    'Division',
+    'Area',
+    'OrgClub',
   ],
   endpoints: (build) => ({
     getMembers: build.query<Member[], void>({
@@ -933,6 +951,172 @@ export const toastlyApi = createApi({
         ...(logs ?? []).map((log) => ({ type: 'ActivityLog' as const, id: log.id })),
       ],
     }),
+
+    /* --------------------------------------------------------- org tree -- */
+    /* District > Division > Area > Club — the unit-switcher dashboards.
+     * Every list endpoint takes an optional parent id and every write also
+     * invalidates the parent-scoped list of its own type, since moving a
+     * row changes which cached list it belongs in. */
+
+    listDistricts: build.query<District[], void>({
+      query: () => ({ url: '/districts', method: 'GET' }),
+      providesTags: (districts) => [
+        { type: 'District', id: 'LIST' },
+        ...(districts ?? []).map((district) => ({ type: 'District' as const, id: district.id })),
+      ],
+    }),
+
+    createDistrict: build.mutation<District, CreateDistrictInput>({
+      query: (body) => ({ url: '/districts', method: 'POST', body }),
+      invalidatesTags: [
+        { type: 'District', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    updateDistrict: build.mutation<District, { districtId: string } & UpdateDistrictInput>({
+      query: ({ districtId, ...body }) => ({
+        url: `/districts/${districtId}`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: (_district, _error, { districtId }) => [
+        { type: 'District', id: districtId },
+        { type: 'District', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    deleteDistrict: build.mutation<null, string>({
+      query: (districtId) => ({ url: `/districts/${districtId}`, method: 'DELETE' }),
+      invalidatesTags: [
+        { type: 'District', id: 'LIST' },
+        { type: 'Division', id: 'LIST' },
+        { type: 'Area', id: 'LIST' },
+        { type: 'OrgClub', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    listDivisions: build.query<Division[], string | void>({
+      query: (districtId) => ({
+        url: districtId
+          ? `/divisions?${new URLSearchParams({ districtId }).toString()}`
+          : '/divisions',
+        method: 'GET',
+      }),
+      providesTags: (divisions) => [
+        { type: 'Division', id: 'LIST' },
+        ...(divisions ?? []).map((division) => ({ type: 'Division' as const, id: division.id })),
+      ],
+    }),
+
+    createDivision: build.mutation<Division, CreateDivisionInput>({
+      query: (body) => ({ url: '/divisions', method: 'POST', body }),
+      invalidatesTags: [
+        { type: 'Division', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    /* Also the "move" action — passing a different `districtId` reparents it. */
+    updateDivision: build.mutation<Division, { divisionId: string } & UpdateDivisionInput>({
+      query: ({ divisionId, ...body }) => ({
+        url: `/divisions/${divisionId}`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: (_division, _error, { divisionId }) => [
+        { type: 'Division', id: divisionId },
+        { type: 'Division', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    deleteDivision: build.mutation<null, string>({
+      query: (divisionId) => ({ url: `/divisions/${divisionId}`, method: 'DELETE' }),
+      invalidatesTags: [
+        { type: 'Division', id: 'LIST' },
+        { type: 'Area', id: 'LIST' },
+        { type: 'OrgClub', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    listAreas: build.query<Area[], string | void>({
+      query: (divisionId) => ({
+        url: divisionId ? `/areas?${new URLSearchParams({ divisionId }).toString()}` : '/areas',
+        method: 'GET',
+      }),
+      providesTags: (areas) => [
+        { type: 'Area', id: 'LIST' },
+        ...(areas ?? []).map((area) => ({ type: 'Area' as const, id: area.id })),
+      ],
+    }),
+
+    createArea: build.mutation<Area, CreateAreaInput>({
+      query: (body) => ({ url: '/areas', method: 'POST', body }),
+      invalidatesTags: [
+        { type: 'Area', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    /* Also the "move" action — passing a different `divisionId` reparents it. */
+    updateArea: build.mutation<Area, { areaId: string } & UpdateAreaInput>({
+      query: ({ areaId, ...body }) => ({ url: `/areas/${areaId}`, method: 'PATCH', body }),
+      invalidatesTags: (_area, _error, { areaId }) => [
+        { type: 'Area', id: areaId },
+        { type: 'Area', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    deleteArea: build.mutation<null, string>({
+      query: (areaId) => ({ url: `/areas/${areaId}`, method: 'DELETE' }),
+      invalidatesTags: [
+        { type: 'Area', id: 'LIST' },
+        { type: 'OrgClub', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    listOrgClubs: build.query<OrgClub[], string | void>({
+      query: (areaId) => ({
+        url: areaId ? `/org-clubs?${new URLSearchParams({ areaId }).toString()}` : '/org-clubs',
+        method: 'GET',
+      }),
+      providesTags: (clubs) => [
+        { type: 'OrgClub', id: 'LIST' },
+        ...(clubs ?? []).map((club) => ({ type: 'OrgClub' as const, id: club.id })),
+      ],
+    }),
+
+    createOrgClub: build.mutation<OrgClub, CreateOrgClubInput>({
+      query: (body) => ({ url: '/org-clubs', method: 'POST', body }),
+      invalidatesTags: [
+        { type: 'OrgClub', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    /* Also the "move" action — passing a different `areaId` reparents it. */
+    updateOrgClub: build.mutation<OrgClub, { clubId: string } & UpdateOrgClubInput>({
+      query: ({ clubId, ...body }) => ({ url: `/org-clubs/${clubId}`, method: 'PATCH', body }),
+      invalidatesTags: (_club, _error, { clubId }) => [
+        { type: 'OrgClub', id: clubId },
+        { type: 'OrgClub', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    deleteOrgClub: build.mutation<null, string>({
+      query: (clubId) => ({ url: `/org-clubs/${clubId}`, method: 'DELETE' }),
+      invalidatesTags: [
+        { type: 'OrgClub', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
   }),
 });
 
@@ -992,4 +1176,20 @@ export const {
   useGetTasksQuery,
   useUpdateTaskMutation,
   useGetActivityLogsQuery,
+  useListDistrictsQuery,
+  useCreateDistrictMutation,
+  useUpdateDistrictMutation,
+  useDeleteDistrictMutation,
+  useListDivisionsQuery,
+  useCreateDivisionMutation,
+  useUpdateDivisionMutation,
+  useDeleteDivisionMutation,
+  useListAreasQuery,
+  useCreateAreaMutation,
+  useUpdateAreaMutation,
+  useDeleteAreaMutation,
+  useListOrgClubsQuery,
+  useCreateOrgClubMutation,
+  useUpdateOrgClubMutation,
+  useDeleteOrgClubMutation,
 } = toastlyApi;

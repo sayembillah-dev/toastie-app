@@ -81,6 +81,21 @@ import type { CreateMeetingInput, Meeting, UpdateMeetingInput } from '@/lib/meet
 import { MEETING_STATUSES } from '@/lib/meetings/meetings';
 import type { TimerEntry } from '@/lib/meetings/timer-reports';
 import type {
+  Area,
+  CreateAreaInput,
+  CreateDistrictInput,
+  CreateDivisionInput,
+  CreateOrgClubInput,
+  District,
+  Division,
+  OrgClub,
+  UpdateAreaInput,
+  UpdateDistrictInput,
+  UpdateDivisionInput,
+  UpdateOrgClubInput,
+} from '@/lib/org/types';
+import { CLUB_NUMBER_MAX, DISTRICT_CODE_MAX, isOrgClubStatus, ORG_NAME_MAX } from '@/lib/org/types';
+import type {
   ContactLog,
   CreateContactLogInput,
   UpdateContactLogInput,
@@ -95,10 +110,13 @@ import type { Task, UpdateTaskInput } from '@/lib/tasks/tasks';
 import {
   readActivityLogs,
   readAhCounterEntries,
+  readAreas,
   readAssets,
   readBudgetLines,
   readChecklists,
   readContactLogs,
+  readDistricts,
+  readDivisions,
   readDocuments,
   readDuesRecords,
   readEvaluations,
@@ -108,16 +126,20 @@ import {
   readInventoryItems,
   readMeetings,
   readMembers,
+  readOrgClubs,
   readSpeechSlotRequests,
   readTasks,
   readTimerEntries,
   readTransactions,
   readVisitLogs,
   writeActivityLogs,
+  writeAreas,
   writeAssets,
   writeBudgetLines,
   writeChecklists,
   writeContactLogs,
+  writeDistricts,
+  writeDivisions,
   writeDocuments,
   writeDuesRecords,
   writeGuests,
@@ -125,6 +147,7 @@ import {
   writeInventoryItems,
   writeMeetings,
   writeMembers,
+  writeOrgClubs,
   writeSpeechSlotRequests,
   writeTasks,
   writeTransactions,
@@ -1992,6 +2015,472 @@ function deleteBudgetLine({ params }: RouteContext): null {
   return null;
 }
 
+/* --------------------------------------------------------------- org tree -- */
+
+function trimmedNameOrThrow(value: unknown, label: string): string {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new LocalApiError(400, `${label} is required`);
+  }
+  if (value.trim().length > ORG_NAME_MAX) {
+    throw new LocalApiError(400, `${label} must be ${ORG_NAME_MAX} characters or fewer`);
+  }
+  return value.trim();
+}
+
+function createOrgId(prefix: string): string {
+  return `${prefix}-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+}
+
+function requireDistrict(districtId: string): District {
+  const district = readDistricts().find((entry) => entry.id === districtId);
+  if (!district) throw new LocalApiError(404, `No district with id "${districtId}"`);
+  return district;
+}
+
+function requireDivision(divisionId: string): Division {
+  const division = readDivisions().find((entry) => entry.id === divisionId);
+  if (!division) throw new LocalApiError(404, `No division with id "${divisionId}"`);
+  return division;
+}
+
+function requireArea(areaId: string): Area {
+  const area = readAreas().find((entry) => entry.id === areaId);
+  if (!area) throw new LocalApiError(404, `No area with id "${areaId}"`);
+  return area;
+}
+
+/* ----- districts ----- */
+
+function parseCreateDistrictBody(body: unknown): CreateDistrictInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected a create-district body');
+  }
+  const { name, code } = body as Partial<CreateDistrictInput>;
+  const parsedName = trimmedNameOrThrow(name, 'A district name');
+  if (typeof code !== 'string' || code.trim() === '') {
+    throw new LocalApiError(400, 'A district code is required');
+  }
+  if (code.trim().length > DISTRICT_CODE_MAX) {
+    throw new LocalApiError(
+      400,
+      `The district code must be ${DISTRICT_CODE_MAX} characters or fewer`,
+    );
+  }
+  return { name: parsedName, code: code.trim() };
+}
+
+function parseUpdateDistrictBody(body: unknown): UpdateDistrictInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected an update-district body');
+  }
+  const { name, code } = body as Partial<UpdateDistrictInput>;
+  const output: UpdateDistrictInput = {};
+  if (name !== undefined) output.name = trimmedNameOrThrow(name, 'A district name');
+  if (code !== undefined) {
+    if (typeof code !== 'string' || code.trim() === '') {
+      throw new LocalApiError(400, 'A district code is required');
+    }
+    if (code.trim().length > DISTRICT_CODE_MAX) {
+      throw new LocalApiError(
+        400,
+        `The district code must be ${DISTRICT_CODE_MAX} characters or fewer`,
+      );
+    }
+    output.code = code.trim();
+  }
+  return output;
+}
+
+function listDistricts(): District[] {
+  return readDistricts();
+}
+
+function createDistrict({ body }: RouteContext): District {
+  const input = parseCreateDistrictBody(body);
+  const district: District = {
+    id: createOrgId('dist'),
+    ...input,
+    createdAt: new Date().toISOString(),
+  };
+  writeDistricts([...readDistricts(), district]);
+  recordActivity({
+    category: 'org',
+    action: 'created a district',
+    summary: `Created district — ${district.name}`,
+    entityType: 'district',
+    entityId: district.id,
+  });
+  return district;
+}
+
+function updateDistrict({ params, body }: RouteContext): District {
+  const districts = readDistricts();
+  const existing = districts.find((entry) => entry.id === params.districtId);
+  if (!existing) throw new LocalApiError(404, `No district with id "${params.districtId}"`);
+  const changes = parseUpdateDistrictBody(body);
+  const updated: District = { ...existing, ...changes, updatedAt: new Date().toISOString() };
+  writeDistricts(districts.map((entry) => (entry.id === updated.id ? updated : entry)));
+  recordActivity({
+    category: 'org',
+    action: 'updated a district',
+    summary: `Updated district — ${updated.name}`,
+    entityType: 'district',
+    entityId: updated.id,
+  });
+  return updated;
+}
+
+function deleteDistrict({ params }: RouteContext): null {
+  const districts = readDistricts();
+  const existing = districts.find((entry) => entry.id === params.districtId);
+  if (!existing) throw new LocalApiError(404, `No district with id "${params.districtId}"`);
+
+  const divisions = readDivisions();
+  const doomedDivisionIds = new Set(
+    divisions
+      .filter((division) => division.districtId === existing.id)
+      .map((division) => division.id),
+  );
+  const areas = readAreas();
+  const doomedAreaIds = new Set(
+    areas.filter((area) => doomedDivisionIds.has(area.divisionId)).map((area) => area.id),
+  );
+  const clubs = readOrgClubs();
+
+  writeOrgClubs(clubs.filter((club) => !doomedAreaIds.has(club.areaId)));
+  writeAreas(areas.filter((area) => !doomedAreaIds.has(area.id)));
+  writeDivisions(divisions.filter((division) => !doomedDivisionIds.has(division.id)));
+  writeDistricts(districts.filter((entry) => entry.id !== existing.id));
+
+  recordActivity({
+    category: 'org',
+    action: 'deleted a district',
+    summary: `Deleted district — ${existing.name}, along with everything under it`,
+    entityType: 'district',
+    entityId: existing.id,
+  });
+  return null;
+}
+
+/* ----- divisions ----- */
+
+function parseCreateDivisionBody(body: unknown): CreateDivisionInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected a create-division body');
+  }
+  const { districtId, name } = body as Partial<CreateDivisionInput>;
+  if (typeof districtId !== 'string' || districtId.trim() === '') {
+    throw new LocalApiError(400, 'districtId is required');
+  }
+  requireDistrict(districtId);
+  return { districtId, name: trimmedNameOrThrow(name, 'A division name') };
+}
+
+function parseUpdateDivisionBody(body: unknown): UpdateDivisionInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected an update-division body');
+  }
+  const { name, districtId } = body as Partial<UpdateDivisionInput>;
+  const output: UpdateDivisionInput = {};
+  if (name !== undefined) output.name = trimmedNameOrThrow(name, 'A division name');
+  if (districtId !== undefined) {
+    if (typeof districtId !== 'string' || districtId.trim() === '') {
+      throw new LocalApiError(400, 'districtId is required');
+    }
+    requireDistrict(districtId);
+    output.districtId = districtId;
+  }
+  return output;
+}
+
+function listDivisions({ query }: RouteContext): Division[] {
+  const divisions = readDivisions();
+  return query.districtId
+    ? divisions.filter((division) => division.districtId === query.districtId)
+    : divisions;
+}
+
+function createDivision({ body }: RouteContext): Division {
+  const input = parseCreateDivisionBody(body);
+  const division: Division = {
+    id: createOrgId('div'),
+    ...input,
+    createdAt: new Date().toISOString(),
+  };
+  writeDivisions([...readDivisions(), division]);
+  recordActivity({
+    category: 'org',
+    action: 'created a division',
+    summary: `Created division — ${division.name}`,
+    entityType: 'division',
+    entityId: division.id,
+  });
+  return division;
+}
+
+function updateDivision({ params, body }: RouteContext): Division {
+  const divisions = readDivisions();
+  const existing = divisions.find((entry) => entry.id === params.divisionId);
+  if (!existing) throw new LocalApiError(404, `No division with id "${params.divisionId}"`);
+  const changes = parseUpdateDivisionBody(body);
+  const moved = changes.districtId !== undefined && changes.districtId !== existing.districtId;
+  const updated: Division = { ...existing, ...changes, updatedAt: new Date().toISOString() };
+  writeDivisions(divisions.map((entry) => (entry.id === updated.id ? updated : entry)));
+  recordActivity({
+    category: 'org',
+    action: moved ? 'moved a division' : 'updated a division',
+    summary: moved
+      ? `Moved division ${updated.name} to a different district`
+      : `Updated division — ${updated.name}`,
+    entityType: 'division',
+    entityId: updated.id,
+  });
+  return updated;
+}
+
+function deleteDivision({ params }: RouteContext): null {
+  const divisions = readDivisions();
+  const existing = divisions.find((entry) => entry.id === params.divisionId);
+  if (!existing) throw new LocalApiError(404, `No division with id "${params.divisionId}"`);
+
+  const areas = readAreas();
+  const doomedAreaIds = new Set(
+    areas.filter((area) => area.divisionId === existing.id).map((area) => area.id),
+  );
+  const clubs = readOrgClubs();
+
+  writeOrgClubs(clubs.filter((club) => !doomedAreaIds.has(club.areaId)));
+  writeAreas(areas.filter((area) => !doomedAreaIds.has(area.id)));
+  writeDivisions(divisions.filter((entry) => entry.id !== existing.id));
+
+  recordActivity({
+    category: 'org',
+    action: 'deleted a division',
+    summary: `Deleted division — ${existing.name}, along with everything under it`,
+    entityType: 'division',
+    entityId: existing.id,
+  });
+  return null;
+}
+
+/* ----- areas ----- */
+
+function parseCreateAreaBody(body: unknown): CreateAreaInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected a create-area body');
+  }
+  const { divisionId, name } = body as Partial<CreateAreaInput>;
+  if (typeof divisionId !== 'string' || divisionId.trim() === '') {
+    throw new LocalApiError(400, 'divisionId is required');
+  }
+  requireDivision(divisionId);
+  return { divisionId, name: trimmedNameOrThrow(name, 'An area name') };
+}
+
+function parseUpdateAreaBody(body: unknown): UpdateAreaInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected an update-area body');
+  }
+  const { name, divisionId } = body as Partial<UpdateAreaInput>;
+  const output: UpdateAreaInput = {};
+  if (name !== undefined) output.name = trimmedNameOrThrow(name, 'An area name');
+  if (divisionId !== undefined) {
+    if (typeof divisionId !== 'string' || divisionId.trim() === '') {
+      throw new LocalApiError(400, 'divisionId is required');
+    }
+    requireDivision(divisionId);
+    output.divisionId = divisionId;
+  }
+  return output;
+}
+
+function listAreas({ query }: RouteContext): Area[] {
+  const areas = readAreas();
+  return query.divisionId ? areas.filter((area) => area.divisionId === query.divisionId) : areas;
+}
+
+function createArea({ body }: RouteContext): Area {
+  const input = parseCreateAreaBody(body);
+  const area: Area = { id: createOrgId('area'), ...input, createdAt: new Date().toISOString() };
+  writeAreas([...readAreas(), area]);
+  recordActivity({
+    category: 'org',
+    action: 'created an area',
+    summary: `Created area — ${area.name}`,
+    entityType: 'area',
+    entityId: area.id,
+  });
+  return area;
+}
+
+function updateArea({ params, body }: RouteContext): Area {
+  const areas = readAreas();
+  const existing = areas.find((entry) => entry.id === params.areaId);
+  if (!existing) throw new LocalApiError(404, `No area with id "${params.areaId}"`);
+  const changes = parseUpdateAreaBody(body);
+  const moved = changes.divisionId !== undefined && changes.divisionId !== existing.divisionId;
+  const updated: Area = { ...existing, ...changes, updatedAt: new Date().toISOString() };
+  writeAreas(areas.map((entry) => (entry.id === updated.id ? updated : entry)));
+  recordActivity({
+    category: 'org',
+    action: moved ? 'moved an area' : 'updated an area',
+    summary: moved
+      ? `Moved area ${updated.name} to a different division`
+      : `Updated area — ${updated.name}`,
+    entityType: 'area',
+    entityId: updated.id,
+  });
+  return updated;
+}
+
+function deleteArea({ params }: RouteContext): null {
+  const areas = readAreas();
+  const existing = areas.find((entry) => entry.id === params.areaId);
+  if (!existing) throw new LocalApiError(404, `No area with id "${params.areaId}"`);
+
+  const clubs = readOrgClubs();
+  writeOrgClubs(clubs.filter((club) => club.areaId !== existing.id));
+  writeAreas(areas.filter((entry) => entry.id !== existing.id));
+
+  recordActivity({
+    category: 'org',
+    action: 'deleted an area',
+    summary: `Deleted area — ${existing.name}, along with its clubs`,
+    entityType: 'area',
+    entityId: existing.id,
+  });
+  return null;
+}
+
+/* ----- org clubs ----- */
+
+function parseCreateOrgClubBody(body: unknown): CreateOrgClubInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected a create-club body');
+  }
+  const { areaId, name, clubNumber, status } = body as Partial<CreateOrgClubInput>;
+  if (typeof areaId !== 'string' || areaId.trim() === '') {
+    throw new LocalApiError(400, 'areaId is required');
+  }
+  requireArea(areaId);
+  const output: CreateOrgClubInput = { areaId, name: trimmedNameOrThrow(name, 'A club name') };
+  if (clubNumber !== undefined) {
+    if (typeof clubNumber !== 'string' || clubNumber.length > CLUB_NUMBER_MAX) {
+      throw new LocalApiError(
+        400,
+        `The club number must be ${CLUB_NUMBER_MAX} characters or fewer`,
+      );
+    }
+    if (clubNumber.trim() !== '') output.clubNumber = clubNumber.trim();
+  }
+  if (status !== undefined) {
+    if (!isOrgClubStatus(status)) {
+      throw new LocalApiError(400, `"${String(status)}" is not a club status`);
+    }
+    output.status = status;
+  }
+  return output;
+}
+
+function parseUpdateOrgClubBody(body: unknown): UpdateOrgClubInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected an update-club body');
+  }
+  const { name, clubNumber, status, areaId } = body as Partial<UpdateOrgClubInput>;
+  const output: UpdateOrgClubInput = {};
+  if (name !== undefined) output.name = trimmedNameOrThrow(name, 'A club name');
+  if (clubNumber !== undefined) {
+    if (
+      clubNumber !== null &&
+      (typeof clubNumber !== 'string' || clubNumber.length > CLUB_NUMBER_MAX)
+    ) {
+      throw new LocalApiError(
+        400,
+        `The club number must be ${CLUB_NUMBER_MAX} characters or fewer`,
+      );
+    }
+    output.clubNumber = clubNumber === null ? null : clubNumber.trim();
+  }
+  if (status !== undefined) {
+    if (!isOrgClubStatus(status)) {
+      throw new LocalApiError(400, `"${String(status)}" is not a club status`);
+    }
+    output.status = status;
+  }
+  if (areaId !== undefined) {
+    if (typeof areaId !== 'string' || areaId.trim() === '') {
+      throw new LocalApiError(400, 'areaId is required');
+    }
+    requireArea(areaId);
+    output.areaId = areaId;
+  }
+  return output;
+}
+
+function listOrgClubs({ query }: RouteContext): OrgClub[] {
+  const clubs = readOrgClubs();
+  return query.areaId ? clubs.filter((club) => club.areaId === query.areaId) : clubs;
+}
+
+function createOrgClub({ body }: RouteContext): OrgClub {
+  const input = parseCreateOrgClubBody(body);
+  const club: OrgClub = {
+    id: createOrgId('club'),
+    status: 'active',
+    ...input,
+    createdAt: new Date().toISOString(),
+  };
+  writeOrgClubs([...readOrgClubs(), club]);
+  recordActivity({
+    category: 'org',
+    action: 'added a club',
+    summary: `Added club — ${club.name}`,
+    entityType: 'orgClub',
+    entityId: club.id,
+  });
+  return club;
+}
+
+function updateOrgClub({ params, body }: RouteContext): OrgClub {
+  const clubs = readOrgClubs();
+  const existing = clubs.find((entry) => entry.id === params.clubId);
+  if (!existing) throw new LocalApiError(404, `No club with id "${params.clubId}"`);
+  const changes = parseUpdateOrgClubBody(body);
+  const moved = changes.areaId !== undefined && changes.areaId !== existing.areaId;
+  const updated: OrgClub = { ...existing, updatedAt: new Date().toISOString() };
+  if (changes.name !== undefined) updated.name = changes.name;
+  if ('clubNumber' in changes) updated.clubNumber = changes.clubNumber ?? undefined;
+  if (changes.status !== undefined) updated.status = changes.status;
+  if (changes.areaId !== undefined) updated.areaId = changes.areaId;
+
+  writeOrgClubs(clubs.map((entry) => (entry.id === updated.id ? updated : entry)));
+  recordActivity({
+    category: 'org',
+    action: moved ? 'moved a club' : 'updated a club',
+    summary: moved
+      ? `Moved club ${updated.name} to a different area`
+      : `Updated club — ${updated.name}`,
+    entityType: 'orgClub',
+    entityId: updated.id,
+  });
+  return updated;
+}
+
+function deleteOrgClub({ params }: RouteContext): null {
+  const clubs = readOrgClubs();
+  const existing = clubs.find((entry) => entry.id === params.clubId);
+  if (!existing) throw new LocalApiError(404, `No club with id "${params.clubId}"`);
+  writeOrgClubs(clubs.filter((entry) => entry.id !== existing.id));
+  recordActivity({
+    category: 'org',
+    action: 'deleted a club',
+    summary: `Deleted club — ${existing.name}`,
+    entityType: 'orgClub',
+    entityId: existing.id,
+  });
+  return null;
+}
+
 /* -------------------------------------------------------- me: speech reports -- */
 
 /** The three reports a speech collects, all keyed by the `speech-given`
@@ -2189,6 +2678,22 @@ const ROUTES: Route[] = [
   route('GET', '/members/:memberId/tasks', listTasks),
   route('PATCH', '/tasks/:taskId', updateTask),
   route('GET', '/activity-logs', listActivityLogs),
+  route('GET', '/districts', listDistricts),
+  route('POST', '/districts', createDistrict),
+  route('PATCH', '/districts/:districtId', updateDistrict),
+  route('DELETE', '/districts/:districtId', deleteDistrict),
+  route('GET', '/divisions', listDivisions),
+  route('POST', '/divisions', createDivision),
+  route('PATCH', '/divisions/:divisionId', updateDivision),
+  route('DELETE', '/divisions/:divisionId', deleteDivision),
+  route('GET', '/areas', listAreas),
+  route('POST', '/areas', createArea),
+  route('PATCH', '/areas/:areaId', updateArea),
+  route('DELETE', '/areas/:areaId', deleteArea),
+  route('GET', '/org-clubs', listOrgClubs),
+  route('POST', '/org-clubs', createOrgClub),
+  route('PATCH', '/org-clubs/:clubId', updateOrgClub),
+  route('DELETE', '/org-clubs/:clubId', deleteOrgClub),
 ];
 
 function toSegments(path: string): string[] {

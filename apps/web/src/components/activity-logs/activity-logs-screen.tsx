@@ -5,6 +5,7 @@ import {
   BookOpen,
   ClipboardText,
   ClockCounterClockwise,
+  Globe,
   GraduationCap,
   ListChecks,
   MagnifyingGlass,
@@ -44,6 +45,7 @@ const CATEGORY_META: Record<ActivityCategory, { label: string; Icon: IconCompone
   people: { label: 'People', Icon: AddressBook },
   library: { label: 'Library', Icon: BookOpen },
   task: { label: 'Task', Icon: ListChecks },
+  org: { label: 'Org', Icon: Globe },
 };
 
 const CATEGORY_OPTIONS = [

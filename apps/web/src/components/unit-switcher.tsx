@@ -11,9 +11,21 @@ import {
   ShieldCheck,
 } from '@phosphor-icons/react/dist/ssr';
 import { Dropdown } from 'antd';
+import { useRouter } from 'next/navigation';
 
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { activeUnitChanged, selectActiveUnit, type UnitKey } from '@/store/ui-slice';
+
+/** Root route for scopes with a real routed dashboard. Scopes without an
+ * entry here (`club`, `club-admin`) just change the switcher state — `club`
+ * is whatever page the officer is already on, and `club-admin` has no
+ * surface to send them to yet. */
+const UNIT_ROOT_ROUTE: Partial<Record<UnitKey, string>> = {
+  area: '/area',
+  division: '/division',
+  district: '/district',
+  'super-admin': '/super-admin',
+};
 
 type IconComponent = React.ComponentType<{
   size?: number;
@@ -44,8 +56,15 @@ const UNITS: Unit[] = [
 export function UnitSwitcher() {
   const activeUnit = useAppSelector(selectActiveUnit);
   const dispatch = useAppDispatch();
+  const router = useRouter();
   const current = UNITS.find((unit) => unit.key === activeUnit) ?? UNITS[0];
   const CurrentIcon = current.Icon;
+
+  const selectUnit = (unit: UnitKey) => {
+    dispatch(activeUnitChanged(unit));
+    const root = UNIT_ROOT_ROUTE[unit];
+    if (root) router.push(root);
+  };
 
   return (
     <Dropdown
@@ -64,7 +83,7 @@ export function UnitSwitcher() {
                 <button
                   key={unit.key}
                   type="button"
-                  onClick={() => dispatch(activeUnitChanged(unit.key))}
+                  onClick={() => selectUnit(unit.key)}
                   className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors ${
                     isActive ? 'bg-fill-strong' : 'hover:bg-fill'
                   }`}
