@@ -1,3 +1,5 @@
+import type { ModuleKey, ModulePermission } from '@/lib/permissions/permissions';
+
 export const OFFICER_ROLES = [
   'President',
   'VPE',
@@ -33,7 +35,21 @@ export interface Member {
   id: string;
   firstName: string;
   lastName: string;
-  role: OfficerRole;
+  /** A member can hold more than one officer role at once (e.g. Secretary and
+   * SAA in a small club). Empty means a plain member — `getPrimaryRole`
+   * treats that the same as `['Member']`. */
+  roles: OfficerRole[];
+  /** Grants full read/mutate access to every module regardless of role or
+   * per-module overrides. Independent of officer role — a plain Member can be
+   * a Club Admin, and a President need not be one. */
+  isClubAdmin: boolean;
+  /** `removed` is a soft delete — the record and its history stay put, the
+   * member just drops out of the active roster. */
+  status: 'active' | 'removed';
+  /** Per-module overrides on top of the role-based default in
+   * `lib/permissions/permissions.ts`. Only modules a Club Admin has
+   * explicitly touched appear here. */
+  permissions?: Partial<Record<ModuleKey, ModulePermission>>;
   /** Undefined until the member starts a pathway from their profile. */
   pathway?: Pathway;
   /** Current level. Undefined while `pathway` is undefined. */
@@ -48,12 +64,25 @@ export interface Member {
   pathwayStartedAt?: string;
 }
 
+/** Fields the Club Admin "Add member" form writes. `roles` defaults to
+ * `['Member']` server-side when omitted. */
+export type CreateMemberInput = Pick<Member, 'firstName' | 'lastName'> & {
+  roles?: OfficerRole[];
+};
+
+/** Fields the Club Admin "Edit member" form can write. Status, admin flag and
+ * permissions each have their own dedicated endpoint — this one is plain
+ * profile/role editing. */
+export type UpdateMemberInput = Partial<Pick<Member, 'firstName' | 'lastName' | 'roles'>>;
+
 export const SEED_MEMBERS: Member[] = [
   {
     id: 'm-01',
     firstName: 'Aisha',
     lastName: 'Patel',
-    role: 'President',
+    roles: ['President'],
+    isClubAdmin: true,
+    status: 'active',
     level: 4,
     pathway: 'Presentation Mastery',
   },
@@ -61,7 +90,9 @@ export const SEED_MEMBERS: Member[] = [
     id: 'm-02',
     firstName: 'Marcus',
     lastName: 'Chen',
-    role: 'VPE',
+    roles: ['VPE'],
+    isClubAdmin: false,
+    status: 'active',
     level: 5,
     pathway: 'Effective Coaching',
   },
@@ -69,7 +100,9 @@ export const SEED_MEMBERS: Member[] = [
     id: 'm-03',
     firstName: 'Priya',
     lastName: 'Sharma',
-    role: 'VPM',
+    roles: ['VPM'],
+    isClubAdmin: false,
+    status: 'active',
     level: 3,
     pathway: 'Dynamic Leadership',
   },
@@ -77,7 +110,9 @@ export const SEED_MEMBERS: Member[] = [
     id: 'm-04',
     firstName: 'Daniel',
     lastName: 'Ortiz',
-    role: 'VPPR',
+    roles: ['VPPR'],
+    isClubAdmin: false,
+    status: 'active',
     level: 2,
     pathway: 'Innovative Planning',
   },
@@ -85,7 +120,9 @@ export const SEED_MEMBERS: Member[] = [
     id: 'm-05',
     firstName: 'Sophia',
     lastName: 'Nakamura',
-    role: 'Secretary',
+    roles: ['Secretary'],
+    isClubAdmin: false,
+    status: 'active',
     level: 3,
     pathway: 'Team Collaboration',
   },
@@ -93,7 +130,9 @@ export const SEED_MEMBERS: Member[] = [
     id: 'm-06',
     firstName: 'Nathan',
     lastName: 'Brooks',
-    role: 'Treasurer',
+    roles: ['Treasurer'],
+    isClubAdmin: false,
+    status: 'active',
     level: 4,
     pathway: 'Strategic Relationships',
   },
@@ -101,7 +140,9 @@ export const SEED_MEMBERS: Member[] = [
     id: 'm-07',
     firstName: 'Yara',
     lastName: 'Ibrahim',
-    role: 'SAA',
+    roles: ['SAA'],
+    isClubAdmin: false,
+    status: 'active',
     level: 2,
     pathway: 'Motivational Strategies',
   },
@@ -109,7 +150,9 @@ export const SEED_MEMBERS: Member[] = [
     id: 'm-08',
     firstName: 'Liam',
     lastName: 'Reeves',
-    role: 'Member',
+    roles: ['Member'],
+    isClubAdmin: false,
+    status: 'active',
     level: 1,
     pathway: 'Engaging Humor',
   },
@@ -117,7 +160,9 @@ export const SEED_MEMBERS: Member[] = [
     id: 'm-09',
     firstName: 'Grace',
     lastName: 'Okafor',
-    role: 'Member',
+    roles: ['Member'],
+    isClubAdmin: false,
+    status: 'active',
     level: 5,
     pathway: 'Visionary Communication',
   },
@@ -125,7 +170,9 @@ export const SEED_MEMBERS: Member[] = [
     id: 'm-10',
     firstName: 'Rafael',
     lastName: 'Mendoza',
-    role: 'Member',
+    roles: ['Member'],
+    isClubAdmin: false,
+    status: 'active',
     level: 2,
     pathway: 'Persuasive Influence',
   },
@@ -133,7 +180,9 @@ export const SEED_MEMBERS: Member[] = [
     id: 'm-11',
     firstName: 'Hannah',
     lastName: 'Klein',
-    role: 'Member',
+    roles: ['Member'],
+    isClubAdmin: false,
+    status: 'active',
     level: 3,
     pathway: 'Leadership Development',
   },
@@ -141,7 +190,9 @@ export const SEED_MEMBERS: Member[] = [
     id: 'm-12',
     firstName: 'Kenji',
     lastName: 'Watanabe',
-    role: 'Member',
+    roles: ['Member'],
+    isClubAdmin: false,
+    status: 'active',
     level: 1,
     pathway: 'Presentation Mastery',
   },
@@ -149,7 +200,9 @@ export const SEED_MEMBERS: Member[] = [
     id: 'm-13',
     firstName: 'Zara',
     lastName: 'Ahmed',
-    role: 'Member',
+    roles: ['Member'],
+    isClubAdmin: false,
+    status: 'active',
     level: 4,
     pathway: 'Dynamic Leadership',
   },
@@ -157,20 +210,75 @@ export const SEED_MEMBERS: Member[] = [
     id: 'm-14',
     firstName: 'Ethan',
     lastName: 'Kowalski',
-    role: 'Member',
+    roles: ['Member'],
+    isClubAdmin: false,
+    status: 'active',
     level: 2,
     pathway: 'Effective Coaching',
   },
-  { id: 'm-15', firstName: 'Riley', lastName: 'Novak', role: 'Member' },
-  { id: 'm-16', firstName: 'Amelia', lastName: 'Fischer', role: 'Member' },
-  { id: 'm-17', firstName: 'Tomas', lastName: 'Rivera', role: 'Member' },
-  { id: 'm-18', firstName: 'Nadia', lastName: 'Haddad', role: 'Member' },
-  { id: 'm-19', firstName: 'Oliver', lastName: 'Bennett', role: 'Member' },
-  { id: 'm-20', firstName: 'Chloe', lastName: 'Dubois', role: 'Member' },
+  {
+    id: 'm-15',
+    firstName: 'Riley',
+    lastName: 'Novak',
+    roles: ['Member'],
+    isClubAdmin: false,
+    status: 'active',
+  },
+  {
+    id: 'm-16',
+    firstName: 'Amelia',
+    lastName: 'Fischer',
+    roles: ['Member'],
+    isClubAdmin: false,
+    status: 'active',
+  },
+  {
+    id: 'm-17',
+    firstName: 'Tomas',
+    lastName: 'Rivera',
+    roles: ['Member'],
+    isClubAdmin: false,
+    status: 'active',
+  },
+  {
+    id: 'm-18',
+    firstName: 'Nadia',
+    lastName: 'Haddad',
+    roles: ['Member'],
+    isClubAdmin: false,
+    status: 'active',
+  },
+  {
+    id: 'm-19',
+    firstName: 'Oliver',
+    lastName: 'Bennett',
+    roles: ['Member'],
+    isClubAdmin: false,
+    status: 'active',
+  },
+  {
+    id: 'm-20',
+    firstName: 'Chloe',
+    lastName: 'Dubois',
+    roles: ['Member'],
+    isClubAdmin: false,
+    status: 'active',
+  },
 ];
 
 export function getInitials(member: Pick<Member, 'firstName' | 'lastName'>): string {
   return `${member.firstName.charAt(0)}${member.lastName.charAt(0)}`.toUpperCase();
+}
+
+/** The role compact contexts (search, table rows) show when there's only room
+ * for one. A member with no roles reads the same as a plain Member. */
+export function getPrimaryRole(member: Pick<Member, 'roles'>): OfficerRole {
+  return member.roles[0] ?? 'Member';
+}
+
+/** Every role a member holds, for contexts with room to show all of them. */
+export function formatRoles(member: Pick<Member, 'roles'>): string {
+  return member.roles.length > 0 ? member.roles.join(', ') : 'Member';
 }
 
 /** Request body for `POST /members/:memberId/pathway`. */

@@ -1,9 +1,15 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 
 import type { ActivityLog } from '@/lib/activity/activity-log';
+import type { CreateInviteInput, Invite } from '@/lib/club-admin/invites';
 import type { Evaluation } from '@/lib/education/evaluations';
 import type { HistoryEvent, MemberStats } from '@/lib/education/history';
-import type { Member, StartPathwayInput } from '@/lib/education/members';
+import type {
+  CreateMemberInput,
+  Member,
+  StartPathwayInput,
+  UpdateMemberInput,
+} from '@/lib/education/members';
 import type {
   CreateSpeechSlotRequestInput,
   SpeechSlotRequest,
@@ -62,6 +68,7 @@ import type {
 } from '@/lib/people/contact-logs';
 import type { Guest, UpdateGuestInput } from '@/lib/people/guests';
 import type { CreateVisitLogInput, UpdateVisitLogInput, VisitLog } from '@/lib/people/visit-logs';
+import type { ModuleKey, ModulePermission } from '@/lib/permissions/permissions';
 import type { Task, UpdateTaskInput } from '@/lib/tasks/tasks';
 
 import { localBaseQuery } from './local-base-query';
@@ -98,13 +105,131 @@ export const toastlyApi = createApi({
     'Division',
     'Area',
     'OrgClub',
+    'Invite',
   ],
   endpoints: (build) => ({
-    getMembers: build.query<Member[], void>({
-      query: () => ({ url: '/members', method: 'GET' }),
+    /* `includeRemoved` opts into seeing soft-removed members — the Club Admin
+     * roster and the Activity Logs actor lookup (a past entry can reference a
+     * since-removed member) both need it; every other consumer gets the
+     * active-only roster by default. */
+    getMembers: build.query<Member[], { includeRemoved?: boolean } | void>({
+      query: (arg) => ({
+        url: arg?.includeRemoved ? '/members?includeRemoved=true' : '/members',
+        method: 'GET',
+      }),
       providesTags: (members) => [
         { type: 'Member', id: 'LIST' },
         ...(members ?? []).map((member) => ({ type: 'Member' as const, id: member.id })),
+      ],
+    }),
+
+    createMember: build.mutation<Member, CreateMemberInput>({
+      query: (body) => ({ url: '/members', method: 'POST', body }),
+      invalidatesTags: [
+        { type: 'Member', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    updateMember: build.mutation<Member, { memberId: string } & UpdateMemberInput>({
+      query: ({ memberId, ...body }) => ({
+        url: `/members/${memberId}`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: (_member, _error, { memberId }) => [
+        { type: 'Member', id: memberId },
+        { type: 'Member', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    setMemberStatus: build.mutation<Member, { memberId: string; status: Member['status'] }>({
+      query: ({ memberId, status }) => ({
+        url: `/members/${memberId}/status`,
+        method: 'POST',
+        body: { status },
+      }),
+      invalidatesTags: (_member, _error, { memberId }) => [
+        { type: 'Member', id: memberId },
+        { type: 'Member', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    setMemberAdmin: build.mutation<Member, { memberId: string; isClubAdmin: boolean }>({
+      query: ({ memberId, isClubAdmin }) => ({
+        url: `/members/${memberId}/admin`,
+        method: 'POST',
+        body: { isClubAdmin },
+      }),
+      invalidatesTags: (_member, _error, { memberId }) => [
+        { type: 'Member', id: memberId },
+        { type: 'Member', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    setMemberPermissions: build.mutation<
+      Member,
+      { memberId: string; permissions: Partial<Record<ModuleKey, ModulePermission>> }
+    >({
+      query: ({ memberId, permissions }) => ({
+        url: `/members/${memberId}/permissions`,
+        method: 'PATCH',
+        body: permissions,
+      }),
+      invalidatesTags: (_member, _error, { memberId }) => [
+        { type: 'Member', id: memberId },
+        { type: 'Member', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    convertGuestToMember: build.mutation<Member, { guestId: string; roles?: Member['roles'] }>({
+      query: ({ guestId, roles }) => ({
+        url: `/guests/${guestId}/convert-to-member`,
+        method: 'POST',
+        body: roles ? { roles } : {},
+      }),
+      invalidatesTags: (_member, _error, { guestId }) => [
+        { type: 'Member', id: 'LIST' },
+        { type: 'Guest', id: guestId },
+        { type: 'Guest', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    getInvites: build.query<Invite[], void>({
+      query: () => ({ url: '/invites', method: 'GET' }),
+      providesTags: (invites) => [
+        { type: 'Invite', id: 'LIST' },
+        ...(invites ?? []).map((invite) => ({ type: 'Invite' as const, id: invite.id })),
+      ],
+    }),
+
+    createInvite: build.mutation<Invite, CreateInviteInput>({
+      query: (body) => ({ url: '/invites', method: 'POST', body }),
+      invalidatesTags: [
+        { type: 'Invite', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    revokeInvite: build.mutation<Invite, string>({
+      query: (inviteId) => ({ url: `/invites/${inviteId}`, method: 'DELETE' }),
+      invalidatesTags: [
+        { type: 'Invite', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    convertInviteToMember: build.mutation<Member, string>({
+      query: (inviteId) => ({ url: `/invites/${inviteId}/convert`, method: 'POST' }),
+      invalidatesTags: [
+        { type: 'Invite', id: 'LIST' },
+        { type: 'Member', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
       ],
     }),
 
@@ -1126,6 +1251,11 @@ export const {
   useGetMemberHistoryQuery,
   useGetMemberStatsQuery,
   useStartPathwayMutation,
+  useCreateMemberMutation,
+  useUpdateMemberMutation,
+  useSetMemberStatusMutation,
+  useSetMemberAdminMutation,
+  useSetMemberPermissionsMutation,
   useGetMeetingsQuery,
   useGetMeetingQuery,
   useCreateMeetingMutation,
@@ -1134,6 +1264,7 @@ export const {
   useGetGuestQuery,
   useUpdateGuestMutation,
   useDeleteGuestMutation,
+  useConvertGuestToMemberMutation,
   useGetContactLogsQuery,
   useCreateContactLogMutation,
   useUpdateContactLogMutation,
@@ -1192,4 +1323,8 @@ export const {
   useCreateOrgClubMutation,
   useUpdateOrgClubMutation,
   useDeleteOrgClubMutation,
+  useGetInvitesQuery,
+  useCreateInviteMutation,
+  useRevokeInviteMutation,
+  useConvertInviteToMemberMutation,
 } = toastlyApi;

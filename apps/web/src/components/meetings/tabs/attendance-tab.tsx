@@ -4,6 +4,7 @@ import { MagnifyingGlass, TrashSimple, UserPlus, X } from '@phosphor-icons/react
 import { Button, Checkbox, Input } from 'antd';
 import { useMemo, useState } from 'react';
 
+import { getPrimaryRole } from '@/lib/education/members';
 import { useGetMembersQuery } from '@/store/api';
 
 interface Guest {
@@ -137,7 +138,7 @@ export function AttendanceTab() {
         .map((member) => ({
           id: member.id,
           name: `${member.firstName} ${member.lastName}`,
-          role: member.role,
+          role: getPrimaryRole(member),
           present: presentById[member.id] ?? false,
           isGuest: false,
         }))

@@ -137,7 +137,8 @@ interface SidebarBodyProps {
   /** When false, the nav column is deliberately blank — `primaryNav` is
    * club-specific, and the org-tree scopes (Area, Division, District, Super
    * Admin) navigate by breadcrumb and card drill-down instead. Also blank for
-   * `club-admin`, whose surfaces don't exist yet. */
+   * Club Admin, whose sections are tabs on one page rather than sidebar
+   * entries. */
   showNav: boolean;
 }
 
@@ -286,6 +287,10 @@ function isOrgRoute(pathname: string): boolean {
   );
 }
 
+function isClubAdminRoute(pathname: string): boolean {
+  return pathname === '/club-admin' || pathname.startsWith('/club-admin/');
+}
+
 export function AppShell({
   children,
   actions,
@@ -304,17 +309,19 @@ export function AppShell({
   const dispatch = useAppDispatch();
   const closeMobileNav = () => dispatch(mobileNavClosed());
 
-  /* `club` and the org-tree scopes (district/division/area/super-admin) have
-   * real surfaces; `club-admin` is still a placeholder. Content gating reads
-   * the pathname rather than `activeUnit` alone so a bookmarked or
-   * freshly-loaded org URL renders correctly before the switcher state (which
-   * is not persisted) catches up. */
+  /* `club`, the org-tree scopes (district/division/area/super-admin) and
+   * Club Admin all have real surfaces now. Content gating reads the pathname
+   * rather than `activeUnit` alone so a bookmarked or freshly-loaded URL
+   * renders correctly before the switcher state (which is not persisted)
+   * catches up. */
   const onOrgRoute = isOrgRoute(pathname);
-  const showContent = activeUnit === 'club' || onOrgRoute;
+  const onClubAdminRoute = isClubAdminRoute(pathname);
+  const showContent = activeUnit === 'club' || onOrgRoute || onClubAdminRoute;
   /* The primary nav is club-specific (Meetings, Finance, …); the org
-   * dashboards navigate by breadcrumb and card drill-down instead, so their
-   * sidebar stays blank the same way the placeholder scopes' did. */
-  const showNav = activeUnit === 'club' && !onOrgRoute;
+   * dashboards navigate by breadcrumb and card drill-down instead, and Club
+   * Admin's sections are tabs on one page, so all three keep the sidebar
+   * blank the same way the placeholder scopes did. */
+  const showNav = activeUnit === 'club' && !onOrgRoute && !onClubAdminRoute;
 
   const rawTrail = breadcrumbTrail ?? buildTrail(pathname);
   const trail = breadcrumbTrail

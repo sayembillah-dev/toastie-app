@@ -15,9 +15,10 @@ import Link from 'next/link';
 import { notFound, useParams } from 'next/navigation';
 
 import { AppShell } from '@/components/app-shell';
+import { ModuleAccessGate } from '@/components/permissions/module-access-gate';
 import { computeEngagement } from '@/lib/education/engagement';
 import type { Member } from '@/lib/education/members';
-import { getInitials } from '@/lib/education/members';
+import { formatRoles, getInitials } from '@/lib/education/members';
 import { useGetMeetingsQuery, useGetMemberQuery, useGetMemberStatsQuery } from '@/store/api';
 import { getApiErrorMessage, isNotFoundError } from '@/store/api-error';
 
@@ -110,7 +111,7 @@ function ProfileHeader({
         <div className="flex flex-wrap items-end justify-between gap-4 pt-12">
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold text-ink">{fullName}</h1>
-            <p className="mt-1 text-sm text-ink-soft">{member.role}</p>
+            <p className="mt-1 text-sm text-ink-soft">{formatRoles(member)}</p>
           </div>
           {health ? (
             <span
@@ -295,7 +296,9 @@ export function MemberEngagementScreen() {
 
   return (
     <AppShell breadcrumbLabel={`${member.firstName} ${member.lastName}`}>
-      <ProfileContent member={member} />
+      <ModuleAccessGate module="people">
+        <ProfileContent member={member} />
+      </ModuleAccessGate>
     </AppShell>
   );
 }

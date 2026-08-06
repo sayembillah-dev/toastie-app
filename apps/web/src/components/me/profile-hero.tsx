@@ -2,7 +2,7 @@ import { ArrowSquareOut, Microphone } from '@phosphor-icons/react/dist/ssr';
 import { Button } from 'antd';
 import Link from 'next/link';
 import type { Member } from '@/lib/education/members';
-import { getInitials } from '@/lib/education/members';
+import { formatRoles, getInitials } from '@/lib/education/members';
 
 /** Shared with the People/Education profile cards so the same member reads
  * with the same identity colour everywhere in the app. */
@@ -51,9 +51,10 @@ export function ProfileHero({
   const fullName = `${member.firstName} ${member.lastName}`;
   const initials = getInitials(member);
   const swatch = AVATAR_PALETTE[hashString(member.id) % AVATAR_PALETTE.length];
+  const roleLabel = formatRoles(member);
   const headline = member.pathway
-    ? `${member.role} · Pursuing ${member.pathway}${member.level ? `, Level ${member.level}` : ''}`
-    : member.role;
+    ? `${roleLabel} · Pursuing ${member.pathway}${member.level ? `, Level ${member.level}` : ''}`
+    : roleLabel;
 
   return (
     <header className="relative overflow-hidden rounded-2xl border border-line bg-canvas">

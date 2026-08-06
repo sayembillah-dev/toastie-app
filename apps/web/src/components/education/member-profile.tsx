@@ -11,8 +11,9 @@ import { AppShell } from '@/components/app-shell';
 import { HistoryTab } from '@/components/education/history-tab';
 import { ProgressTab } from '@/components/education/progress-tab';
 import { StartPathwayModal } from '@/components/education/start-pathway-modal';
+import { ModuleAccessGate } from '@/components/permissions/module-access-gate';
 import type { Member } from '@/lib/education/members';
-import { getInitials } from '@/lib/education/members';
+import { formatRoles, getInitials } from '@/lib/education/members';
 import { useGetMemberQuery } from '@/store/api';
 import { getApiErrorMessage, isNotFoundError } from '@/store/api-error';
 
@@ -60,7 +61,7 @@ function ProfileHeader({ member, onStartPathway }: { member: Member; onStartPath
         <div className="flex flex-wrap items-end justify-between gap-4 pt-12">
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold text-ink">{fullName}</h1>
-            <p className="mt-1 text-sm text-ink-soft">{member.role}</p>
+            <p className="mt-1 text-sm text-ink-soft">{formatRoles(member)}</p>
           </div>
           {hasPathway ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -187,7 +188,9 @@ export function MemberProfileScreen() {
 
   return (
     <AppShell breadcrumbLabel={`${member.firstName} ${member.lastName}`}>
-      <ProfileContent member={member} />
+      <ModuleAccessGate module="education">
+        <ProfileContent member={member} />
+      </ModuleAccessGate>
     </AppShell>
   );
 }

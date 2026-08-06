@@ -5,7 +5,7 @@ import { App, Button, Dropdown, Input, Segmented, Skeleton, Tag } from 'antd';
 import { useMemo, useState } from 'react';
 
 import { DuesPaymentModal } from '@/components/finance/dues-payment-modal';
-import { getInitials } from '@/lib/education/members';
+import { formatRoles, getInitials } from '@/lib/education/members';
 import type { DuesRecord, DuesStatus } from '@/lib/finance/dues';
 import {
   CURRENT_DUES_PERIOD_ID,
@@ -183,7 +183,8 @@ export function DuesTab() {
                       {member ? `${member.firstName} ${member.lastName}` : record.memberId}
                     </p>
                     <p className="truncate text-xs text-ink-muted">
-                      {member?.role ?? 'Member'} · Due {formatMoney(record.amountDueMinor)}
+                      {member ? formatRoles(member) : 'Member'} · Due{' '}
+                      {formatMoney(record.amountDueMinor)}
                       {record.amountPaidMinor > 0 && status !== 'paid'
                         ? ` · Paid ${formatMoney(record.amountPaidMinor)}`
                         : ''}

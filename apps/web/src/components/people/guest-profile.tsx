@@ -15,6 +15,7 @@ import { notFound, useParams } from 'next/navigation';
 import { AppShell } from '@/components/app-shell';
 import { GuestActions } from '@/components/people/guest-actions';
 import { GuestInfo } from '@/components/people/guest-info';
+import { ModuleAccessGate } from '@/components/permissions/module-access-gate';
 import type { Guest } from '@/lib/people/guests';
 import { getGuestInitials, getGuestStage, getGuestSwatch } from '@/lib/people/guests';
 import { useGetGuestQuery } from '@/store/api';
@@ -267,7 +268,9 @@ export function GuestProfileScreen() {
 
   return (
     <AppShell breadcrumbLabel={`${guest.firstName} ${guest.lastName}`}>
-      <ProfileContent guest={guest} />
+      <ModuleAccessGate module="people">
+        <ProfileContent guest={guest} />
+      </ModuleAccessGate>
     </AppShell>
   );
 }

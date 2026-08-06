@@ -14,6 +14,7 @@ import { MeetingCard } from '@/components/meetings/meeting-card';
 import { NewMeetingModal } from '@/components/meetings/new-meeting-modal';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { nextMeetingNumber, partitionMeetings } from '@/lib/meetings/meetings';
+import { usePermission } from '@/lib/permissions/use-permission';
 import { useGetMeetingsQuery } from '@/store/api';
 
 /* `useSyncExternalStore` compares snapshots with `Object.is` — a fresh
@@ -161,6 +162,7 @@ export function MeetingsTabs() {
    * defer the actual partition until the clock is trustworthy. */
   const now = useClientNow();
   const { data: meetings } = useGetMeetingsQuery();
+  const { mutate: canMutate } = usePermission('meetings');
   const [isCreateOpen, setCreateOpen] = useState(false);
   const router = useRouter();
 
@@ -206,6 +208,7 @@ export function MeetingsTabs() {
           <Button
             type="primary"
             size="middle"
+            disabled={!canMutate}
             onClick={handleCreateMeeting}
             icon={<Plus size={16} weight="bold" />}
           >
@@ -284,6 +287,7 @@ export function MeetingsTabs() {
         <Button
           type="primary"
           shape="circle"
+          disabled={!canMutate}
           onClick={handleCreateMeeting}
           aria-label="Create new meeting"
           icon={<Plus size={22} weight="bold" />}

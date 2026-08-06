@@ -16,6 +16,7 @@ import { DocumentPreviewModal } from '@/components/library/document-preview-moda
 import { DocumentUploadModal } from '@/components/library/document-upload-modal';
 import type { LibraryDocument } from '@/lib/library/documents';
 import { documentTypeLabel } from '@/lib/library/documents';
+import { usePermission } from '@/lib/permissions/use-permission';
 import { useListDocumentsQuery } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -38,6 +39,7 @@ interface DocumentsTabProps {
  * IntersectionObserver on a sentinel so the body keeps fetching as long as
  * the sentinel is on-screen. */
 export function DocumentsTab({ className }: DocumentsTabProps) {
+  const { mutate: canMutate } = usePermission('library');
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [offset, setOffset] = useState(0);
@@ -129,7 +131,12 @@ export function DocumentsTab({ className }: DocumentsTabProps) {
               },
             ]}
           />
-          <Button type="primary" icon={<Plus size={14} />} onClick={() => setUploadOpen(true)}>
+          <Button
+            type="primary"
+            icon={<Plus size={14} />}
+            disabled={!canMutate}
+            onClick={() => setUploadOpen(true)}
+          >
             Upload
           </Button>
         </div>
@@ -208,6 +215,7 @@ export function DocumentsTab({ className }: DocumentsTabProps) {
                 size="small"
                 icon={<Plus size={14} />}
                 className="mt-4"
+                disabled={!canMutate}
                 onClick={() => setUploadOpen(true)}
               >
                 Upload document

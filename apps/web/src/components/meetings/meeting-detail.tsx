@@ -27,6 +27,7 @@ import { RolesTab } from '@/components/meetings/tabs/roles-tab';
 import { TableTopicsTab } from '@/components/meetings/tabs/table-topics-tab';
 import { ThemeTab } from '@/components/meetings/tabs/theme-tab';
 import { TimerTab } from '@/components/meetings/tabs/timer-tab';
+import { ModuleAccessGate } from '@/components/permissions/module-access-gate';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { useGetMeetingQuery } from '@/store/api';
 import { getApiErrorMessage, isNotFoundError } from '@/store/api-error';
@@ -186,7 +187,9 @@ export function MeetingDetailScreen() {
 
   return (
     <AppShell breadcrumbLabel={`Meeting #${meeting.meetingNumber}`}>
-      <DetailContent meeting={meeting} />
+      <ModuleAccessGate module="meetings">
+        <DetailContent meeting={meeting} />
+      </ModuleAccessGate>
     </AppShell>
   );
 }

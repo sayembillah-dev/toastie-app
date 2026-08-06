@@ -6,6 +6,7 @@ import { useMemo } from 'react';
 
 import { MemberCard, type MemberCardVariant } from '@/components/education/member-card';
 import type { Member } from '@/lib/education/members';
+import { formatRoles } from '@/lib/education/members';
 import { useGetMembersQuery } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
@@ -16,7 +17,7 @@ const GRID_CLASSES =
 
 function matchesQuery(member: Member, needle: string): boolean {
   const haystack =
-    `${member.firstName} ${member.lastName} ${member.role} ${member.pathway ?? ''}`.toLowerCase();
+    `${member.firstName} ${member.lastName} ${formatRoles(member)} ${member.pathway ?? ''}`.toLowerCase();
   return haystack.includes(needle);
 }
 

@@ -24,6 +24,7 @@ import {
   sortTransactionsNewestFirst,
   sumTransactions,
 } from '@/lib/finance/transactions';
+import { usePermission } from '@/lib/permissions/use-permission';
 import { useListTransactionsQuery } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -51,6 +52,7 @@ const CATEGORY_OPTIONS = [
  * first, with a running balance column. */
 export function TransactionsTab() {
   const { data: transactions, isLoading, isError, error, refetch } = useListTransactionsQuery();
+  const { mutate: canMutate } = usePermission('finance');
 
   const [query, setQuery] = useState('');
   const [direction, setDirection] = useState<DirectionFilter>('all');
@@ -109,7 +111,12 @@ export function TransactionsTab() {
             popupMatchSelectWidth={false}
           />
         </div>
-        <Button type="primary" icon={<Plus size={14} />} onClick={() => setAddOpen(true)}>
+        <Button
+          type="primary"
+          icon={<Plus size={14} />}
+          disabled={!canMutate}
+          onClick={() => setAddOpen(true)}
+        >
           Add transaction
         </Button>
       </div>

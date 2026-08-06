@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AssetPreviewModal } from '@/components/library/asset-preview-modal';
 import { AssetUploadModal } from '@/components/library/asset-upload-modal';
 import type { Asset } from '@/lib/library/assets';
+import { usePermission } from '@/lib/permissions/use-permission';
 import { useListAssetsQuery } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -31,6 +32,7 @@ interface AssetsTabProps {
  * fills the rest. Infinite scroll uses an IntersectionObserver on a sentinel
  * so the grid keeps fetching as long as the sentinel is on-screen. */
 export function AssetsTab({ className }: AssetsTabProps) {
+  const { mutate: canMutate } = usePermission('library');
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [offset, setOffset] = useState(0);
@@ -106,7 +108,12 @@ export function AssetsTab({ className }: AssetsTabProps) {
             prefix={<MagnifyingGlass size={16} className="text-ink-muted" />}
           />
         </div>
-        <Button type="primary" icon={<Plus size={14} />} onClick={() => setUploadOpen(true)}>
+        <Button
+          type="primary"
+          icon={<Plus size={14} />}
+          disabled={!canMutate}
+          onClick={() => setUploadOpen(true)}
+        >
           Upload
         </Button>
       </div>
@@ -173,6 +180,7 @@ export function AssetsTab({ className }: AssetsTabProps) {
                 size="small"
                 icon={<Plus size={14} />}
                 className="mt-4"
+                disabled={!canMutate}
                 onClick={() => setUploadOpen(true)}
               >
                 Upload asset

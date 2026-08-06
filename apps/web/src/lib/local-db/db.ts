@@ -1,5 +1,7 @@
 import type { ActivityLog } from '@/lib/activity/activity-log';
 import { SEED_ACTIVITY_LOGS } from '@/lib/activity/activity-log';
+import type { Invite } from '@/lib/club-admin/invites';
+import { SEED_INVITES } from '@/lib/club-admin/invites';
 import type { Evaluation } from '@/lib/education/evaluations';
 import { EVALUATION_SEED } from '@/lib/education/evaluations';
 import type { HistoryEvent, MemberProfileExtras } from '@/lib/education/history';
@@ -71,8 +73,11 @@ import { SEED_TASKS } from '@/lib/tasks/tasks';
  *    speech-slot-requests and tasks tables backing the Me page.
  * v11 introduced the activity-logs table backing the Activity Logs page.
  * v12 introduced the districts, divisions, areas and org-clubs tables backing
- *     the District/Division/Area/Super Admin unit dashboards. */
-const SCHEMA_VERSION = 'v12';
+ *     the District/Division/Area/Super Admin unit dashboards.
+ * v13 replaced Member.role with Member.roles (multi-role), added
+ *     isClubAdmin/status/permissions to Member, and introduced the invites
+ *     table — all backing the Club Admin dashboard. */
+const SCHEMA_VERSION = 'v13';
 
 export const DB_KEYS = {
   members: `toastly.db.${SCHEMA_VERSION}.members`,
@@ -99,6 +104,7 @@ export const DB_KEYS = {
   divisions: `toastly.db.${SCHEMA_VERSION}.divisions`,
   areas: `toastly.db.${SCHEMA_VERSION}.areas`,
   orgClubs: `toastly.db.${SCHEMA_VERSION}.org-clubs`,
+  invites: `toastly.db.${SCHEMA_VERSION}.invites`,
 } as const;
 
 /** Used by the cross-tab sync listener to tell our writes apart from any other
@@ -209,6 +215,10 @@ function seedAreas(): Area[] {
 
 function seedOrgClubs(): OrgClub[] {
   return SEED_ORG_CLUBS;
+}
+
+function seedInvites(): Invite[] {
+  return SEED_INVITES;
 }
 
 function seedMemberExtras(): MemberExtrasTable {
@@ -414,6 +424,14 @@ export function readOrgClubs(): OrgClub[] {
 
 export function writeOrgClubs(clubs: OrgClub[]): void {
   writeTable(DB_KEYS.orgClubs, clubs);
+}
+
+export function readInvites(): Invite[] {
+  return readTable(DB_KEYS.invites, seedInvites);
+}
+
+export function writeInvites(invites: Invite[]): void {
+  writeTable(DB_KEYS.invites, invites);
 }
 
 export function readMemberExtras(): MemberExtrasTable {

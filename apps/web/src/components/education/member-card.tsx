@@ -5,7 +5,7 @@ import Link from 'next/link';
 
 import { computeEngagement } from '@/lib/education/engagement';
 import type { Member } from '@/lib/education/members';
-import { getInitials } from '@/lib/education/members';
+import { formatRoles, getInitials } from '@/lib/education/members';
 import { useGetMeetingsQuery, useGetMemberStatsQuery } from '@/store/api';
 
 export type MemberCardVariant = 'education' | 'engagement';
@@ -173,7 +173,7 @@ export function MemberCard({ member, variant = 'education' }: MemberCardProps) {
 
         <div className="mt-3 text-center">
           <h3 className="text-sm font-semibold text-ink">{fullName}</h3>
-          <p className="mt-0.5 text-xs text-ink-muted">{member.role}</p>
+          <p className="mt-0.5 text-xs text-ink-muted">{formatRoles(member)}</p>
         </div>
       </div>
     </Link>

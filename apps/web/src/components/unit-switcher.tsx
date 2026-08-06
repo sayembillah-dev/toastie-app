@@ -16,11 +16,13 @@ import { useRouter } from 'next/navigation';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { activeUnitChanged, selectActiveUnit, type UnitKey } from '@/store/ui-slice';
 
-/** Root route for scopes with a real routed dashboard. Scopes without an
- * entry here (`club`, `club-admin`) just change the switcher state — `club`
- * is whatever page the officer is already on, and `club-admin` has no
- * surface to send them to yet. */
+/** Root route for every scope. `club` goes to the dashboard home — without
+ * an entry here, switching to Club from a scope that hides the sidebar nav
+ * (Club Admin, the org tiers) would only flip internal state without
+ * actually navigating anywhere, leaving the user stuck on the same page. */
 const UNIT_ROOT_ROUTE: Partial<Record<UnitKey, string>> = {
+  club: '/',
+  'club-admin': '/club-admin',
   area: '/area',
   division: '/division',
   district: '/district',

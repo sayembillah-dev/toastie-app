@@ -1,10 +1,17 @@
 import type { ActivityCategory, ActivityLog } from '@/lib/activity/activity-log';
 import { sortActivityLogsNewestFirst } from '@/lib/activity/activity-log';
+import type { CreateInviteInput, Invite } from '@/lib/club-admin/invites';
 import type { Evaluation } from '@/lib/education/evaluations';
 import type { HistoryEvent, MemberStats } from '@/lib/education/history';
 import { computeMemberStats, sortEvents } from '@/lib/education/history';
-import type { Member, StartPathwayInput } from '@/lib/education/members';
-import { PATHWAYS } from '@/lib/education/members';
+import type {
+  CreateMemberInput,
+  Member,
+  OfficerRole,
+  StartPathwayInput,
+  UpdateMemberInput,
+} from '@/lib/education/members';
+import { OFFICER_ROLES, PATHWAYS } from '@/lib/education/members';
 import { findProject } from '@/lib/education/pathways';
 import type {
   CreateSpeechSlotRequestInput,
@@ -105,6 +112,8 @@ import type { Guest, GuestSocial, UpdateGuestInput } from '@/lib/people/guests';
 import { isGuestStage, isSocialPlatform } from '@/lib/people/guests';
 import type { CreateVisitLogInput, UpdateVisitLogInput, VisitLog } from '@/lib/people/visit-logs';
 import { VISIT_LOG_NOTES_MAX, VISIT_LOG_ROLE_MAX } from '@/lib/people/visit-logs';
+import type { ModuleKey, ModulePermission } from '@/lib/permissions/permissions';
+import { getEffectivePermission, MODULES } from '@/lib/permissions/permissions';
 import type { Task, UpdateTaskInput } from '@/lib/tasks/tasks';
 
 import {
@@ -124,6 +133,7 @@ import {
   readGuests,
   readHistoryEvents,
   readInventoryItems,
+  readInvites,
   readMeetings,
   readMembers,
   readOrgClubs,
@@ -145,6 +155,7 @@ import {
   writeGuests,
   writeHistoryEvents,
   writeInventoryItems,
+  writeInvites,
   writeMeetings,
   writeMembers,
   writeOrgClubs,
@@ -385,8 +396,17 @@ function parseUpdateGuestBody(body: unknown): UpdateGuestInput {
 
 /* ---------------------------------------------------------------- routes -- */
 
-function listMembers(): Member[] {
-  return readMembers();
+/** Removed members are hidden from the normal roster by default — the
+ * directory, attendance picker, dues list, etc. — so a soft-removed member
+ * stops showing up anywhere operational without losing their history. The
+ * Club Admin dashboard and the Activity Logs actor lookup (a past action can
+ * reference a since-removed member) pass `?includeRemoved=true` to see
+ * everyone. */
+function listMembers({ query }: RouteContext): Member[] {
+  const members = readMembers();
+  return query.includeRemoved === 'true'
+    ? members
+    : members.filter((member) => member.status !== 'removed');
 }
 
 function getMember({ params }: RouteContext): Member {
@@ -442,6 +462,358 @@ function startPathway({ params, body }: RouteContext): Member {
   });
 
   return updated;
+}
+
+/* ------------------------------------------------------------- club admin -- */
+
+function isOfficerRole(value: unknown): value is OfficerRole {
+  return typeof value === 'string' && (OFFICER_ROLES as readonly string[]).includes(value);
+}
+
+function parseRoles(input: unknown, fieldName = 'roles'): OfficerRole[] {
+  if (!Array.isArray(input) || input.length === 0) {
+    throw new LocalApiError(400, `${fieldName} must be a non-empty array of officer roles`);
+  }
+  return input.map((role) => {
+    if (!isOfficerRole(role))
+      throw new LocalApiError(400, `"${String(role)}" is not an officer role`);
+    return role;
+  });
+}
+
+function createMemberId(): string {
+  return `m-${Date.now().toString(36)}`;
+}
+
+function parseCreateMemberBody(body: unknown): CreateMemberInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected a create-member body');
+  }
+  const { firstName, lastName, roles } = body as Partial<CreateMemberInput>;
+  if (typeof firstName !== 'string' || firstName.trim() === '') {
+    throw new LocalApiError(400, 'firstName is required');
+  }
+  if (typeof lastName !== 'string' || lastName.trim() === '') {
+    throw new LocalApiError(400, 'lastName is required');
+  }
+  return {
+    firstName: firstName.trim(),
+    lastName: lastName.trim(),
+    roles: roles === undefined ? undefined : parseRoles(roles),
+  };
+}
+
+/** Powers the Club Admin "Add member" form. `roles` falls back to plain
+ * Member when the form leaves it empty. */
+function createMember({ body }: RouteContext): Member {
+  const input = parseCreateMemberBody(body);
+  const member: Member = {
+    id: createMemberId(),
+    firstName: input.firstName,
+    lastName: input.lastName,
+    roles: input.roles && input.roles.length > 0 ? input.roles : ['Member'],
+    isClubAdmin: false,
+    status: 'active',
+  };
+  writeMembers([...readMembers(), member]);
+  recordActivity({
+    category: 'people',
+    action: 'added a member',
+    summary: `Added ${member.firstName} ${member.lastName} to the roster`,
+    entityType: 'member',
+    entityId: member.id,
+  });
+  return member;
+}
+
+function parseUpdateMemberBody(body: unknown): UpdateMemberInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected an update-member body');
+  }
+  const input = body as Record<string, unknown>;
+  const output: UpdateMemberInput = {};
+
+  if ('firstName' in input) {
+    if (typeof input.firstName !== 'string' || input.firstName.trim() === '') {
+      throw new LocalApiError(400, 'firstName cannot be blank');
+    }
+    output.firstName = input.firstName.trim();
+  }
+  if ('lastName' in input) {
+    if (typeof input.lastName !== 'string' || input.lastName.trim() === '') {
+      throw new LocalApiError(400, 'lastName cannot be blank');
+    }
+    output.lastName = input.lastName.trim();
+  }
+  if ('roles' in input) {
+    output.roles = parseRoles(input.roles);
+  }
+  return output;
+}
+
+/** Plain profile/role editing — status, admin flag and permissions each have
+ * their own dedicated endpoint below since they carry their own guard rules. */
+function updateMember({ params, body }: RouteContext): Member {
+  const existing = requireMember(params.memberId);
+  const updated: Member = { ...existing, ...parseUpdateMemberBody(body) };
+  writeMembers(readMembers().map((entry) => (entry.id === updated.id ? updated : entry)));
+  recordActivity({
+    category: 'people',
+    action: 'updated a member',
+    summary: `Updated ${updated.firstName} ${updated.lastName}'s profile`,
+    entityType: 'member',
+    entityId: updated.id,
+  });
+  return updated;
+}
+
+/** True when `member` is the club's only active Club Admin — the guard both
+ * `setMemberStatus` (removing them) and `setMemberAdmin` (demoting them) use
+ * to keep the club from locking itself out of its own admin dashboard. */
+function isLastActiveClubAdmin(member: Member): boolean {
+  if (!member.isClubAdmin || member.status !== 'active') return false;
+  const activeAdmins = readMembers().filter(
+    (entry) => entry.isClubAdmin && entry.status === 'active',
+  );
+  return activeAdmins.length <= 1;
+}
+
+function parseSetMemberStatusBody(body: unknown): { status: Member['status'] } {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected a status body');
+  }
+  const { status } = body as { status?: unknown };
+  if (status !== 'active' && status !== 'removed') {
+    throw new LocalApiError(400, `"${String(status)}" is not a member status`);
+  }
+  return { status };
+}
+
+/** Soft remove/restore — the record and its history (speeches, evaluations,
+ * activity log) stay put, the member just drops out of the active roster. */
+function setMemberStatus({ params, body }: RouteContext): Member {
+  const existing = requireMember(params.memberId);
+  const { status } = parseSetMemberStatusBody(body);
+
+  if (status === 'removed' && isLastActiveClubAdmin(existing)) {
+    throw new LocalApiError(
+      400,
+      'The club must keep at least one active Club Admin — promote someone else first.',
+    );
+  }
+
+  const updated: Member = { ...existing, status };
+  writeMembers(readMembers().map((entry) => (entry.id === updated.id ? updated : entry)));
+  recordActivity({
+    category: 'people',
+    action: status === 'removed' ? 'removed a member' : 'restored a member',
+    summary: `${status === 'removed' ? 'Removed' : 'Restored'} ${updated.firstName} ${updated.lastName}`,
+    entityType: 'member',
+    entityId: updated.id,
+  });
+  return updated;
+}
+
+function parseSetMemberAdminBody(body: unknown): { isClubAdmin: boolean } {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected an admin body');
+  }
+  const { isClubAdmin } = body as { isClubAdmin?: unknown };
+  if (typeof isClubAdmin !== 'boolean') {
+    throw new LocalApiError(400, 'isClubAdmin must be a boolean');
+  }
+  return { isClubAdmin };
+}
+
+/** Grants or revokes full read/mutate access to every module. Any Club Admin
+ * can promote or demote another — including themselves, as long as it
+ * doesn't leave the club with zero active admins. */
+function setMemberAdmin({ params, body }: RouteContext): Member {
+  const existing = requireMember(params.memberId);
+  const { isClubAdmin } = parseSetMemberAdminBody(body);
+
+  if (!isClubAdmin && isLastActiveClubAdmin(existing)) {
+    throw new LocalApiError(
+      400,
+      'The club must keep at least one Club Admin — promote someone else before revoking the last one.',
+    );
+  }
+
+  const updated: Member = { ...existing, isClubAdmin };
+  writeMembers(readMembers().map((entry) => (entry.id === updated.id ? updated : entry)));
+  recordActivity({
+    category: 'people',
+    action: isClubAdmin ? 'granted club admin' : 'revoked club admin',
+    summary: isClubAdmin
+      ? `Made ${updated.firstName} ${updated.lastName} a Club Admin`
+      : `Removed ${updated.firstName} ${updated.lastName} as a Club Admin`,
+    entityType: 'member',
+    entityId: updated.id,
+  });
+  return updated;
+}
+
+function isModuleKey(value: string): value is ModuleKey {
+  return (MODULES as readonly string[]).includes(value);
+}
+
+function parseModulePermission(value: unknown, key: string): ModulePermission {
+  if (typeof value !== 'object' || value === null) {
+    throw new LocalApiError(400, `${key} must be an object`);
+  }
+  const { read, mutate } = value as { read?: unknown; mutate?: unknown };
+  if (typeof read !== 'boolean' || typeof mutate !== 'boolean') {
+    throw new LocalApiError(400, `${key}.read and ${key}.mutate must be booleans`);
+  }
+  return { read, mutate };
+}
+
+function parseSetMemberPermissionsBody(
+  body: unknown,
+): Partial<Record<ModuleKey, ModulePermission>> {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected a permissions body');
+  }
+  const output: Partial<Record<ModuleKey, ModulePermission>> = {};
+  for (const [key, value] of Object.entries(body as Record<string, unknown>)) {
+    if (!isModuleKey(key)) throw new LocalApiError(400, `"${key}" is not a module`);
+    output[key] = parseModulePermission(value, key);
+  }
+  return output;
+}
+
+/** Merges a partial module → { read, mutate } map into the member's
+ * overrides — modules not present in the body are left exactly as they
+ * were, matching the PATCH semantics used everywhere else. */
+function setMemberPermissions({ params, body }: RouteContext): Member {
+  const existing = requireMember(params.memberId);
+  const overrides = parseSetMemberPermissionsBody(body);
+  const updated: Member = {
+    ...existing,
+    permissions: { ...existing.permissions, ...overrides },
+  };
+  writeMembers(readMembers().map((entry) => (entry.id === updated.id ? updated : entry)));
+  recordActivity({
+    category: 'people',
+    action: 'updated permissions',
+    summary: `Updated module permissions for ${updated.firstName} ${updated.lastName}`,
+    entityType: 'member',
+    entityId: updated.id,
+  });
+  return updated;
+}
+
+function createInviteId(): string {
+  return `inv-${Date.now().toString(36)}`;
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function parseCreateInviteBody(body: unknown): CreateInviteInput {
+  if (typeof body !== 'object' || body === null) {
+    throw new LocalApiError(400, 'Expected a create-invite body');
+  }
+  const { email, firstName, lastName, roles } = body as Partial<CreateInviteInput>;
+  if (typeof email !== 'string' || !EMAIL_PATTERN.test(email.trim())) {
+    throw new LocalApiError(400, 'A valid email is required');
+  }
+  return {
+    email: email.trim(),
+    firstName:
+      typeof firstName === 'string' && firstName.trim() !== '' ? firstName.trim() : undefined,
+    lastName: typeof lastName === 'string' && lastName.trim() !== '' ? lastName.trim() : undefined,
+    /* Roles are optional on an invite — an absent field and an empty
+     * selection both mean "no roles picked yet", not "invalid input". */
+    roles: Array.isArray(roles) && roles.length > 0 ? parseRoles(roles) : [],
+  };
+}
+
+function listInvites(): Invite[] {
+  return readInvites();
+}
+
+/** No email is actually sent — there's no email infrastructure in this app.
+ * The invite is a trackable pending record a Club Admin can revoke, or
+ * convert into a real member by hand once the person actually joins. */
+function createInvite({ body }: RouteContext): Invite {
+  const input = parseCreateInviteBody(body);
+  const invite: Invite = {
+    id: createInviteId(),
+    email: input.email,
+    firstName: input.firstName,
+    lastName: input.lastName,
+    roles: input.roles,
+    status: 'pending',
+    invitedBy: CURRENT_MEMBER_ID,
+    invitedAt: new Date().toISOString(),
+  };
+  writeInvites([invite, ...readInvites()]);
+  recordActivity({
+    category: 'people',
+    action: 'invited a member',
+    summary: `Invited ${invite.email} to join the club`,
+    entityType: 'invite',
+    entityId: invite.id,
+  });
+  return invite;
+}
+
+function requireInvite(inviteId: string): Invite {
+  const invite = readInvites().find((entry) => entry.id === inviteId);
+  if (!invite) throw new LocalApiError(404, `No invite with id "${inviteId}"`);
+  return invite;
+}
+
+function revokeInvite({ params }: RouteContext): Invite {
+  const invite = requireInvite(params.inviteId);
+  if (invite.status !== 'pending') {
+    throw new LocalApiError(400, 'Only a pending invite can be revoked');
+  }
+  const updated: Invite = { ...invite, status: 'revoked', respondedAt: new Date().toISOString() };
+  writeInvites(readInvites().map((entry) => (entry.id === updated.id ? updated : entry)));
+  recordActivity({
+    category: 'people',
+    action: 'revoked an invite',
+    summary: `Revoked the invite to ${invite.email}`,
+    entityType: 'invite',
+    entityId: invite.id,
+  });
+  return updated;
+}
+
+/** "Mark as joined" — the admin's manual close-the-loop action once an
+ * invitee has actually shown up, since there's no sign-up flow for them to
+ * accept the invite through. */
+function convertInviteToMember({ params }: RouteContext): Member {
+  const invite = requireInvite(params.inviteId);
+  if (invite.status !== 'pending') {
+    throw new LocalApiError(400, 'Only a pending invite can be converted');
+  }
+
+  const member: Member = {
+    id: createMemberId(),
+    firstName: invite.firstName ?? invite.email.split('@')[0],
+    lastName: invite.lastName ?? '',
+    roles: invite.roles.length > 0 ? invite.roles : ['Member'],
+    isClubAdmin: false,
+    status: 'active',
+  };
+  writeMembers([...readMembers(), member]);
+  writeInvites(
+    readInvites().map((entry) =>
+      entry.id === invite.id
+        ? { ...entry, status: 'accepted' as const, respondedAt: new Date().toISOString() }
+        : entry,
+    ),
+  );
+  recordActivity({
+    category: 'people',
+    action: 'converted an invite to a member',
+    summary: `${member.firstName} ${member.lastName} joined as a member`,
+    entityType: 'member',
+    entityId: member.id,
+  });
+  return member;
 }
 
 function listMeetings(): Meeting[] {
@@ -543,6 +915,48 @@ function deleteGuest({ params }: RouteContext): null {
     entityId: existing.id,
   });
   return null;
+}
+
+function parseConvertGuestBody(body: unknown): { roles?: OfficerRole[] } {
+  if (body === undefined || body === null) return {};
+  if (typeof body !== 'object') throw new LocalApiError(400, 'Expected a convert-guest body');
+  const { roles } = body as { roles?: unknown };
+  /* An absent field and an empty selection both mean "no roles picked" —
+   * the caller falls back to plain Member either way. */
+  return { roles: Array.isArray(roles) && roles.length > 0 ? parseRoles(roles) : undefined };
+}
+
+/** Turns a guest into a member — the guest keeps their record (kept at the
+ * `joined-club` stage, not deleted) so the pipeline history stays intact,
+ * while a fresh `Member` row starts their roster life. */
+function convertGuestToMember({ params, body }: RouteContext): Member {
+  const guests = readGuests();
+  const guest = guests.find((entry) => entry.id === params.guestId);
+  if (!guest) throw new LocalApiError(404, `No guest with id "${params.guestId}"`);
+  const { roles } = parseConvertGuestBody(body);
+
+  const member: Member = {
+    id: createMemberId(),
+    firstName: guest.firstName,
+    lastName: guest.lastName,
+    roles: roles && roles.length > 0 ? roles : ['Member'],
+    isClubAdmin: false,
+    status: 'active',
+  };
+  writeMembers([...readMembers(), member]);
+  writeGuests(
+    guests.map((entry) =>
+      entry.id === guest.id ? { ...entry, stage: 'joined-club' as const } : entry,
+    ),
+  );
+  recordActivity({
+    category: 'people',
+    action: 'converted a guest to a member',
+    summary: `${member.firstName} ${member.lastName} joined as a member`,
+    entityType: 'member',
+    entityId: member.id,
+  });
+  return member;
 }
 
 /** Guest existence check reused by every contact-log route so a missing guest
@@ -2612,10 +3026,15 @@ interface Route {
   /** Path split on `/`; a `:name` segment captures into `params`. */
   segments: string[];
   handler: RouteHandler;
+  /** When set, `handleLocalRequest` checks `CURRENT_MEMBER_ID`'s permission
+   * for this module before running the handler — `read` for GET, `mutate`
+   * for everything else. Routes without a module (member reads, the org-tier
+   * dashboards) stay ungated, same as today. */
+  module?: ModuleKey;
 }
 
-function route(method: HttpMethod, path: string, handler: RouteHandler): Route {
-  return { method, segments: toSegments(path), handler };
+function route(method: HttpMethod, path: string, handler: RouteHandler, module?: ModuleKey): Route {
+  return { method, segments: toSegments(path), handler, module };
 }
 
 const ROUTES: Route[] = [
@@ -2623,53 +3042,63 @@ const ROUTES: Route[] = [
   route('GET', '/members/:memberId', getMember),
   route('GET', '/members/:memberId/history', getMemberHistory),
   route('GET', '/members/:memberId/stats', getMemberStats),
-  route('POST', '/members/:memberId/pathway', startPathway),
-  route('GET', '/meetings', listMeetings),
-  route('GET', '/meetings/:meetingId', getMeeting),
-  route('POST', '/meetings', createMeeting),
-  route('PATCH', '/meetings/:meetingId', updateMeeting),
-  route('GET', '/guests', listGuests),
-  route('GET', '/guests/:guestId', getGuest),
-  route('PATCH', '/guests/:guestId', updateGuest),
-  route('DELETE', '/guests/:guestId', deleteGuest),
-  route('GET', '/guests/:guestId/contact-logs', listContactLogs),
-  route('POST', '/guests/:guestId/contact-logs', createContactLog),
-  route('PATCH', '/guests/:guestId/contact-logs/:logId', updateContactLog),
-  route('DELETE', '/guests/:guestId/contact-logs/:logId', deleteContactLog),
-  route('GET', '/guests/:guestId/visit-logs', listVisitLogs),
-  route('POST', '/guests/:guestId/visit-logs', createVisitLog),
-  route('PATCH', '/guests/:guestId/visit-logs/:logId', updateVisitLog),
-  route('DELETE', '/guests/:guestId/visit-logs/:logId', deleteVisitLog),
-  route('GET', '/assets', listAssets),
-  route('GET', '/assets/:assetId', getAsset),
-  route('POST', '/assets', createAsset),
-  route('PATCH', '/assets/:assetId', updateAsset),
-  route('DELETE', '/assets/:assetId', deleteAsset),
-  route('GET', '/documents', listDocuments),
-  route('GET', '/documents/:documentId', getDocument),
-  route('POST', '/documents', createDocument),
-  route('PATCH', '/documents/:documentId', updateDocument),
-  route('DELETE', '/documents/:documentId', deleteDocument),
-  route('GET', '/meetings/:meetingId/checklist', listChecklist),
-  route('POST', '/meetings/:meetingId/checklist', createChecklistItem),
-  route('PATCH', '/meetings/:meetingId/checklist/:itemId', updateChecklistItem),
-  route('DELETE', '/meetings/:meetingId/checklist/:itemId', deleteChecklistItem),
-  route('GET', '/inventory-items', listInventoryItems),
-  route('GET', '/inventory-items/:itemId', getInventoryItem),
-  route('POST', '/inventory-items', createInventoryItem),
-  route('PATCH', '/inventory-items/:itemId', updateInventoryItem),
-  route('DELETE', '/inventory-items/:itemId', deleteInventoryItem),
-  route('GET', '/transactions', listTransactions),
-  route('GET', '/transactions/:transactionId', getTransaction),
-  route('POST', '/transactions', createTransaction),
-  route('PATCH', '/transactions/:transactionId', updateTransaction),
-  route('DELETE', '/transactions/:transactionId', deleteTransaction),
-  route('GET', '/dues-records', listDuesRecords),
-  route('PATCH', '/dues-records/:recordId', updateDuesRecord),
-  route('GET', '/budget-lines', listBudgetLines),
-  route('POST', '/budget-lines', createBudgetLine),
-  route('PATCH', '/budget-lines/:lineId', updateBudgetLine),
-  route('DELETE', '/budget-lines/:lineId', deleteBudgetLine),
+  route('POST', '/members/:memberId/pathway', startPathway, 'education'),
+  route('POST', '/members', createMember, 'clubAdmin'),
+  route('PATCH', '/members/:memberId', updateMember, 'clubAdmin'),
+  route('POST', '/members/:memberId/status', setMemberStatus, 'clubAdmin'),
+  route('POST', '/members/:memberId/admin', setMemberAdmin, 'clubAdmin'),
+  route('PATCH', '/members/:memberId/permissions', setMemberPermissions, 'clubAdmin'),
+  route('GET', '/invites', listInvites, 'clubAdmin'),
+  route('POST', '/invites', createInvite, 'clubAdmin'),
+  route('DELETE', '/invites/:inviteId', revokeInvite, 'clubAdmin'),
+  route('POST', '/invites/:inviteId/convert', convertInviteToMember, 'clubAdmin'),
+  route('GET', '/meetings', listMeetings, 'meetings'),
+  route('GET', '/meetings/:meetingId', getMeeting, 'meetings'),
+  route('POST', '/meetings', createMeeting, 'meetings'),
+  route('PATCH', '/meetings/:meetingId', updateMeeting, 'meetings'),
+  route('GET', '/guests', listGuests, 'people'),
+  route('GET', '/guests/:guestId', getGuest, 'people'),
+  route('PATCH', '/guests/:guestId', updateGuest, 'people'),
+  route('DELETE', '/guests/:guestId', deleteGuest, 'people'),
+  route('POST', '/guests/:guestId/convert-to-member', convertGuestToMember, 'people'),
+  route('GET', '/guests/:guestId/contact-logs', listContactLogs, 'people'),
+  route('POST', '/guests/:guestId/contact-logs', createContactLog, 'people'),
+  route('PATCH', '/guests/:guestId/contact-logs/:logId', updateContactLog, 'people'),
+  route('DELETE', '/guests/:guestId/contact-logs/:logId', deleteContactLog, 'people'),
+  route('GET', '/guests/:guestId/visit-logs', listVisitLogs, 'people'),
+  route('POST', '/guests/:guestId/visit-logs', createVisitLog, 'people'),
+  route('PATCH', '/guests/:guestId/visit-logs/:logId', updateVisitLog, 'people'),
+  route('DELETE', '/guests/:guestId/visit-logs/:logId', deleteVisitLog, 'people'),
+  route('GET', '/assets', listAssets, 'library'),
+  route('GET', '/assets/:assetId', getAsset, 'library'),
+  route('POST', '/assets', createAsset, 'library'),
+  route('PATCH', '/assets/:assetId', updateAsset, 'library'),
+  route('DELETE', '/assets/:assetId', deleteAsset, 'library'),
+  route('GET', '/documents', listDocuments, 'library'),
+  route('GET', '/documents/:documentId', getDocument, 'library'),
+  route('POST', '/documents', createDocument, 'library'),
+  route('PATCH', '/documents/:documentId', updateDocument, 'library'),
+  route('DELETE', '/documents/:documentId', deleteDocument, 'library'),
+  route('GET', '/meetings/:meetingId/checklist', listChecklist, 'meetings'),
+  route('POST', '/meetings/:meetingId/checklist', createChecklistItem, 'meetings'),
+  route('PATCH', '/meetings/:meetingId/checklist/:itemId', updateChecklistItem, 'meetings'),
+  route('DELETE', '/meetings/:meetingId/checklist/:itemId', deleteChecklistItem, 'meetings'),
+  route('GET', '/inventory-items', listInventoryItems, 'inventory'),
+  route('GET', '/inventory-items/:itemId', getInventoryItem, 'inventory'),
+  route('POST', '/inventory-items', createInventoryItem, 'inventory'),
+  route('PATCH', '/inventory-items/:itemId', updateInventoryItem, 'inventory'),
+  route('DELETE', '/inventory-items/:itemId', deleteInventoryItem, 'inventory'),
+  route('GET', '/transactions', listTransactions, 'finance'),
+  route('GET', '/transactions/:transactionId', getTransaction, 'finance'),
+  route('POST', '/transactions', createTransaction, 'finance'),
+  route('PATCH', '/transactions/:transactionId', updateTransaction, 'finance'),
+  route('DELETE', '/transactions/:transactionId', deleteTransaction, 'finance'),
+  route('GET', '/dues-records', listDuesRecords, 'finance'),
+  route('PATCH', '/dues-records/:recordId', updateDuesRecord, 'finance'),
+  route('GET', '/budget-lines', listBudgetLines, 'finance'),
+  route('POST', '/budget-lines', createBudgetLine, 'finance'),
+  route('PATCH', '/budget-lines/:lineId', updateBudgetLine, 'finance'),
+  route('DELETE', '/budget-lines/:lineId', deleteBudgetLine, 'finance'),
   route('GET', '/members/:memberId/evaluations', listEvaluations),
   route('GET', '/members/:memberId/timer-entries', listTimerEntries),
   route('GET', '/members/:memberId/ah-counter-entries', listAhCounterEntries),
@@ -2677,7 +3106,7 @@ const ROUTES: Route[] = [
   route('POST', '/members/:memberId/speech-slot-requests', createSpeechSlotRequest),
   route('GET', '/members/:memberId/tasks', listTasks),
   route('PATCH', '/tasks/:taskId', updateTask),
-  route('GET', '/activity-logs', listActivityLogs),
+  route('GET', '/activity-logs', listActivityLogs, 'activityLogs'),
   route('GET', '/districts', listDistricts),
   route('POST', '/districts', createDistrict),
   route('PATCH', '/districts/:districtId', updateDistrict),
@@ -2734,12 +3163,34 @@ function matchRoute(
   return null;
 }
 
+/** The single enforcement chokepoint for the whole mock API — every module
+ * route (see the `module` tag on each `route()` call below) passes through
+ * here before its handler runs, the same way a real Nest guard would sit in
+ * front of every controller method. `read` gates GET, `mutate` gates
+ * everything else, checked against `CURRENT_MEMBER_ID`'s effective
+ * permission (`getEffectivePermission`) — a Club Admin always passes, a
+ * member without the right grant gets a 403 instead of reaching the handler. */
+function assertModuleAccess(module: ModuleKey | undefined, method: HttpMethod): void {
+  if (!module) return;
+  const actor = requireMember(CURRENT_MEMBER_ID);
+  const permission = getEffectivePermission(actor, module);
+  const need = method === 'GET' ? 'read' : 'mutate';
+  if (!permission[need]) {
+    throw new LocalApiError(
+      403,
+      `You don't have ${need} access to ${module}. Ask a Club Admin to grant it.`,
+    );
+  }
+}
+
 /** Resolves a request against the route table. Throws `LocalApiError` for
  * anything a real server would answer with a 4xx. */
 export function handleLocalRequest(request: LocalRequest): unknown {
   const method = request.method ?? 'GET';
   const match = matchRoute(method, request.url);
   if (!match) throw new LocalApiError(404, `No local route for ${method} ${request.url}`);
+
+  assertModuleAccess(match.route.module, method);
 
   return match.route.handler({
     params: match.params,
