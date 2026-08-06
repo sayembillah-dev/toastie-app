@@ -15,6 +15,7 @@ import {
   List,
   MagnifyingGlass,
   Question,
+  ShieldCheck,
   SidebarSimple,
   SquaresFour,
   UserCircle,
@@ -79,16 +80,23 @@ const primaryNav: NavEntry[] = [
   { href: '/me', title: 'Me', Icon: UserCircle },
 ];
 
+const clubAdminNav: NavEntry[] = [
+  { href: '/club-admin/members', title: 'Members', Icon: Users },
+  { href: '/club-admin/permissions', title: 'Permissions', Icon: ShieldCheck },
+  { href: '/club-admin/audit-trail', title: 'Audit Trail', Icon: ClockCounterClockwise },
+];
+
 /** Named routes win; anything deeper falls back to title-cased segments.
  * Crumbs are text-only — the icon lives on the sidebar entry instead. */
 function buildTrail(pathname: string): { href: string; title: string }[] {
-  const matched = primaryNav.find((entry) => entry.href === pathname);
+  const allNav = [...primaryNav, ...clubAdminNav];
+  const matched = allNav.find((entry) => entry.href === pathname);
   if (matched) return [{ href: matched.href, title: matched.title }];
 
   const segments = pathname.split('/').filter(Boolean);
   return segments.map((segment, index) => ({
     href: `/${segments.slice(0, index + 1).join('/')}`,
-    title: segment.replace(/-/g, ' ').replace(/^./, (char) => char.toUpperCase()),
+    title: segment.replace(/-/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
   }));
 }
 
@@ -134,12 +142,12 @@ interface SidebarBodyProps {
   brandAction: React.ReactNode;
   /** Fires when a nav entry is followed, so the drawer can dismiss itself. */
   onNavigate?: () => void;
-  /** When false, the nav column is deliberately blank — `primaryNav` is
-   * club-specific, and the org-tree scopes (Area, Division, District, Super
-   * Admin) navigate by breadcrumb and card drill-down instead. Also blank for
-   * Club Admin, whose sections are tabs on one page rather than sidebar
-   * entries. */
-  showNav: boolean;
+  /** Which set of nav entries to render. Null means the sidebar is blank —
+   * org-tree scopes (Area, Division, District, Super Admin) navigate by
+   * breadcrumb and card drill-down and don't need a sidebar nav list. */
+  navEntries: NavEntry[] | null;
+  /** Show the search bar above the nav. Only shown for the primary (club) nav. */
+  showSearch?: boolean;
 }
 
 /** The sidebar's contents, independent of what is holding them — the desktop
@@ -151,7 +159,8 @@ function SidebarBody({
   account,
   brandAction,
   onNavigate,
-  showNav,
+  navEntries,
+  showSearch = true,
 }: SidebarBodyProps) {
   return (
     /* pt-2 matches the content panel's inset so the brand row and the
@@ -172,26 +181,28 @@ function SidebarBody({
         <span className={collapsed ? '' : 'ml-auto'}>{brandAction}</span>
       </div>
 
-      {showNav ? (
+      {navEntries ? (
         <>
-          <div className="shrink-0 px-2 pb-2">
-            {collapsed ? (
-              <SideRow Icon={MagnifyingGlass} label="Search" collapsed />
-            ) : (
-              <Input
-                variant="filled"
-                placeholder="Search"
-                aria-label="Search"
-                prefix={<MagnifyingGlass size={16} className="text-ink-muted" />}
-              />
-            )}
-          </div>
+          {showSearch ? (
+            <div className="shrink-0 px-2 pb-2">
+              {collapsed ? (
+                <SideRow Icon={MagnifyingGlass} label="Search" collapsed />
+              ) : (
+                <Input
+                  variant="filled"
+                  placeholder="Search"
+                  aria-label="Search"
+                  prefix={<MagnifyingGlass size={16} className="text-ink-muted" />}
+                />
+              )}
+            </div>
+          ) : null}
 
           <Menu
             mode="inline"
             selectedKeys={[pathname]}
             style={{ borderInlineEnd: 'none', background: 'transparent' }}
-            items={primaryNav.map((entry) => ({
+            items={navEntries.map((entry) => ({
               key: entry.href,
               icon: <entry.Icon size={18} />,
               label: (
@@ -317,11 +328,14 @@ export function AppShell({
   const onOrgRoute = isOrgRoute(pathname);
   const onClubAdminRoute = isClubAdminRoute(pathname);
   const showContent = activeUnit === 'club' || onOrgRoute || onClubAdminRoute;
-  /* The primary nav is club-specific (Meetings, Finance, …); the org
-   * dashboards navigate by breadcrumb and card drill-down instead, and Club
-   * Admin's sections are tabs on one page, so all three keep the sidebar
-   * blank the same way the placeholder scopes did. */
-  const showNav = activeUnit === 'club' && !onOrgRoute && !onClubAdminRoute;
+  /* Org dashboards navigate by breadcrumb and card drill-down — no sidebar
+   * nav needed. Club Admin has its own three-entry nav; the primary nav is
+   * club-specific for everything else. */
+  const navEntries: NavEntry[] | null = onClubAdminRoute
+    ? clubAdminNav
+    : activeUnit === 'club' && !onOrgRoute
+      ? primaryNav
+      : null;
 
   const rawTrail = breadcrumbTrail ?? buildTrail(pathname);
   const trail = breadcrumbTrail
@@ -349,7 +363,8 @@ export function AppShell({
           pathname={pathname}
           notificationCount={notificationCount}
           account={account}
-          showNav={showNav}
+          navEntries={navEntries}
+          showSearch={navEntries === primaryNav}
           brandAction={
             <Button
               type="text"
@@ -378,7 +393,8 @@ export function AppShell({
           pathname={pathname}
           notificationCount={notificationCount}
           account={account}
-          showNav={showNav}
+          navEntries={navEntries}
+          showSearch={navEntries === primaryNav}
           onNavigate={closeMobileNav}
           brandAction={
             <Button
