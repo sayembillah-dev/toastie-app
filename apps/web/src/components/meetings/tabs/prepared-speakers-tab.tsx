@@ -1,12 +1,21 @@
 'use client';
 
-import { CaretDown, Plus, TrashSimple } from '@phosphor-icons/react/dist/ssr';
-import { Button, Input, InputNumber, Select } from 'antd';
-import { useMemo } from 'react';
+import {
+  CaretDown,
+  ChatCircleDots,
+  Copy,
+  DownloadSimple,
+  Plus,
+  QrCode,
+  TrashSimple,
+} from '@phosphor-icons/react/dist/ssr';
+import { App, Button, Input, InputNumber, Modal, QRCode, Select, Tooltip } from 'antd';
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { Pathway } from '@/lib/education/members';
 import { PATHWAYS } from '@/lib/education/members';
 import type { ProjectDefinition } from '@/lib/education/pathways';
 import { findProject, getProjectDuration, getProjectsForPathway } from '@/lib/education/pathways';
+import { readSubmissions, subscribeToSubmissions } from '@/lib/evaluation/storage';
 import type { DraftSpeaker, SpeakerStatus } from '@/lib/meetings/draft';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { useGetMembersQuery } from '@/store/api';
@@ -79,8 +88,154 @@ function FieldWrap({
   );
 }
 
+interface EvaluationQrModalProps {
+  open: boolean;
+  onClose: () => void;
+  url: string;
+  speakerName: string | undefined;
+  speechTitle: string;
+  onCopy: () => void;
+}
+
+/** Evaluation QR modal — shows a scannable QR for the speaker's evaluation
+ * link, along with a copyable URL row and a PNG download. Rendering the QR
+ * with `type="canvas"` (the antd default) means we can grab the canvas at
+ * download time and encode it directly, without a second render pass. */
+function EvaluationQrModal({
+  open,
+  onClose,
+  url,
+  speakerName,
+  speechTitle,
+  onCopy,
+}: EvaluationQrModalProps) {
+  const qrWrapRef = useRef<HTMLDivElement>(null);
+
+  function handleDownload() {
+    const canvas = qrWrapRef.current?.querySelector('canvas');
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL('image/png');
+    const filename =
+      (speakerName ? speakerName.replace(/\s+/g, '-').toLowerCase() : 'speaker') +
+      '-evaluation-qr.png';
+    const anchor = document.createElement('a');
+    anchor.href = dataUrl;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+  }
+
+  const heading = speakerName || 'Speaker evaluation';
+  const subheading = speakerName
+    ? speechTitle
+      ? `Evaluation for “${speechTitle}”`
+      : 'Scan or share the evaluation link'
+    : 'Scan or share the evaluation link';
+
+  return (
+    <Modal
+      open={open}
+      onCancel={onClose}
+      footer={null}
+      centered
+      width={440}
+      destroyOnHidden
+      title={null}
+      styles={{ body: { padding: 0 } }}
+      classNames={{ body: 'overflow-hidden rounded-b-2xl' }}
+    >
+      <div className="flex flex-col">
+        <div className="border-b border-line px-6 py-5">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+            Evaluation link
+          </p>
+          <h3 className="mt-1 truncate text-lg font-semibold text-ink">{heading}</h3>
+          <p className="mt-0.5 truncate text-xs text-ink-soft">{subheading}</p>
+        </div>
+
+        <div className="flex flex-col items-center gap-3 px-6 pt-6">
+          <div
+            ref={qrWrapRef}
+            className="rounded-2xl border border-line bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+          >
+            <QRCode
+              value={url || ' '}
+              size={224}
+              bordered={false}
+              errorLevel="M"
+              color="#1c1c1c"
+              bgColor="#ffffff"
+            />
+          </div>
+          <p className="text-center text-[11px] text-ink-muted">
+            Scan with a phone camera to open the evaluation form.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-3 px-6 pb-6 pt-5">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">
+            Or share the link
+          </p>
+          <div className="flex items-center gap-2">
+            <Input readOnly value={url} size="large" className="!bg-fill !text-ink" />
+            <Button
+              size="large"
+              icon={<Copy size={16} />}
+              onClick={onCopy}
+              aria-label="Copy evaluation link"
+            >
+              Copy
+            </Button>
+          </div>
+          <Button
+            block
+            type="primary"
+            size="large"
+            icon={<DownloadSimple size={16} weight="bold" />}
+            onClick={handleDownload}
+          >
+            Download QR as image
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/** Small pill shown next to the status/QR cluster once at least one public
+ * evaluation has landed for a speaker. Reads localStorage via
+ * `useSyncExternalStore` so a submission from the shared link — or from a
+ * phone using the same-origin browser — updates the count without a reload. */
+function FeedbackBadge({ meetingId, speakerId }: { meetingId: string; speakerId: string }) {
+  const subscribe = useCallback(
+    (notify: () => void) => subscribeToSubmissions(meetingId, speakerId, notify),
+    [meetingId, speakerId],
+  );
+  const submissions = useSyncExternalStore(
+    subscribe,
+    () => readSubmissions(meetingId, speakerId),
+    () => [],
+  );
+  const count = submissions.length;
+  if (count === 0) return null;
+  return (
+    <Tooltip title={`${count} evaluation${count === 1 ? '' : 's'} received — see the Me page`}>
+      <span
+        role="img"
+        aria-label={`${count} evaluation${count === 1 ? '' : 's'} received`}
+        className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700"
+      >
+        <ChatCircleDots size={11} weight="fill" />
+        {count}
+      </span>
+    </Tooltip>
+  );
+}
+
 interface SpeakerCardProps {
   index: number;
+  meetingId: string;
   speaker: DraftSpeaker;
   memberOptions: MemberOption[];
   membersLoading: boolean;
@@ -92,6 +247,7 @@ interface SpeakerCardProps {
 
 function SpeakerCard({
   index,
+  meetingId,
   speaker,
   memberOptions,
   membersLoading,
@@ -100,6 +256,7 @@ function SpeakerCard({
   onSave,
   onToggle,
 }: SpeakerCardProps) {
+  const { message } = App.useApp();
   const idPrefix = `speaker-${speaker.id}`;
   const bodyId = `${idPrefix}-body`;
 
@@ -117,12 +274,23 @@ function SpeakerCard({
   const durationBounds = getProjectDuration(selectedProject?.name, speaker.pathway);
   const status = STATUS_STYLES[speaker.status];
 
+  const speakerName = speaker.memberId
+    ? memberOptions.find((option) => option.value === speaker.memberId)?.label
+    : undefined;
+  const trimmedTitle = speaker.title.trim();
+
   /* Changing the pathway invalidates any previously selected project — level
    * and duration derive from that project, so keeping the stale value would
    * silently mislead the panel below. */
   function handlePathwayChange(pathway: Pathway | undefined) {
     onChange({ pathway, project: undefined });
   }
+
+  const [qrOpen, setQrOpen] = useState(false);
+  const evaluationUrl = useMemo(() => {
+    const origin = typeof window !== 'undefined' && window.location ? window.location.origin : '';
+    return `${origin}/meetings/${meetingId}/evaluate/${speaker.id}`;
+  }, [meetingId, speaker.id]);
 
   return (
     <article className="overflow-hidden rounded-xl border border-line bg-sidebar">
@@ -146,8 +314,20 @@ function SpeakerCard({
             }`}
           />
           <span className="text-sm font-semibold text-ink-muted">#{index}</span>
-          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
-            {speaker.title.trim() || 'Untitled speech'}
+          <span className="min-w-0 flex-1 truncate text-sm">
+            {speakerName ? (
+              <>
+                <span className="font-semibold text-ink">{speakerName}</span>
+                {trimmedTitle && (
+                  <>
+                    <span className="mx-1.5 text-ink-muted">·</span>
+                    <span className="text-ink-muted">{trimmedTitle}</span>
+                  </>
+                )}
+              </>
+            ) : (
+              <span className="font-semibold text-ink">{trimmedTitle || 'Untitled speech'}</span>
+            )}
           </span>
         </button>
         <span
@@ -156,14 +336,33 @@ function SpeakerCard({
         >
           {status.label}
         </span>
-        <Button
-          type="text"
-          size="small"
-          aria-label={`Delete speaker #${index}`}
-          icon={<TrashSimple size={16} className="text-ink-muted" />}
-          onClick={onDelete}
-        />
+        <FeedbackBadge meetingId={meetingId} speakerId={speaker.id} />
+        <Tooltip title="Show evaluation QR">
+          <Button
+            type="text"
+            size="small"
+            aria-label={`Show evaluation QR for speaker #${index}`}
+            icon={<QrCode size={16} className="text-ink-muted" />}
+            onClick={() => setQrOpen(true)}
+          />
+        </Tooltip>
       </div>
+
+      <EvaluationQrModal
+        open={qrOpen}
+        onClose={() => setQrOpen(false)}
+        url={evaluationUrl}
+        speakerName={speakerName}
+        speechTitle={trimmedTitle}
+        onCopy={async () => {
+          try {
+            await navigator.clipboard.writeText(evaluationUrl);
+            message.success('Evaluation link copied');
+          } catch {
+            message.error('Could not copy link');
+          }
+        }}
+      />
 
       {/* Body stays mounted-then-hidden so form state doesn't reset on
        * collapse and antd Selects keep their dropdown portal roots. */}
@@ -295,14 +494,19 @@ function SpeakerCard({
               </>
             )}
           </p>
-          <Button
-            type="primary"
-            onClick={onSave}
-            disabled={!speaker.dirty}
-            className="self-end sm:self-auto"
-          >
-            {speaker.dirty ? 'Save speaker' : 'Saved'}
-          </Button>
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <Button
+              danger
+              icon={<TrashSimple size={16} />}
+              onClick={onDelete}
+              aria-label={`Delete speaker #${index}`}
+            >
+              Delete
+            </Button>
+            <Button type="primary" onClick={onSave} disabled={!speaker.dirty}>
+              {speaker.dirty ? 'Save speaker' : 'Saved'}
+            </Button>
+          </div>
         </div>
       </div>
     </article>
@@ -385,6 +589,7 @@ export function PreparedSpeakersTab({ meeting }: PreparedSpeakersTabProps) {
               <SpeakerCard
                 key={speaker.id}
                 index={index + 1}
+                meetingId={meeting.id}
                 speaker={speaker}
                 memberOptions={memberOptions}
                 membersLoading={membersLoading}

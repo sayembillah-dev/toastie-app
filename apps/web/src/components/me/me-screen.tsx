@@ -24,6 +24,7 @@ import { ClubStandingCard } from './club-standing-card';
 import { FinanceCard } from './finance-card';
 import { PathwayCard } from './pathway-card';
 import { ProfileHero } from './profile-hero';
+import { PublicFeedbackFeed } from './public-feedback-feed';
 import { RequestSpeechSlotModal } from './request-speech-slot-modal';
 import { SpeechSlotCard } from './speech-slot-card';
 import { SpeechesFeed } from './speeches-feed';
@@ -114,6 +115,7 @@ function MeContent() {
             ahCounterEntries={ahCounterEntries ?? []}
             membersById={membersById}
           />
+          <PublicFeedbackFeed memberId={CURRENT_MEMBER_ID} />
         </div>
 
         <div className="flex flex-col gap-4">
