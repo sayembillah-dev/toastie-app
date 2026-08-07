@@ -57,6 +57,13 @@ export const sessionSlice = createSlice({
     contextChanged(state, action: PayloadAction<ActiveContextKey>) {
       state.contextKey = action.payload;
     },
+    /** Clears the post-login "set your own password" nudge the moment the
+     * self-service change succeeds — the mutation itself doesn't return a
+     * fresh session, so the caller patches this one field locally instead
+     * of a full reload. */
+    passwordChanged(state) {
+      if (state.user) state.user.mustChangePassword = false;
+    },
     sessionCleared() {
       return initialState;
     },
@@ -70,8 +77,13 @@ export const sessionSlice = createSlice({
   },
 });
 
-export const { sessionLoaded, sessionUnauthenticated, contextChanged, sessionCleared } =
-  sessionSlice.actions;
+export const {
+  sessionLoaded,
+  sessionUnauthenticated,
+  contextChanged,
+  passwordChanged,
+  sessionCleared,
+} = sessionSlice.actions;
 export const {
   selectSessionStatus,
   selectSessionUser,

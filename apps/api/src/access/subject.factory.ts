@@ -35,6 +35,7 @@ export class SubjectFactory {
         firstName: true,
         lastName: true,
         isSuperAdmin: true,
+        mustChangePassword: true,
         status: true,
       },
     });
@@ -139,6 +140,7 @@ export class SubjectFactory {
         firstName: user.firstName,
         lastName: user.lastName,
         isSuperAdmin: user.isSuperAdmin,
+        mustChangePassword: user.mustChangePassword,
       },
       memberships,
       orgAssignments,

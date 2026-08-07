@@ -52,7 +52,15 @@ export default function LoginPage() {
       if (contextKey) writeStoredContext(contextKey);
 
       dispatch(sessionLoaded({ payload: res.session, contextKey }));
-      router.replace(contextKey ? defaultRouteForContext(contextKey) : '/');
+      const destination = contextKey ? defaultRouteForContext(contextKey) : '/';
+      // A temporary (admin-set) password — land on the "set your own"
+      // prompt instead, carrying the real destination through so Skip (or
+      // a successful change) still lands them where they were headed.
+      router.replace(
+        res.session.user.mustChangePassword
+          ? `/change-password?next=${encodeURIComponent(destination)}`
+          : destination,
+      );
     } catch (err) {
       const code = extractErrorCode(err);
       setError(messageForCode(code));

@@ -5,6 +5,7 @@ import type { SessionResponse } from '@toastly/access';
 import { SubjectFactory } from '@/access';
 import { PrismaService } from '@/prisma';
 
+import type { ChangePasswordDto } from './dto/change-password.dto';
 import type { LoginDto } from './dto/login.dto';
 import type { RegisterDto } from './dto/register.dto';
 import { type IssuedTokens, TokenService } from './token.service';
@@ -83,6 +84,11 @@ export class AuthService {
       throw new UnauthorizedException({ code: 'USER_SUSPENDED' });
     }
 
+    // Consume the credential-handoff link (if one exists) the moment the
+    // recipient actually signs in — best-effort `deleteMany` so a login
+    // never fails over a row that may already be gone.
+    await this.prisma.credentialShare.deleteMany({ where: { userId: user.id } });
+
     const now = new Date();
     const tokens = await this.tokens.issueTokens(user.id, now);
     const session = await this.subjectFactory.loadSession(user.id, now.getTime());
@@ -90,6 +96,29 @@ export class AuthService {
       throw new UnauthorizedException({ code: 'SESSION_LOAD_FAILED' });
     }
     return { tokens, session };
+  }
+
+  /** Self-service password change — the account holder rotating their own
+   * credential, as opposed to `UsersService.setPassword` (an admin choosing
+   * it for them). No session revocation: this request is already running
+   * on a session the user controls, so there's nothing to force out. */
+  async changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { passwordHash: true },
+    });
+    if (!user) {
+      throw new UnauthorizedException({ code: 'SESSION_INVALID' });
+    }
+    const currentOk = await this.tokens.verifyPassword(user.passwordHash, dto.currentPassword);
+    if (!currentOk) {
+      throw new UnauthorizedException({ code: 'INVALID_CREDENTIALS' });
+    }
+    const passwordHash = await this.tokens.hashPassword(dto.newPassword);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash, mustChangePassword: false },
+    });
   }
 
   async refresh(rawRefreshToken: string): Promise<AuthResult> {

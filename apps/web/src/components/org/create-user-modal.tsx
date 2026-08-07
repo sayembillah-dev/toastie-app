@@ -1,7 +1,13 @@
 'use client';
 
-import { ArrowsClockwise, CheckCircle, Copy, EnvelopeSimple } from '@phosphor-icons/react/dist/ssr';
-import { App, Button, Checkbox, Input, Modal, Select } from 'antd';
+import {
+  ArrowsClockwise,
+  CheckCircle,
+  Copy,
+  EnvelopeSimple,
+  Link as LinkIcon,
+} from '@phosphor-icons/react/dist/ssr';
+import { App, Button, Checkbox, Input, Modal, QRCode, Select } from 'antd';
 import { useMemo, useState } from 'react';
 
 import type { OfficerRole } from '@/lib/education/members';
@@ -411,10 +417,15 @@ function CredentialsCard({
 }) {
   const { message } = App.useApp();
 
-  const loginUrl = useMemo(() => {
-    const origin = typeof window !== 'undefined' && window.location ? window.location.origin : '';
-    return `${origin}/login`;
-  }, []);
+  const origin = useMemo(
+    () => (typeof window !== 'undefined' && window.location ? window.location.origin : ''),
+    [],
+  );
+  const loginUrl = `${origin}/login`;
+  /* Same data the credentials card already shows, on a page the recipient
+   * can open themselves — the direct link and QR code both point here.
+   * Stops working the moment they log in once (see `AuthService.login`). */
+  const credentialsUrl = `${origin}/credentials/${result.id}?t=${encodeURIComponent(result.credentialShare.token)}`;
 
   const summaryLines = [
     `${result.firstName} ${result.lastName}`,
@@ -440,6 +451,15 @@ function CredentialsCard({
     }
   }
 
+  async function handleCopyLink() {
+    try {
+      await navigator.clipboard.writeText(credentialsUrl);
+      message.success('Link copied');
+    } catch {
+      message.error('Could not copy — select the text manually');
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2.5 text-emerald-800">
@@ -448,13 +468,28 @@ function CredentialsCard({
       </div>
 
       <p className="text-xs text-ink-muted">
-        The password is shown here once. Copy these credentials and share them with{' '}
-        {result.firstName} directly — there is no automated email or SMS.
+        The password is shown here once. Share it with {result.firstName} however works best — copy
+        the text below, send the direct link, or let them scan the QR code.
       </p>
 
       <pre className="whitespace-pre-wrap rounded-lg border border-line bg-fill px-3 py-2.5 text-xs text-ink">
         {summary}
       </pre>
+
+      <div className="flex flex-col gap-3 rounded-lg border border-line p-3 sm:flex-row sm:items-center">
+        <div className="flex shrink-0 items-center justify-center rounded-md bg-canvas p-1.5">
+          <QRCode value={credentialsUrl} size={104} />
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <p className="text-xs font-medium text-ink">Direct link</p>
+          <p className="truncate text-xs text-ink-muted" title={credentialsUrl}>
+            {credentialsUrl}
+          </p>
+          <Button size="small" icon={<LinkIcon size={13} />} onClick={handleCopyLink}>
+            Copy link
+          </Button>
+        </div>
+      </div>
 
       <div className="flex items-center justify-end gap-2">
         <Button icon={<Copy size={14} />} onClick={handleCopy}>

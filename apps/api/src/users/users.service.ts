@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { createId } from '@paralleldrive/cuid2';
 import { Prisma } from '@prisma/client';
 import { can, type PermissionSubject } from '@toastly/access';
 
@@ -175,6 +176,8 @@ export class UsersService {
     const isClubAdmin = dto.isClubAdmin ?? false;
     const memberType = club ? (dto.memberType ?? null) : null;
 
+    const credentialShareToken = createId();
+
     try {
       const user = await this.prisma.$transaction(async (tx) => {
         const created = await tx.user.create({
@@ -186,6 +189,9 @@ export class UsersService {
             lastName,
             tiMemberNumber,
             status: 'active',
+            // The SA is choosing this password on the user's behalf — nudge
+            // them to pick their own the first time they sign in.
+            mustChangePassword: true,
           },
         });
         if (club) {
@@ -204,6 +210,20 @@ export class UsersService {
             },
           });
         }
+        // Snapshot rather than a join back to `User` — the handoff page
+        // should keep showing what was created even if the profile is
+        // edited afterward, and it means the public lookup never touches
+        // the `User` row directly.
+        await tx.credentialShare.create({
+          data: {
+            userId: created.id,
+            token: credentialShareToken,
+            firstName,
+            lastName,
+            phone,
+            password: dto.password,
+          },
+        });
         return created;
       });
 
@@ -214,6 +234,7 @@ export class UsersService {
         roles: club ? roles : [],
         isClubAdmin: club ? isClubAdmin : false,
         memberType,
+        credentialShare: { token: credentialShareToken },
       };
     } catch (err) {
       throw this.mapUniqueConflict(err);
@@ -270,7 +291,10 @@ export class UsersService {
     await this.loadWithCounts(userId);
     const passwordHash = await this.tokens.hashPassword(dto.password);
     await this.prisma.$transaction([
-      this.prisma.user.update({ where: { id: userId }, data: { passwordHash } }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash, mustChangePassword: true },
+      }),
       this.prisma.refreshToken.updateMany({
         where: { userId, revokedAt: null },
         data: { revokedAt: new Date() },

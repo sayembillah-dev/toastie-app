@@ -13,6 +13,10 @@ export interface SessionUser {
   firstName: string;
   lastName: string;
   isSuperAdmin: boolean;
+  /** True when someone other than the account holder chose the current
+   * password (creation, admin-driven reset). Drives a post-login "set your
+   * own password" nudge — skippable, not an access gate. */
+  mustChangePassword: boolean;
 }
 
 export interface SessionMembership {

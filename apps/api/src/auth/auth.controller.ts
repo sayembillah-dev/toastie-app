@@ -1,10 +1,11 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Patch, Post } from '@nestjs/common';
 import type { SessionResponse } from '@toastly/access';
 
 import { Public } from '@/access';
 
 import { type AuthResult, AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -56,5 +57,16 @@ export class AuthController {
   @Get('session')
   session(@CurrentUser() user: AuthenticatedUser): Promise<SessionResponse> {
     return this.authService.loadSession(user.id);
+  }
+
+  /** Self-service rotation — see `AuthService.changePassword` for how this
+   * differs from the admin-driven `POST /users/:userId/password`. */
+  @Patch('password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  changePassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ChangePasswordDto,
+  ): Promise<void> {
+    return this.authService.changePassword(user.id, dto);
   }
 }

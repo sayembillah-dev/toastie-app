@@ -1302,6 +1302,22 @@ export const toastlyApi = createApi({
     getAuthSession: build.query<SessionResponse, void>({
       query: () => ({ url: '/auth/session', method: 'GET' }),
     }),
+    /* Self-service password rotation — see `AuthService.changePassword`.
+     * The session slice's `mustChangePassword` flag is updated by the
+     * caller on success, same as any other locally-derived session field. */
+    changePassword: build.mutation<void, ChangePasswordInput>({
+      query: (body) => ({ url: '/auth/password', method: 'PATCH', body }),
+    }),
+    /* Anonymous credential handoff — same shape as `getPublicMeeting`:
+     * matched by `isPublicUrl` in `routed-base-query.ts`, so no
+     * `Authorization` header goes out. The row (and so this query) stops
+     * resolving the moment the recipient actually logs in once. */
+    getCredentialShare: build.query<CredentialShare, { userId: string; token: string }>({
+      query: ({ userId, token }) => ({
+        url: `/public/users/${userId}/credentials?t=${encodeURIComponent(token)}`,
+        method: 'GET',
+      }),
+    }),
 
     /* Super Admin cross-tenant users list. Backend gates on `user:read`,
      * only reachable via the SuperAdmin bypass. `search` matches phone,
@@ -1536,6 +1552,21 @@ export interface CreatePlatformUserResult extends PlatformUser {
   roles: OfficerRole[];
   isClubAdmin: boolean;
   memberType: MemberType | null;
+  credentialShare: { token: string };
+}
+
+export interface ChangePasswordInput {
+  currentPassword: string;
+  newPassword: string;
+}
+
+/** Wire shape from `GET /public/users/:userId/credentials?t=...` — the
+ * unauthenticated handoff page's only data source. */
+export interface CredentialShare {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  password: string;
 }
 
 /** The Super Admin user-detail panel's edit form — every field optional,
@@ -1677,6 +1708,8 @@ export const {
   useAuthLogoutMutation,
   useGetAuthSessionQuery,
   useLazyGetAuthSessionQuery,
+  useChangePasswordMutation,
+  useGetCredentialShareQuery,
   useListPlatformUsersQuery,
   useSetPlatformUserStatusMutation,
   useSetPlatformUserAdminMutation,

@@ -13,6 +13,7 @@ import {
   Gear,
   GraduationCap,
   List,
+  LockKey,
   MagnifyingGlass,
   Question,
   ShieldCheck,
@@ -328,6 +329,15 @@ function SidebarBody({
             placement={collapsed ? 'topLeft' : 'top'}
             menu={{
               items: [
+                {
+                  key: 'change-password',
+                  label: (
+                    <Link href="/change-password" onClick={onNavigate}>
+                      Change password
+                    </Link>
+                  ),
+                  icon: <LockKey size={15} />,
+                },
                 {
                   key: 'logout',
                   label: 'Log out',

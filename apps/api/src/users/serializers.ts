@@ -63,4 +63,9 @@ export interface CreateUserResultWire extends UserWire {
   roles: OfficerRole[];
   isClubAdmin: boolean;
   memberType: MemberType | null;
+  /** Token for the unauthenticated "direct link"/QR handoff page
+   * (`GET /public/users/:userId/credentials?t=<token>`) — see
+   * `CredentialShare`. The client builds the full URL; this stays a bare
+   * token so the API doesn't need to know its own public origin. */
+  credentialShare: { token: string };
 }
