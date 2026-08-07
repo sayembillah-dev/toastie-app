@@ -1,3 +1,5 @@
+import type { WordOfTheDay } from '@/lib/meetings/draft';
+
 export const MEETING_STATUSES = ['draft', 'published'] as const;
 
 export type MeetingStatus = (typeof MEETING_STATUSES)[number];
@@ -11,6 +13,9 @@ export interface Meeting {
    * render both the date and the time without a second field. */
   dateTime: string;
   theme: string;
+  /** The grammarian's word of the day. Absent until the Theme tab has been
+   * saved — consumers treat that as an empty form. */
+  word?: WordOfTheDay;
   status: MeetingStatus;
   /** Opaque credential used by anonymous share links —
    * `/meetings/:id/roles/:kind?t=<shareToken>` and the equivalent
@@ -45,8 +50,11 @@ export interface CreateMeetingInput {
 /** What the meeting page's Save as Draft / Publish buttons commit: the status
  * they set, plus the fields the working draft owns on the meeting record. */
 export interface UpdateMeetingInput {
-  status: MeetingStatus;
+  status?: MeetingStatus;
   theme?: string;
+  /** Sent whole. An empty `word` clears the stored block; omitting the key
+   * entirely leaves it untouched. */
+  word?: WordOfTheDay;
 }
 
 /** The club meets in the evening, so the create form starts here and lets the

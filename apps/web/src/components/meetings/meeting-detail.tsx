@@ -14,6 +14,7 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 import { Tabs } from 'antd';
 import { notFound, useParams } from 'next/navigation';
+import { useEffect } from 'react';
 import { MeetingActions } from '@/components/meetings/meeting-actions';
 import { AhCounterTab } from '@/components/meetings/tabs/ah-counter-tab';
 import { AttendanceTab } from '@/components/meetings/tabs/attendance-tab';
@@ -30,6 +31,8 @@ import { AccessGate } from '@/components/permissions/access-gate';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { useGetMeetingQuery } from '@/store/api';
 import { getApiErrorMessage, isNotFoundError } from '@/store/api-error';
+import { useAppDispatch } from '@/store/hooks';
+import { draftHydrated } from '@/store/meeting-draft-slice';
 
 interface TabDef {
   key: string;
@@ -109,6 +112,15 @@ function buildTabs(meeting: Meeting): TabDef[] {
 
 function DetailContent({ meeting }: { meeting: Meeting }) {
   const tabs = buildTabs(meeting);
+  const dispatch = useAppDispatch();
+
+  /* Seed the working draft from the saved record once the meeting lands.
+   * Done here rather than inside the Theme tab because Overview's readiness
+   * panel reads the same draft, and it is the tab that opens first — the
+   * word would otherwise read as "not set" until you visited Theme. */
+  useEffect(() => {
+    dispatch(draftHydrated({ meetingId: meeting.id, theme: meeting.theme, word: meeting.word }));
+  }, [dispatch, meeting.id, meeting.theme, meeting.word]);
 
   return (
     <div className="mx-auto max-w-6xl">

@@ -467,6 +467,14 @@ model Meeting {
   dateTime      DateTime
   theme         String
   status        MeetingStatus @default(draft)
+  /// The grammarian's word of the day, set on the meeting's Theme tab.
+  /// Four nullable columns rather than one Json blob: the shape is fixed,
+  /// and the agenda renders each part on its own line. All four are null
+  /// until someone fills the tab in.
+  word             String?
+  wordPartOfSpeech String?
+  wordMeaning      String?  @db.Text
+  wordExample      String?  @db.Text
   /// Opaque share credential — the link IS the capability. Rotates on
   /// demand so a leaked URL can be revoked without breaking the meeting
   /// itself. Unique globally so `/public/meetings/:id?t=<token>` can look

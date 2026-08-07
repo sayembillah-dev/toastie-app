@@ -103,6 +103,22 @@ export class MeetingsService {
 
     const data: Prisma.MeetingUpdateInput = {};
     if (dto.theme !== undefined) data.theme = dto.theme.trim();
+    if (dto.word !== undefined) {
+      const word = dto.word.word.trim();
+      /* An empty word clears the whole block — a meaning or part of speech
+       * with no word left to attach to is not worth keeping. */
+      if (!word) {
+        data.word = null;
+        data.wordPartOfSpeech = null;
+        data.wordMeaning = null;
+        data.wordExample = null;
+      } else {
+        data.word = word;
+        data.wordPartOfSpeech = dto.word.partOfSpeech?.trim() || null;
+        data.wordMeaning = dto.word.meaning?.trim() || null;
+        data.wordExample = dto.word.example?.trim() || null;
+      }
+    }
     if (dto.status !== undefined) {
       if (dto.status !== 'draft' && dto.status !== 'published') {
         throw new BadRequestException(`"${dto.status}" is not a meeting status`);

@@ -15,9 +15,13 @@ import type { MeetingSeed } from '@/lib/meetings/from-planner';
  */
 export interface MeetingDraftState {
   byMeetingId: Record<string, MeetingDraft>;
+  /** Meetings whose draft has already been filled from the saved record.
+   * Kept beside the drafts rather than inside one so re-opening the Theme
+   * tab cannot overwrite edits the user has not committed yet. */
+  hydratedIds: Record<string, true>;
 }
 
-const initialState: MeetingDraftState = { byMeetingId: {} };
+const initialState: MeetingDraftState = { byMeetingId: {}, hydratedIds: {} };
 
 /** Drafts are created lazily — a meeting only gets an entry once it is edited. */
 function ensureDraft(state: MeetingDraftState, meetingId: string): MeetingDraft {
@@ -68,6 +72,22 @@ export const meetingDraftSlice = createSlice({
         };
         return { payload: { meetingId, draft } };
       },
+    },
+    /** Seeds theme + word from the saved meeting the first time its Theme
+     * tab renders. Without this the tab opens blank over a record that has
+     * values, which reads as "my save was lost". Runs once per meeting —
+     * later renders (tab switches, refetches) are no-ops, so in-flight
+     * edits survive. */
+    draftHydrated(
+      state,
+      action: PayloadAction<MeetingScoped & { theme: string; word?: WordOfTheDay }>,
+    ) {
+      const { meetingId, theme, word } = action.payload;
+      if (state.hydratedIds[meetingId]) return;
+      const draft = ensureDraft(state, meetingId);
+      draft.theme = theme;
+      if (word) draft.word = { ...word };
+      state.hydratedIds[meetingId] = true;
     },
     themeChanged(state, action: PayloadAction<MeetingScoped & { theme: string }>) {
       ensureDraft(state, action.payload.meetingId).theme = action.payload.theme;
@@ -136,6 +156,7 @@ export const meetingDraftSlice = createSlice({
 
 export const {
   draftSeeded,
+  draftHydrated,
   themeChanged,
   wordChanged,
   roleAssigned,

@@ -35,6 +35,15 @@ export function MeetingActions({ meeting }: MeetingActionsProps) {
   const isPublished = meeting.status === 'published';
   const workingTheme = draft.theme.trim();
   const hasThemeEdit = workingTheme !== '' && workingTheme !== meeting.theme;
+  /* The Theme tab has its own Save, but committing from here should not
+   * silently drop what is sitting in the tab unsaved — carry any word edit
+   * along with the status write. */
+  const savedWord = meeting.word;
+  const hasWordEdit =
+    draft.word.word.trim() !== (savedWord?.word ?? '') ||
+    (draft.word.partOfSpeech ?? '') !== (savedWord?.partOfSpeech ?? '') ||
+    draft.word.meaning.trim() !== (savedWord?.meaning ?? '') ||
+    draft.word.example.trim() !== (savedWord?.example ?? '');
 
   async function commit(status: MeetingStatus) {
     if (pending !== null) return;
@@ -47,6 +56,16 @@ export function MeetingActions({ meeting }: MeetingActionsProps) {
         /* Omitted unless the Theme tab actually changed it — the API leaves an
          * absent theme alone rather than writing back what it already holds. */
         ...(hasThemeEdit ? { theme: workingTheme } : {}),
+        ...(hasWordEdit
+          ? {
+              word: {
+                word: draft.word.word.trim(),
+                partOfSpeech: draft.word.partOfSpeech ?? '',
+                meaning: draft.word.meaning.trim(),
+                example: draft.word.example.trim(),
+              },
+            }
+          : {}),
       }).unwrap();
 
       message.success(

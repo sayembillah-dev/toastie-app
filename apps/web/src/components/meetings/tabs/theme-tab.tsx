@@ -1,9 +1,20 @@
 'use client';
 
-import { BookOpen, ChatCircleText, Palette, Quotes, TextAa } from '@phosphor-icons/react/dist/ssr';
-import { Input, Select } from 'antd';
+import {
+  BookOpen,
+  ChatCircleText,
+  FloppyDisk,
+  Palette,
+  Quotes,
+  TextAa,
+} from '@phosphor-icons/react/dist/ssr';
+import { App, Button, Input, Select } from 'antd';
+import { useMemo } from 'react';
 
+import type { WordOfTheDay } from '@/lib/meetings/draft';
 import type { Meeting } from '@/lib/meetings/meetings';
+import { useUpdateMeetingMutation } from '@/store/api';
+import { getApiErrorMessage } from '@/store/api-error';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { selectMeetingDraft, themeChanged, wordChanged } from '@/store/meeting-draft-slice';
 
@@ -53,18 +64,54 @@ interface ThemeTabProps {
   meeting: Meeting;
 }
 
-/** Theme tab body — the meeting's theme, word of the day, and grammarian's
- * word-of-the-day breakdown. Everything here feeds the meeting draft, which is
- * what the Overview → Agenda sheet prints from. */
+/** Everything on this tab lives on the meeting record, so "has it changed?"
+ * is a straight comparison against what the API last returned. */
+function isDirty(meeting: Meeting, theme: string, word: WordOfTheDay): boolean {
+  const saved = meeting.word;
+  return (
+    theme.trim() !== meeting.theme ||
+    word.word.trim() !== (saved?.word ?? '') ||
+    (word.partOfSpeech ?? '') !== (saved?.partOfSpeech ?? '') ||
+    word.meaning.trim() !== (saved?.meaning ?? '') ||
+    word.example.trim() !== (saved?.example ?? '')
+  );
+}
+
+/** Theme tab body — the meeting's theme and the grammarian's word-of-the-day
+ * breakdown. Both live on the meeting record and are committed by this tab's
+ * own Save; the draft they pass through is what the Overview → Agenda sheet
+ * prints from, so the preview stays live while you type. */
 export function ThemeTab({ meeting }: ThemeTabProps) {
   const dispatch = useAppDispatch();
   const draft = useAppSelector((state) => selectMeetingDraft(state, meeting.id));
   const { word } = draft;
+  const { message } = App.useApp();
+  const [updateMeeting, { isLoading: isSaving }] = useUpdateMeetingMutation();
+
+  const dirty = useMemo(() => isDirty(meeting, draft.theme, word), [meeting, draft.theme, word]);
+
+  async function handleSave() {
+    try {
+      await updateMeeting({
+        meetingId: meeting.id,
+        theme: draft.theme.trim(),
+        word: {
+          word: word.word.trim(),
+          partOfSpeech: word.partOfSpeech ?? '',
+          meaning: word.meaning.trim(),
+          example: word.example.trim(),
+        },
+      }).unwrap();
+      message.success('Theme and word of the day saved');
+    } catch (error) {
+      message.error(getApiErrorMessage(error, 'Could not save the theme'));
+    }
+  }
 
   return (
     <section className="mx-auto max-w-2xl rounded-2xl border border-line bg-canvas p-5 sm:p-6">
       <div className="mb-5">
-        <h2 className="text-base font-semibold text-ink">Theme & Word of the Day</h2>
+        <h2 className="text-base font-semibold text-ink">Theme &amp; Word of the Day</h2>
         <p className="mt-1 text-xs text-ink-soft">
           Set the meeting&apos;s theme and the grammarian&apos;s word of the day so members can
           weave both into their speeches.
@@ -76,9 +123,7 @@ export function ThemeTab({ meeting }: ThemeTabProps) {
           <Input
             id="theme-of-the-day"
             size="large"
-            /* The seeded theme is the placeholder rather than the value — the
-             * agenda falls back to it until someone types a replacement. */
-            placeholder={meeting.theme}
+            placeholder="e.g. New Beginnings"
             value={draft.theme}
             onChange={(event) =>
               dispatch(themeChanged({ meetingId: meeting.id, theme: event.target.value }))
@@ -166,6 +211,26 @@ export function ThemeTab({ meeting }: ThemeTabProps) {
             showCount
           />
         </Field>
+      </div>
+
+      {/* Full-width on phones so the button is an easy thumb target, and
+       * right-aligned from sm up where the card has room. */}
+      <div className="mt-6 flex flex-col items-stretch gap-2 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-end">
+        <span aria-live="polite" className="text-xs text-ink-muted sm:mr-auto">
+          {dirty ? 'Unsaved changes' : 'All changes saved'}
+        </span>
+        <Button
+          type="primary"
+          size="middle"
+          icon={<FloppyDisk size={14} weight="bold" />}
+          disabled={!dirty}
+          loading={isSaving}
+          onClick={() => {
+            void handleSave();
+          }}
+        >
+          Save
+        </Button>
       </div>
     </section>
   );
