@@ -1,5 +1,7 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsEnum,
@@ -14,7 +16,7 @@ import {
   MinLength,
 } from 'class-validator';
 
-import { OFFICER_ROLES, type OfficerRole } from '@/memberships';
+import { MEMBER_TYPES, type MemberType, OFFICER_ROLES, type OfficerRole } from '@/memberships';
 
 const USER_STATUSES = ['active', 'suspended'] as const;
 
@@ -30,6 +32,13 @@ export class ListUsersQueryDto {
   @Min(1)
   @Max(1_000)
   page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  pageSize?: number;
 }
 
 export class SetUserStatusDto {
@@ -40,6 +49,59 @@ export class SetUserStatusDto {
 export class SetUserAdminDto {
   @IsBoolean()
   isSuperAdmin!: boolean;
+}
+
+/** Permanent bulk delete — capped well above any realistic single
+ * selection so a fat-fingered request can't take down the whole table. */
+export class BulkDeleteUsersDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(200)
+  @IsString({ each: true })
+  userIds!: string[];
+}
+
+/** Profile-field edit from the Super Admin's user detail panel. Every field
+ * optional — a save only sends what changed. */
+export class UpdateUserDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(80)
+  firstName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(80)
+  lastName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\+?[0-9\s-]{8,20}$/, {
+    message: 'Enter a valid phone number (8–20 digits, optional leading +)',
+  })
+  @MaxLength(20)
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  tiMemberNumber?: string;
+}
+
+/** Admin-driven password reset — same strength requirement as account
+ * creation. The new password is never echoed back in the response. */
+export class SetUserPasswordDto {
+  @IsString()
+  @MinLength(12, { message: 'Password must be at least 12 characters' })
+  @MaxLength(200)
+  password!: string;
 }
 
 /** Super Admin's direct-provision flow — creates the `User` row and,
@@ -76,6 +138,13 @@ export class CreateUserDto {
   @MaxLength(255)
   email?: string;
 
+  /** Toastmasters International member number — a person-level identifier,
+   * independent of any club placement below. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  tiMemberNumber?: string;
+
   /** Omit to create a bare account with no club membership. */
   @IsOptional()
   @IsString()
@@ -92,4 +161,9 @@ export class CreateUserDto {
   @IsOptional()
   @IsBoolean()
   isClubAdmin?: boolean;
+
+  /** Only meaningful alongside `clubId`. */
+  @IsOptional()
+  @IsIn(MEMBER_TYPES)
+  memberType?: MemberType;
 }

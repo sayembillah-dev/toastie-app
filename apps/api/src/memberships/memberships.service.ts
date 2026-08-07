@@ -1,10 +1,11 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Prisma, ClubRole as PrismaClubRole } from '@prisma/client';
+import { Prisma, type ClubRole as PrismaClubRole } from '@prisma/client';
 import { can, type PermissionSubject } from '@toastly/access';
 
 import { PrismaService } from '@/prisma';
@@ -15,8 +16,14 @@ import type {
   SetMemberStatusDto,
   UpdateMemberDto,
 } from './dto/members.dto';
+import type { MemberType, OfficerRole } from './role-mapping';
 import { toClubRoles } from './role-mapping';
-import { type MemberWire, toMemberWire } from './serializers';
+import {
+  type MemberWire,
+  type PlatformUserMembershipWire,
+  toMemberWire,
+  toPlatformUserMembershipWire,
+} from './serializers';
 
 type OverridePatchValue = 'allow' | 'deny' | 'default';
 
@@ -94,6 +101,79 @@ export class MembershipsService {
       },
     });
     return toMemberWire(row);
+  }
+
+  /** Super Admin's "add this existing user to another club" action —
+   * distinct from `create()` above, which always makes an *unclaimed*
+   * roster row (`userId` null) for a Club Admin to invite someone into
+   * later. This creates an already-claimed `Membership` directly, the same
+   * way `UsersService.create()` does at account-creation time, just for a
+   * user who already exists. Not club-context-bound (no `clubId` check
+   * against `ctx` — the caller supplies the target club explicitly), since
+   * it's only reachable via the SA-only `/users/:userId/memberships` route. */
+  async createForUser(
+    subject: PermissionSubject,
+    args: {
+      userId: string;
+      clubId: string;
+      firstName: string;
+      lastName: string;
+      email: string | null;
+      roles?: OfficerRole[];
+      isClubAdmin?: boolean;
+      memberType?: MemberType;
+    },
+  ): Promise<MemberWire> {
+    if (!can(subject, 'create', 'member', { clubId: args.clubId })) {
+      throw new ForbiddenException({
+        code: 'PERMISSION_DENIED',
+        resource: 'member',
+        action: 'create',
+      });
+    }
+    const club = await this.prisma.club.findUnique({
+      where: { id: args.clubId },
+      select: { id: true },
+    });
+    if (!club) throw new NotFoundException(`No club with id "${args.clubId}"`);
+
+    try {
+      const row = await this.prisma.membership.create({
+        data: {
+          clubId: args.clubId,
+          userId: args.userId,
+          firstName: args.firstName,
+          lastName: args.lastName,
+          email: args.email,
+          roles: normaliseRoles(args.roles),
+          isClubAdmin: args.isClubAdmin ?? false,
+          memberType: args.memberType ?? null,
+          status: 'active',
+          grantOverrides: {},
+        },
+      });
+      return toMemberWire(row);
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException({ code: 'ALREADY_MEMBER' });
+      }
+      throw err;
+    }
+  }
+
+  /** Every club membership a single user holds, across every club — the
+   * Super Admin user-detail panel's view, as opposed to `list()` above
+   * which is one club's roster. Reachable only via the SA-only `/users`
+   * surface, so unlike every other method here there's no fine-grained
+   * per-club `can()` check: the coarse `@Requires('user','read')` on the
+   * controller already restricts this to Super Admin. */
+  async listForUser(userId: string): Promise<PlatformUserMembershipWire[]> {
+    const rows = await this.prisma.membership.findMany({
+      where: { userId },
+      include: { club: { select: { name: true } } },
+      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+    });
+    return rows.map((row) => toPlatformUserMembershipWire(row, row.club.name));
   }
 
   async update(

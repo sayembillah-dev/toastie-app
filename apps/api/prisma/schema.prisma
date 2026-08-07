@@ -51,6 +51,15 @@ enum MembershipStatus {
   removed
 }
 
+/// Whether a person is new to Toastmasters International or already held
+/// membership elsewhere before this club placement. Captured once, at
+/// provisioning time — nullable because most existing rows predate this
+/// field and not every `Membership` traces back through a flow that asks.
+enum MemberType {
+  new
+  existing
+}
+
 /// Matches `CLUB_ROLES` in `@toastly/access` exactly.
 enum ClubRole {
   ClubAdmin
@@ -138,6 +147,11 @@ model User {
   /// bypass is waste, so this stays denormalised.
   isSuperAdmin    Boolean   @default(false)
   emailVerifiedAt DateTime?
+  /// Toastmasters International member number. A person-level identifier
+  /// captured once on the account (typically at Super Admin provisioning),
+  /// not per club — TI issues one number per member regardless of how many
+  /// clubs they belong to.
+  tiMemberNumber  String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -276,6 +290,10 @@ model Membership {
   roles            ClubRole[]
   isClubAdmin      Boolean  @default(false)
   status           MembershipStatus @default(active)
+  /// New TI member vs. someone who already held membership elsewhere before
+  /// this club placement. Only ever set by the Super Admin direct-provision
+  /// flow today — nullable everywhere else.
+  memberType       MemberType?
   /// Sparse per-`resource:action` overrides on top of role grants:
   /// `{ "transaction:delete": "deny" }`. Read on every request alongside
   /// the row; not a join table because 0–10 keys per row × 2,500 rows fits

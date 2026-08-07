@@ -1,9 +1,6 @@
 'use client';
 
-import { UsersThree } from '@phosphor-icons/react/dist/ssr';
 import { skipToken } from '@reduxjs/toolkit/query';
-import { Button } from 'antd';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
 
 import { PageBreadcrumb } from '@/components/page-breadcrumb';
@@ -17,18 +14,13 @@ import { DivisionsList } from './divisions-list';
 
 /** Super Admin dashboard root — every district. Sees and can create, edit,
  * move or delete anything from here down; every other unit-switcher scope
- * only manages its own branch. Super Admin has no sidebar nav (the rail is
- * blank in `global` context — see `unitKeyForContext`), so the platform-wide
- * User directory is surfaced as a header action here instead. */
+ * only manages its own branch. The platform-wide user directory is a
+ * sidebar entry (see `superAdminNav` in `app-shell.tsx`) rather than a
+ * header action here. */
 export function SuperAdminDistrictsScreen() {
   return (
     <>
       <PageBreadcrumb trail={[{ href: '/super-admin', title: 'Super Admin' }]} />
-      <div className="mb-3 flex justify-end">
-        <Link href="/super-admin/users">
-          <Button icon={<UsersThree size={15} weight="bold" />}>Manage users</Button>
-        </Link>
-      </div>
       <DistrictsList
         title="Districts"
         subtitle="The whole org tree. Drill into a district to manage its divisions."

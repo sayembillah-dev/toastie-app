@@ -1,6 +1,6 @@
 import type { User } from '@prisma/client';
 
-import type { OfficerRole } from '@/memberships';
+import type { MemberType, OfficerRole } from '@/memberships';
 
 /** Wire shape returned by `/users` — the Super Admin's cross-tenant view.
  * Never returned by any other endpoint (which would leak cross-club data).
@@ -12,6 +12,7 @@ export interface UserWire {
   email: string | null;
   firstName: string;
   lastName: string;
+  tiMemberNumber: string | null;
   status: 'active' | 'suspended';
   isSuperAdmin: boolean;
   membershipCount: number;
@@ -36,6 +37,7 @@ export function toUserWire(
     email: row.email,
     firstName: row.firstName,
     lastName: row.lastName,
+    tiMemberNumber: row.tiMemberNumber,
     status: row.status,
     isSuperAdmin: row.isSuperAdmin,
     membershipCount,
@@ -45,6 +47,8 @@ export function toUserWire(
 }
 
 export const USERS_PAGE_SIZE = 25;
+/** Rows-per-page choices the Super Admin can pick on the Users screen. */
+export const USERS_PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 
 /** Response for `POST /users`. Deliberately does NOT echo the password
  * back — the caller (the SA's own form) already has it in memory, and an
@@ -58,4 +62,5 @@ export interface CreateUserResultWire extends UserWire {
   clubName: string | null;
   roles: OfficerRole[];
   isClubAdmin: boolean;
+  memberType: MemberType | null;
 }

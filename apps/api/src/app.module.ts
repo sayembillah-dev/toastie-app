@@ -22,6 +22,7 @@ import { LibraryModule } from './library';
 import { MeetingsModule } from './meetings';
 import { MembershipsModule } from './memberships';
 import { OrgModule } from './org';
+import { OrgAssignmentsModule } from './org-assignments';
 import { PeopleModule } from './people';
 import { PrismaModule } from './prisma';
 import { TasksModule } from './tasks';
@@ -50,6 +51,7 @@ import { UsersModule } from './users';
     FinanceModule,
     TasksModule,
     UsersModule,
+    OrgAssignmentsModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

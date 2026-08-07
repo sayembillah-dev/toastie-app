@@ -41,6 +41,7 @@ const RESOURCE_LABELS: Record<ResourceKey, string> = {
   invite: 'Invites',
   joinRequest: 'Join requests',
   orgUnit: 'Org unit',
+  orgAssignment: 'Org assignments (Director roles)',
   report: 'Reports',
 };
 

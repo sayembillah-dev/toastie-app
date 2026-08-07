@@ -25,6 +25,11 @@ export const RESOURCE_KEYS = [
   'invite',
   'joinRequest',
   'orgUnit',
+  /** Area/Division/District Director assignment (the `OrgAssignment` row,
+   * distinct from `orgUnit` which is the Area/Division/District entity
+   * itself). Only reachable via the Super Admin bypass — no club/org role
+   * grants `orgAssignment:*`, matching `user` above. */
+  'orgAssignment',
   'report',
 ] as const;
 

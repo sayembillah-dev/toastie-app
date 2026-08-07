@@ -1,5 +1,5 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
-import type { SessionResponse } from '@toastly/access';
+import type { OrgRole, OrgUnitType, SessionResponse } from '@toastly/access';
 import type { ActivityLog } from '@/lib/activity/activity-log';
 import type { CreateInviteInput, Invite } from '@/lib/club-admin/invites';
 import type { Evaluation } from '@/lib/education/evaluations';
@@ -139,6 +139,8 @@ export const toastlyApi = createApi({
     'OrgClub',
     'Invite',
     'PlatformUser',
+    'PlatformUserMembership',
+    'OrgAssignment',
   ],
   endpoints: (build) => ({
     /* `includeRemoved` opts into seeing soft-removed members — the Club Admin
@@ -1303,13 +1305,14 @@ export const toastlyApi = createApi({
 
     /* Super Admin cross-tenant users list. Backend gates on `user:read`,
      * only reachable via the SuperAdmin bypass. `search` matches phone,
-     * email, first name or last name; `page` is 1-indexed and returns
-     * `USERS_PAGE_SIZE`-sized pages. */
+     * email, first name or last name; `page` is 1-indexed. `pageSize`
+     * defaults server-side to `USERS_PAGE_SIZE` when omitted. */
     listPlatformUsers: build.query<PlatformUsersPage, ListPlatformUsersArgs | void>({
       query: (args) => {
         const params = new URLSearchParams();
         if (args?.search) params.set('search', args.search);
         if (args?.page && args.page > 1) params.set('page', String(args.page));
+        if (args?.pageSize) params.set('pageSize', String(args.pageSize));
         const qs = params.toString();
         return { url: qs ? `/users?${qs}` : '/users', method: 'GET' };
       },
@@ -1358,8 +1361,125 @@ export const toastlyApi = createApi({
         { type: 'ActivityLog', id: 'LIST' },
       ],
     }),
+
+    /* Permanent, irreversible — no soft-delete, no undo. Club memberships
+     * survive (the backend FK is `onDelete: SetNull`); only the account
+     * itself and everything account-scoped goes. */
+    bulkDeletePlatformUsers: build.mutation<{ deletedCount: number }, string[]>({
+      query: (userIds) => ({ url: '/users', method: 'DELETE', body: { userIds } }),
+      invalidatesTags: [{ type: 'PlatformUser', id: 'LIST' }],
+    }),
+
+    /* --------------------------------------------- user detail panel -- */
+    /* The Super Admin's full "edit this person" surface: profile fields,
+     * password reset, cross-club memberships, and org-tree Director
+     * assignments — everything the Users list itself doesn't cover. */
+
+    updatePlatformUserProfile: build.mutation<
+      PlatformUser,
+      { userId: string } & UpdatePlatformUserProfileInput
+    >({
+      query: ({ userId, ...body }) => ({ url: `/users/${userId}`, method: 'PATCH', body }),
+      invalidatesTags: (_user, _error, { userId }) => [
+        { type: 'PlatformUser', id: userId },
+        { type: 'PlatformUser', id: 'LIST' },
+      ],
+    }),
+
+    /* Never returns the password — same rule as `createPlatformUser`. The
+     * caller's own form already holds what it just sent. */
+    resetPlatformUserPassword: build.mutation<void, { userId: string; password: string }>({
+      query: ({ userId, password }) => ({
+        url: `/users/${userId}/password`,
+        method: 'POST',
+        body: { password },
+      }),
+      invalidatesTags: (_result, _error, { userId }) => [{ type: 'PlatformUser', id: userId }],
+    }),
+
+    getPlatformUserMemberships: build.query<PlatformUserMembership[], string>({
+      query: (userId) => ({ url: `/users/${userId}/memberships`, method: 'GET' }),
+      providesTags: (memberships) => [
+        { type: 'PlatformUserMembership', id: 'LIST' },
+        ...(memberships ?? []).map((m) => ({ type: 'PlatformUserMembership' as const, id: m.id })),
+      ],
+    }),
+
+    addPlatformUserMembership: build.mutation<
+      Member,
+      { userId: string } & AddPlatformUserMembershipInput
+    >({
+      query: ({ userId, ...body }) => ({
+        url: `/users/${userId}/memberships`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_member, _error, { userId }) => [
+        { type: 'PlatformUser', id: userId },
+        { type: 'PlatformUserMembership', id: 'LIST' },
+        { type: 'Member', id: 'LIST' },
+      ],
+    }),
+
+    updatePlatformUserMembership: build.mutation<
+      Member,
+      { userId: string; membershipId: string } & UpdatePlatformUserMembershipInput
+    >({
+      query: ({ userId, membershipId, ...body }) => ({
+        url: `/users/${userId}/memberships/${membershipId}`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: (_member, _error, { userId }) => [
+        { type: 'PlatformUser', id: userId },
+        { type: 'PlatformUserMembership', id: 'LIST' },
+        { type: 'Member', id: 'LIST' },
+      ],
+    }),
+
+    getPlatformUserOrgAssignments: build.query<PlatformUserOrgAssignment[], string>({
+      query: (userId) => ({ url: `/users/${userId}/org-assignments`, method: 'GET' }),
+      providesTags: (assignments) => [
+        { type: 'OrgAssignment', id: 'LIST' },
+        ...(assignments ?? []).map((a) => ({ type: 'OrgAssignment' as const, id: a.id })),
+      ],
+    }),
+
+    addPlatformUserOrgAssignment: build.mutation<
+      PlatformUserOrgAssignment,
+      { userId: string } & CreateOrgAssignmentInput
+    >({
+      query: ({ userId, ...body }) => ({
+        url: `/users/${userId}/org-assignments`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_assignment, _error, { userId }) => [
+        { type: 'PlatformUser', id: userId },
+        { type: 'OrgAssignment', id: 'LIST' },
+      ],
+    }),
+
+    removePlatformUserOrgAssignment: build.mutation<void, { userId: string; assignmentId: string }>(
+      {
+        query: ({ userId, assignmentId }) => ({
+          url: `/users/${userId}/org-assignments/${assignmentId}`,
+          method: 'DELETE',
+        }),
+        invalidatesTags: (_result, _error, { userId }) => [
+          { type: 'PlatformUser', id: userId },
+          { type: 'OrgAssignment', id: 'LIST' },
+        ],
+      },
+    ),
   }),
 });
+
+/** How a person is joining Toastmasters International as of this club
+ * placement — new to TI, or already a member elsewhere. String-identical
+ * to the backend's Prisma `MemberType` enum. */
+export const MEMBER_TYPES = ['new', 'existing'] as const;
+export type MemberType = (typeof MEMBER_TYPES)[number];
 
 export interface PlatformUser {
   id: string;
@@ -1367,6 +1487,7 @@ export interface PlatformUser {
   email: string | null;
   firstName: string;
   lastName: string;
+  tiMemberNumber: string | null;
   status: 'active' | 'suspended';
   isSuperAdmin: boolean;
   membershipCount: number;
@@ -1383,7 +1504,12 @@ export interface PlatformUsersPage {
 export interface ListPlatformUsersArgs {
   search?: string;
   page?: number;
+  pageSize?: number;
 }
+
+/** Rows-per-page choices on the Users screen — string-identical to the
+ * backend's `USERS_PAGE_SIZE_OPTIONS`. */
+export const PLATFORM_USERS_PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 
 export interface CreatePlatformUserInput {
   phone: string;
@@ -1391,12 +1517,17 @@ export interface CreatePlatformUserInput {
   firstName: string;
   lastName: string;
   email?: string;
+  /** Toastmasters International member number — a person-level identifier,
+   * independent of any club placement below. */
+  tiMemberNumber?: string;
   /** Omit to create a bare account with no club membership. */
   clubId?: string;
   /** Only meaningful alongside `clubId`. Absent/empty → `['Member']`. */
   roles?: OfficerRole[];
   /** Only meaningful alongside `clubId`. */
   isClubAdmin?: boolean;
+  /** Only meaningful alongside `clubId`. */
+  memberType?: MemberType;
 }
 
 export interface CreatePlatformUserResult extends PlatformUser {
@@ -1404,6 +1535,58 @@ export interface CreatePlatformUserResult extends PlatformUser {
   clubName: string | null;
   roles: OfficerRole[];
   isClubAdmin: boolean;
+  memberType: MemberType | null;
+}
+
+/** The Super Admin user-detail panel's edit form — every field optional,
+ * a save only sends what changed. */
+export interface UpdatePlatformUserProfileInput {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  tiMemberNumber?: string;
+}
+
+/** One of a platform user's club memberships, as seen from their own detail
+ * panel — a `Member` (the club-roster shape) plus which club it's on,
+ * since this view spans every club at once rather than living inside one
+ * club's roster page. */
+export interface PlatformUserMembership extends Member {
+  clubName: string;
+}
+
+export interface AddPlatformUserMembershipInput {
+  clubId: string;
+  /** Absent/empty → `['Member']`. */
+  roles?: OfficerRole[];
+  isClubAdmin?: boolean;
+  memberType?: MemberType;
+}
+
+/** Every field optional — roles, the Club Admin flag and status can be
+ * changed independently or together in one save. */
+export interface UpdatePlatformUserMembershipInput {
+  roles?: OfficerRole[];
+  isClubAdmin?: boolean;
+  status?: 'active' | 'removed';
+}
+
+/** An Area/Division/District Director assignment, as shown on the Super
+ * Admin user-detail panel. */
+export interface PlatformUserOrgAssignment {
+  id: string;
+  role: OrgRole;
+  unitType: OrgUnitType;
+  unitId: string;
+  unitName: string;
+  createdAt: string;
+}
+
+export interface CreateOrgAssignmentInput {
+  role: OrgRole;
+  unitType: OrgUnitType;
+  unitId: string;
 }
 
 export const {
@@ -1498,4 +1681,13 @@ export const {
   useSetPlatformUserStatusMutation,
   useSetPlatformUserAdminMutation,
   useCreatePlatformUserMutation,
+  useBulkDeletePlatformUsersMutation,
+  useUpdatePlatformUserProfileMutation,
+  useResetPlatformUserPasswordMutation,
+  useGetPlatformUserMembershipsQuery,
+  useAddPlatformUserMembershipMutation,
+  useUpdatePlatformUserMembershipMutation,
+  useGetPlatformUserOrgAssignmentsQuery,
+  useAddPlatformUserOrgAssignmentMutation,
+  useRemovePlatformUserOrgAssignmentMutation,
 } = toastlyApi;

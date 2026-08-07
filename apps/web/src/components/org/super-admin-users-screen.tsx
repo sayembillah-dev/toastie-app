@@ -1,12 +1,20 @@
 'use client';
 
-import { Crown, MagnifyingGlass, ShieldCheck, UserPlus } from '@phosphor-icons/react/dist/ssr';
-import { App, Button, Dropdown, Input, Pagination, Skeleton, Tag } from 'antd';
+import {
+  Crown,
+  MagnifyingGlass,
+  ShieldCheck,
+  Trash,
+  UserPlus,
+} from '@phosphor-icons/react/dist/ssr';
+import { App, Button, Checkbox, Dropdown, Input, Pagination, Skeleton, Tag } from 'antd';
 import { useMemo, useState } from 'react';
 
 import { PageBreadcrumb } from '@/components/page-breadcrumb';
 import {
+  PLATFORM_USERS_PAGE_SIZE_OPTIONS,
   type PlatformUser,
+  useBulkDeletePlatformUsersMutation,
   useListPlatformUsersQuery,
   useSetPlatformUserAdminMutation,
   useSetPlatformUserStatusMutation,
@@ -16,6 +24,7 @@ import { useAppSelector } from '@/store/hooks';
 import { selectSessionUser } from '@/store/session-slice';
 
 import { CreateUserModal } from './create-user-modal';
+import { UserDetailDrawer } from './user-detail-drawer';
 
 const DATE_FMT = new Intl.DateTimeFormat('en-GB', {
   day: 'numeric',
@@ -33,21 +42,89 @@ export function SuperAdminUsersScreen() {
   const sessionUser = useAppSelector(selectSessionUser);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(PLATFORM_USERS_PAGE_SIZE_OPTIONS[1]);
   const trimmedSearch = search.trim();
-  const args = useMemo(() => ({ search: trimmedSearch || undefined, page }), [trimmedSearch, page]);
+  const args = useMemo(
+    () => ({ search: trimmedSearch || undefined, page, pageSize }),
+    [trimmedSearch, page, pageSize],
+  );
   const { data, isFetching, isError, error, refetch } = useListPlatformUsersQuery(args);
   const [setStatus, statusMut] = useSetPlatformUserStatusMutation();
   const [setAdmin, adminMut] = useSetPlatformUserAdminMutation();
+  const [bulkDelete, bulkDeleteMut] = useBulkDeletePlatformUsersMutation();
   const [createOpen, setCreateOpen] = useState(false);
+  const [detailUser, setDetailUser] = useState<PlatformUser | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Selection is page-scoped. Rather than an effect, this follows React's
+  // "adjust state during render" pattern: when `page`/`pageSize`/
+  // `trimmedSearch` move past what the selection was captured for, clear it
+  // before this render commits so a stale id from a page the caller has
+  // left never lingers.
+  const [selectionScope, setSelectionScope] = useState({ page, pageSize, trimmedSearch });
+  if (
+    selectionScope.page !== page ||
+    selectionScope.pageSize !== pageSize ||
+    selectionScope.trimmedSearch !== trimmedSearch
+  ) {
+    setSelectionScope({ page, pageSize, trimmedSearch });
+    setSelectedIds(new Set());
+  }
 
   const rows = data?.items ?? [];
   const total = data?.total ?? 0;
+  // A row can't delete its own account — mirrors the disabled self-suspend
+  // action below, and keeps `CANNOT_DELETE_SELF` from ever being reachable
+  // through this UI rather than only defending against it server-side.
+  const selectableRows = rows.filter((user) => user.id !== sessionUser?.id);
+  const allSelected =
+    selectableRows.length > 0 && selectableRows.every((user) => selectedIds.has(user.id));
+  const someSelected = selectableRows.some((user) => selectedIds.has(user.id));
 
   function handleSearchChange(value: string) {
     setSearch(value);
     // A search change resets pagination so the caller doesn't scroll
     // through an empty page 4 of a 1-page result.
     setPage(1);
+  }
+
+  function toggleSelected(userId: string, checked: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(userId);
+      else next.delete(userId);
+      return next;
+    });
+  }
+
+  function toggleSelectAll(checked: boolean) {
+    setSelectedIds(checked ? new Set(selectableRows.map((user) => user.id)) : new Set());
+  }
+
+  async function handleBulkDelete() {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    const confirmed = await new Promise<boolean>((resolve) => {
+      modal.confirm({
+        title: `Delete ${ids.length} account${ids.length === 1 ? '' : 's'} forever?`,
+        content:
+          'This permanently deletes the selected accounts — sign-in, admin rights and platform history all go with them. It cannot be undone. Club rosters are unaffected.',
+        okText: 'Delete forever',
+        okButtonProps: { danger: true },
+        cancelText: 'Cancel',
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (!confirmed) return;
+    try {
+      const result = await bulkDelete(ids).unwrap();
+      message.success(
+        `Deleted ${result.deletedCount} account${result.deletedCount === 1 ? '' : 's'}`,
+      );
+      setSelectedIds(new Set());
+    } catch (err) {
+      message.error(getApiErrorMessage(err, 'Could not delete the selected accounts'));
+    }
   }
 
   async function toggleStatus(user: PlatformUser) {
@@ -115,6 +192,13 @@ export function SuperAdminUsersScreen() {
         </header>
 
         <div className="flex items-center gap-2">
+          <Checkbox
+            checked={allSelected}
+            indeterminate={someSelected && !allSelected}
+            disabled={selectableRows.length === 0}
+            onChange={(event) => toggleSelectAll(event.target.checked)}
+            aria-label="Select all accounts on this page"
+          />
           <Input
             prefix={<MagnifyingGlass size={14} className="text-ink-muted" />}
             placeholder="Search phone, email, or name"
@@ -123,9 +207,24 @@ export function SuperAdminUsersScreen() {
             allowClear
             className="max-w-md"
           />
-          <span className="text-xs text-ink-muted">
-            {isFetching ? 'Loading…' : `${total.toLocaleString()} accounts`}
-          </span>
+          {selectedIds.size > 0 ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-ink">{selectedIds.size} selected</span>
+              <Button
+                danger
+                size="small"
+                icon={<Trash size={13} weight="bold" />}
+                loading={bulkDeleteMut.isLoading}
+                onClick={() => void handleBulkDelete()}
+              >
+                Delete forever
+              </Button>
+            </div>
+          ) : (
+            <span className="text-xs text-ink-muted">
+              {isFetching ? 'Loading…' : `${total.toLocaleString()} accounts`}
+            </span>
+          )}
         </div>
 
         <div className="rounded-xl border border-line bg-canvas">
@@ -152,44 +251,62 @@ export function SuperAdminUsersScreen() {
             <ul className="divide-y divide-line">
               {rows.map((user) => {
                 const isSelf = sessionUser?.id === user.id;
-                const busy = statusMut.isLoading || adminMut.isLoading;
+                const busy = statusMut.isLoading || adminMut.isLoading || bulkDeleteMut.isLoading;
                 return (
                   <li key={user.id} className="flex items-center justify-between gap-3 px-4 py-3">
                     <div className="flex min-w-0 items-center gap-3">
-                      <span
-                        aria-hidden
-                        className="flex size-9 shrink-0 items-center justify-center rounded-full bg-fill text-xs font-semibold text-ink-soft"
+                      <Checkbox
+                        checked={selectedIds.has(user.id)}
+                        disabled={isSelf}
+                        title={isSelf ? "You can't delete your own account" : undefined}
+                        onChange={(event) => toggleSelected(user.id, event.target.checked)}
+                        aria-label={`Select ${user.firstName} ${user.lastName}`}
+                      />
+                      {/* The row's own click target — a real button (not a
+                       * `<li onClick>`) so it's keyboard-reachable for free
+                       * and doesn't need to fight the checkbox/dropdown for
+                       * the click, matching `pathways-tab.tsx`'s card-open
+                       * pattern. */}
+                      <button
+                        type="button"
+                        onClick={() => setDetailUser(user)}
+                        className="flex min-w-0 flex-1 items-center gap-3 rounded-lg py-1 pr-2 text-left transition-colors hover:bg-fill/60"
                       >
-                        {getInitials(user)}
-                      </span>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="truncate text-sm font-medium text-ink">
-                            {user.firstName} {user.lastName}
+                        <span
+                          aria-hidden
+                          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-fill text-xs font-semibold text-ink-soft"
+                        >
+                          {getInitials(user)}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-medium text-ink">
+                              {user.firstName} {user.lastName}
+                            </p>
+                            {user.isSuperAdmin ? (
+                              <Tag color="gold" icon={<Crown size={11} weight="fill" />}>
+                                Super Admin
+                              </Tag>
+                            ) : null}
+                            {user.status === 'suspended' ? (
+                              <Tag color="default">Suspended</Tag>
+                            ) : null}
+                            {isSelf ? <Tag color="blue">You</Tag> : null}
+                          </div>
+                          <p className="mt-0.5 truncate text-xs text-ink-muted">
+                            {user.phone}
+                            {user.email ? ` · ${user.email}` : ''}
+                            {' · '}
+                            {user.membershipCount} membership
+                            {user.membershipCount === 1 ? '' : 's'}
+                            {user.orgAssignmentCount > 0
+                              ? ` · ${user.orgAssignmentCount} director role${user.orgAssignmentCount === 1 ? '' : 's'}`
+                              : ''}
+                            {' · joined '}
+                            {DATE_FMT.format(new Date(user.createdAt))}
                           </p>
-                          {user.isSuperAdmin ? (
-                            <Tag color="gold" icon={<Crown size={11} weight="fill" />}>
-                              Super Admin
-                            </Tag>
-                          ) : null}
-                          {user.status === 'suspended' ? (
-                            <Tag color="default">Suspended</Tag>
-                          ) : null}
-                          {isSelf ? <Tag color="blue">You</Tag> : null}
                         </div>
-                        <p className="mt-0.5 truncate text-xs text-ink-muted">
-                          {user.phone}
-                          {user.email ? ` · ${user.email}` : ''}
-                          {' · '}
-                          {user.membershipCount} membership
-                          {user.membershipCount === 1 ? '' : 's'}
-                          {user.orgAssignmentCount > 0
-                            ? ` · ${user.orgAssignmentCount} director role${user.orgAssignmentCount === 1 ? '' : 's'}`
-                            : ''}
-                          {' · joined '}
-                          {DATE_FMT.format(new Date(user.createdAt))}
-                        </p>
-                      </div>
+                      </button>
                     </div>
 
                     <Dropdown
@@ -224,25 +341,41 @@ export function SuperAdminUsersScreen() {
           )}
         </div>
 
-        {data && total > rows.length + (page - 1) * rows.length ? (
+        {data ? (
           <div className="flex justify-end">
             <Pagination
               current={page}
-              pageSize={25}
+              pageSize={pageSize}
               total={total}
-              showSizeChanger={false}
-              onChange={(next) => setPage(next)}
+              showSizeChanger
+              pageSizeOptions={PLATFORM_USERS_PAGE_SIZE_OPTIONS.map(String)}
+              onChange={(next, size) => {
+                if (size !== pageSize) {
+                  // A page-size change resets to page 1 — the caller's
+                  // previous `next` was computed against the old size and
+                  // no longer means the same slice of results.
+                  setPageSize(size);
+                  setPage(1);
+                } else {
+                  setPage(next);
+                }
+              }}
             />
           </div>
         ) : null}
       </div>
 
       <CreateUserModal open={createOpen} onClose={() => setCreateOpen(false)} />
+      <UserDetailDrawer
+        user={detailUser}
+        open={detailUser !== null}
+        onClose={() => setDetailUser(null)}
+      />
     </>
   );
 }
 
-function getInitials(user: PlatformUser): string {
+export function getInitials(user: PlatformUser): string {
   const f = user.firstName?.charAt(0) ?? '';
   const l = user.lastName?.charAt(0) ?? '';
   return `${f}${l}`.toUpperCase() || '?';

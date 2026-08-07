@@ -129,10 +129,22 @@ const primaryNav: NavEntry[] = [
     Icon: ClockCounterClockwise,
     access: { resource: 'activityLog', action: 'read' },
   },
+  {
+    href: '/club-admin',
+    title: 'Club Admin',
+    Icon: Gear,
+    access: { resource: 'memberRole', action: 'read' },
+  },
   { href: '/me', title: 'Me', Icon: UserCircle },
 ];
 
 const clubAdminNav: NavEntry[] = [
+  {
+    href: '/club-admin',
+    title: 'Dashboard',
+    Icon: SquaresFour,
+    access: { resource: 'memberRole', action: 'read' },
+  },
   {
     href: '/club-admin/members',
     title: 'Members',
@@ -153,10 +165,18 @@ const clubAdminNav: NavEntry[] = [
   },
 ];
 
+/** Super Admin's two entries — the org-tree dashboard and the platform-wide
+ * user directory. Drilling into a district/division/area still navigates by
+ * breadcrumb and card drill-down, so only these two routes get a nav item. */
+const superAdminNav: NavEntry[] = [
+  { href: '/super-admin', title: 'Dashboard', Icon: SquaresFour },
+  { href: '/super-admin/users', title: 'Users', Icon: Users },
+];
+
 /** Named routes win; anything deeper falls back to title-cased segments.
  * Crumbs are text-only — the icon lives on the sidebar entry instead. */
 function buildTrail(pathname: string): { href: string; title: string }[] {
-  const allNav = [...primaryNav, ...clubAdminNav];
+  const allNav = [...primaryNav, ...clubAdminNav, ...superAdminNav];
   const matched = allNav.find((entry) => entry.href === pathname);
   if (matched) return [{ href: matched.href, title: matched.title }];
 
@@ -210,8 +230,8 @@ interface SidebarBodyProps {
   /** Fires when a nav entry is followed, so the drawer can dismiss itself. */
   onNavigate?: () => void;
   /** Which set of nav entries to render. Null means the nav list is blank —
-   * org-tree scopes (Area, Division, District, Super Admin) navigate by
-   * breadcrumb and card drill-down and don't need a sidebar nav list. The
+   * the District/Division/Area drill-down scopes navigate by breadcrumb and
+   * card drill-down and don't need a sidebar nav list. The
    * Help/Notifications/Account block below still renders regardless — a
    * blank nav list must never take the sign-out control down with it. */
   navEntries: NavEntry[] | null;
@@ -359,6 +379,10 @@ function isClubAdminRoute(pathname: string): boolean {
   return pathname === '/club-admin' || pathname.startsWith('/club-admin/');
 }
 
+function isSuperAdminNavRoute(pathname: string): boolean {
+  return pathname === '/super-admin' || pathname === '/super-admin/users';
+}
+
 export function AppShell({ children, actions, notificationCount = 0 }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -399,18 +423,22 @@ export function AppShell({ children, actions, notificationCount = 0 }: AppShellP
     }
   };
 
-  /* Org dashboards navigate by breadcrumb and card drill-down — no sidebar
-   * nav needed. Club Admin has its own three-entry nav; the primary nav is
-   * club-specific for everything else. A Super Admin in `global` context
-   * gets `null` here (blank rail) rather than the stale-default club nav
-   * they used to see on first paint. */
+  /* District/Division/Area drill-downs navigate by breadcrumb and card
+   * drill-down — no sidebar nav needed. Club Admin has its own three-entry
+   * nav, Super Admin its own Dashboard/Users pair, and the primary nav is
+   * club-specific for everything else. A Super Admin in `global` context on
+   * an org drill-down route gets `null` here (blank rail) rather than the
+   * stale-default club nav they used to see on first paint. */
   const onOrgRoute = isOrgRoute(pathname);
   const onClubAdminRoute = isClubAdminRoute(pathname);
+  const onSuperAdminNavRoute = isSuperAdminNavRoute(pathname);
   const rawNavEntries: NavEntry[] | null = onClubAdminRoute
     ? clubAdminNav
-    : activeUnit === 'club' && !onOrgRoute
-      ? primaryNav
-      : null;
+    : onSuperAdminNavRoute
+      ? superAdminNav
+      : activeUnit === 'club' && !onOrgRoute
+        ? primaryNav
+        : null;
 
   /* Drop entries the current member can't read. `useCan` returns `false`
    * while loading, so entries with an `access` clause stay hidden until the

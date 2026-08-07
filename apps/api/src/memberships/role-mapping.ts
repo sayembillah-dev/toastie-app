@@ -62,3 +62,12 @@ export function toClubRoles(roles: OfficerRole[]): PrismaClubRole[] {
 export function isOfficerRole(value: unknown): value is OfficerRole {
   return typeof value === 'string' && (OFFICER_ROLES as readonly string[]).includes(value);
 }
+
+/// Whether a person is new to Toastmasters International or already held
+/// membership elsewhere before this club placement. String-identical to the
+/// Prisma `MemberType` enum, mirroring the `UserStatus` pattern rather than
+/// the `OfficerRole` translation layer above — there's no legacy wire name
+/// to preserve here.
+export const MEMBER_TYPES = ['new', 'existing'] as const;
+
+export type MemberType = (typeof MEMBER_TYPES)[number];

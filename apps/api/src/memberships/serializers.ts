@@ -52,6 +52,21 @@ export function toMemberWire(row: Membership): MemberWire {
   return wire;
 }
 
+/** `MemberWire` plus the club's name — the Super Admin user-detail panel
+ * shows memberships across many clubs at once, so each row needs to name
+ * its club (a single-club roster view never does, since the club is
+ * already the page you're on). */
+export interface PlatformUserMembershipWire extends MemberWire {
+  clubName: string;
+}
+
+export function toPlatformUserMembershipWire(
+  row: Membership,
+  clubName: string,
+): PlatformUserMembershipWire {
+  return { ...toMemberWire(row), clubName };
+}
+
 function parseOverrides(raw: unknown): Record<string, 'allow' | 'deny'> {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
   const out: Record<string, 'allow' | 'deny'> = {};
