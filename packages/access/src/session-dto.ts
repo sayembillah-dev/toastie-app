@@ -3,7 +3,13 @@ import type { Lineage } from './subject';
 
 export interface SessionUser {
   id: string;
-  email: string;
+  /** Primary auth credential — every user has one. Format is captured
+   * verbatim from the register form; normalisation lives at the DB
+   * boundary if/when it becomes necessary. */
+  phone: string;
+  /** Optional contact channel — `null` on accounts that only ever set a
+   * phone (the common case). Never used for sign-in. */
+  email: string | null;
   firstName: string;
   lastName: string;
   isSuperAdmin: boolean;

@@ -121,9 +121,15 @@ enum SpeechSlotRequestStatus {
 
 model User {
   id              String    @id @default(cuid())
-  /// Lowercased at write time. A raw-SQL migration converts this column to
-  /// CITEXT so lookups stay case-insensitive without a functional index.
-  email           String    @unique
+  /// Primary auth credential — every user signs in with phone + password.
+  /// Stored verbatim from the register form; if we ever need to
+  /// canonicalise (E.164), do it in a follow-up migration with a
+  /// backfill, not silently on read.
+  phone           String    @unique
+  /// Optional contact channel — nullable so a user can sign up with
+  /// phone alone. Kept CITEXT (raw-SQL migration) + `@unique` so any
+  /// email that IS present is still unique, case-insensitively.
+  email           String?   @unique
   passwordHash    String
   firstName       String
   lastName        String

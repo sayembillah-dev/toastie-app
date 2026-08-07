@@ -23,13 +23,15 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResult> {
-    const email = dto.email.trim().toLowerCase();
+    const phone = normalisePhone(dto.phone);
+    const email = dto.email ? dto.email.trim().toLowerCase() : null;
     const passwordHash = await this.tokens.hashPassword(dto.password);
 
     let user: { id: string };
     try {
       user = await this.prisma.user.create({
         data: {
+          phone,
           email,
           passwordHash,
           firstName: dto.firstName.trim(),
@@ -39,7 +41,17 @@ export class AuthService {
       });
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        throw new ConflictException({ code: 'EMAIL_TAKEN' });
+        // `meta.target` names the offending unique index — distinguish phone
+        // vs. email so the register form can highlight the right field.
+        const target = err.meta?.target;
+        const takenField = Array.isArray(target)
+          ? target.find((t) => t === 'email' || t === 'phone')
+          : typeof target === 'string' && (target === 'email' || target === 'phone')
+            ? target
+            : undefined;
+        throw new ConflictException({
+          code: takenField === 'email' ? 'EMAIL_TAKEN' : 'PHONE_TAKEN',
+        });
       }
       throw err;
     }
@@ -55,9 +67,9 @@ export class AuthService {
   }
 
   async login(dto: LoginDto): Promise<AuthResult> {
-    const email = dto.email.trim().toLowerCase();
+    const phone = normalisePhone(dto.phone);
     const user = await this.prisma.user.findUnique({
-      where: { email },
+      where: { phone },
       select: { id: true, passwordHash: true, status: true },
     });
     if (!user) {
@@ -104,4 +116,12 @@ export class AuthService {
     if (!session) throw new UnauthorizedException({ code: 'SESSION_INVALID' });
     return session;
   }
+}
+
+/** Strip user-friendly whitespace and dashes from the phone before hitting
+ * the DB. Keeps the leading `+` (E.164 marker). Callers that display the
+ * phone back to the user should render this canonical form; the register
+ * form's placeholder tells them what to type, so no round-trip surprise. */
+function normalisePhone(raw: string): string {
+  return raw.trim().replace(/[\s-]/g, '');
 }

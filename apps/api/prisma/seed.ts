@@ -59,6 +59,43 @@ async function chunked<T>(rows: T[], size: number, run: (chunk: T[]) => Promise<
   }
 }
 
+/** Reads `SUPER_ADMIN_PHONE` + `SUPER_ADMIN_PASSWORD` from the env and
+ * upserts a super admin User by phone. Runs before the dev-data seed so
+ * the admin survives the wipe. A missing env is a hard error — a silent
+ * skip would leave prod/staging without an admin, which is worse than
+ * failing loudly. */
+async function bootstrapSuperAdmin(): Promise<void> {
+  const phone = process.env.SUPER_ADMIN_PHONE?.trim();
+  const password = process.env.SUPER_ADMIN_PASSWORD;
+  if (!phone || !password) {
+    throw new Error(
+      'SUPER_ADMIN_PHONE and SUPER_ADMIN_PASSWORD must be set (see apps/api/.env.example)',
+    );
+  }
+  const canonicalPhone = phone.replace(/[\s-]/g, '');
+  const passwordHash = await argon2Hash(password);
+  const user = await prisma.user.upsert({
+    where: { phone: canonicalPhone },
+    create: {
+      id: createId(),
+      phone: canonicalPhone,
+      email: null,
+      passwordHash,
+      firstName: 'Super',
+      lastName: 'Admin',
+      status: 'active',
+      isSuperAdmin: true,
+    },
+    update: {
+      passwordHash,
+      status: 'active',
+      isSuperAdmin: true,
+    },
+    select: { id: true, phone: true },
+  });
+  console.log(`[seed] super admin ready — phone=${user.phone}`);
+}
+
 async function main() {
   console.log('[seed] wiping existing rows…');
   // Order matters — children first, parents last, so no dangling FKs.
@@ -114,15 +151,22 @@ async function main() {
 
   const users: Prisma.UserCreateManyInput[] = Array.from({ length: 1_000 }, (_, i) => {
     const [first, last] = pickTwo(FIRST_NAMES, i);
-    const emailNoise = i.toString(36);
+    const noise = i.toString(36);
+    // Synthetic +99 test-range phones — real users get their own via the
+    // register form. Padding to 10 digits keeps a fixed E.164-ish shape.
+    const phone = `+99${(1000000000 + i).toString()}`;
     return {
       id: createId(),
-      email: `${first.toLowerCase()}.${last.toLowerCase()}.${emailNoise}@toastly.test`,
+      phone,
+      email: `${first.toLowerCase()}.${last.toLowerCase()}.${noise}@toastly.test`,
       passwordHash: sharedPasswordHash,
       firstName: first,
       lastName: last,
       status: 'active',
-      isSuperAdmin: i === 0,
+      // The super admin comes from `bootstrapSuperAdmin()` below — dev
+      // seed users are all plain accounts so a fresh seed leaves the
+      // env-driven admin as the only global-scope operator.
+      isSuperAdmin: false,
       emailVerifiedAt: new Date(),
     };
   });
@@ -231,6 +275,11 @@ async function main() {
   await chunked(orgAssignments, CHUNK_SIZE, (chunk) =>
     prisma.orgAssignment.createMany({ data: chunk, skipDuplicates: true }),
   );
+
+  // Bootstrap runs LAST so the wipe above can't take it out. Idempotent
+  // upsert by phone — running the seed twice never duplicates the admin.
+  console.log('[seed] bootstrap super admin');
+  await bootstrapSuperAdmin();
 
   console.log(
     `[seed] done — ${districts.length} districts, ${divisions.length} divisions, ` +

@@ -16,14 +16,16 @@ import toastieLogo from '../../../../assets/toastie.svg';
 const { Title, Text } = Typography;
 
 interface FormValues {
-  email: string;
+  phone: string;
   password: string;
   firstName: string;
   lastName: string;
+  email?: string;
 }
 
-/** Register page. On success the account is created role-less: the
- * returned session carries `memberships: []` and `orgAssignments: []`,
+/** Register page. Sign-up is phone + password (email optional — see
+ * project_phone_auth memory). On success the account is created role-less:
+ * the returned session carries `memberships: []` and `orgAssignments: []`,
  * which `AppFrame` recognises and swaps in the onboarding screen. */
 export default function RegisterPage() {
   const router = useRouter();
@@ -34,11 +36,13 @@ export default function RegisterPage() {
   async function onSubmit(values: FormValues) {
     setError(null);
     try {
+      const trimmedEmail = values.email?.trim();
       const res = await register({
-        email: values.email.trim().toLowerCase(),
+        phone: values.phone.trim(),
         password: values.password,
         firstName: values.firstName.trim(),
         lastName: values.lastName.trim(),
+        email: trimmedEmail ? trimmedEmail.toLowerCase() : undefined,
       }).unwrap();
 
       writeAccessToken(res.tokens.accessToken);
@@ -100,12 +104,29 @@ export default function RegisterPage() {
           </div>
 
           <Form.Item
-            label="Email"
-            name="email"
+            label="Mobile number"
+            name="phone"
             rules={[
-              { required: true, message: 'Email is required' },
-              { type: 'email', message: 'Enter a valid email' },
+              { required: true, message: 'Mobile number is required' },
+              {
+                pattern: /^\+?[0-9\s-]{8,20}$/,
+                message: 'Enter a valid mobile number',
+              },
             ]}
+          >
+            <Input
+              type="tel"
+              autoComplete="tel"
+              inputMode="tel"
+              size="large"
+              placeholder="+1 555 000 0000"
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="Email (optional)"
+            name="email"
+            rules={[{ type: 'email', message: 'Enter a valid email' }]}
           >
             <Input type="email" autoComplete="email" size="large" />
           </Form.Item>
@@ -146,8 +167,10 @@ function extractErrorCode(err: unknown): string | null {
 
 function messageForCode(code: string | null): string {
   switch (code) {
+    case 'PHONE_TAKEN':
+      return 'An account with that mobile number already exists.';
     case 'EMAIL_TAKEN':
-      return 'An account with that email already exists.';
+      return 'That email is already linked to another account.';
     default:
       return 'Registration failed. Please try again.';
   }

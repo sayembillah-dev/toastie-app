@@ -16,17 +16,16 @@ import toastieLogo from '../../../../assets/toastie.svg';
 const { Title, Text } = Typography;
 
 interface FormValues {
-  email: string;
+  phone: string;
   password: string;
 }
 
 /** Login page. Public route — `(public)/layout.tsx` renders no shell.
  *
- * On success writes the token pair to localStorage, hydrates the session
- * slice from the returned payload, and pushes into `/` where `AppFrame`
- * picks between dashboard / onboarding based on memberships. Failing
- * calls surface the API's `code` (e.g. `INVALID_CREDENTIALS`) as inline
- * alert copy — no toast, since the form is the only surface here. */
+ * Sign-in is phone + password (email is a contact field, not a credential
+ * — see project_phone_auth memory). On success writes the token pair to
+ * localStorage, hydrates the session slice, and pushes to `/` where
+ * `AppFrame` picks between dashboard / onboarding based on memberships. */
 export default function LoginPage() {
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -37,7 +36,7 @@ export default function LoginPage() {
     setError(null);
     try {
       const res = await login({
-        email: values.email.trim().toLowerCase(),
+        phone: values.phone.trim(),
         password: values.password,
       }).unwrap();
 
@@ -80,14 +79,23 @@ export default function LoginPage() {
           disabled={isLoading}
         >
           <Form.Item
-            label="Email"
-            name="email"
+            label="Mobile number"
+            name="phone"
             rules={[
-              { required: true, message: 'Email is required' },
-              { type: 'email', message: 'Enter a valid email' },
+              { required: true, message: 'Mobile number is required' },
+              {
+                pattern: /^\+?[0-9\s-]{8,20}$/,
+                message: 'Enter a valid mobile number',
+              },
             ]}
           >
-            <Input type="email" autoComplete="email" size="large" />
+            <Input
+              type="tel"
+              autoComplete="tel"
+              inputMode="tel"
+              size="large"
+              placeholder="+1 555 000 0000"
+            />
           </Form.Item>
 
           <Form.Item
@@ -124,7 +132,7 @@ function extractErrorCode(err: unknown): string | null {
 function messageForCode(code: string | null): string {
   switch (code) {
     case 'INVALID_CREDENTIALS':
-      return 'Email or password is incorrect.';
+      return 'Mobile number or password is incorrect.';
     case 'USER_SUSPENDED':
       return 'This account is suspended. Contact an admin.';
     default:

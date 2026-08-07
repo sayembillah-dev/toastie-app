@@ -30,6 +30,7 @@ export class SubjectFactory {
       where: { id: userId },
       select: {
         id: true,
+        phone: true,
         email: true,
         firstName: true,
         lastName: true,
@@ -133,6 +134,7 @@ export class SubjectFactory {
     return {
       user: {
         id: user.id,
+        phone: user.phone,
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
