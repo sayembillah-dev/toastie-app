@@ -32,15 +32,15 @@ import { Fragment, useMemo } from 'react';
 
 import { useCan } from '@/lib/permissions/use-can';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { selectSessionUser } from '@/store/session-slice';
+import { selectActiveContextKey, selectSessionUser } from '@/store/session-slice';
 import {
   mobileNavClosed,
   mobileNavOpened,
-  selectActiveUnit,
   selectBreadcrumb,
   selectMobileNavOpen,
   selectSidebarCollapsed,
   sidebarToggled,
+  unitKeyForContext,
 } from '@/store/ui-slice';
 
 import toastieLogo from '../../assets/toastie.svg';
@@ -310,24 +310,6 @@ function SidebarBody({
   );
 }
 
-/** Placeholder for scopes whose surfaces do not exist yet. Centred vertically
- * and horizontally in the main area so it reads as a deliberate empty state
- * rather than a broken page. */
-function ComingSoonPanel() {
-  return (
-    <div className="flex h-full min-h-[24rem] items-center justify-center">
-      <div className="flex flex-col items-center gap-2 text-center">
-        <span className="rounded-full border border-line px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-muted">
-          In progress
-        </span>
-        <h2 className="text-lg font-semibold text-ink">Coming soon</h2>
-        <p className="max-w-sm text-sm text-ink-soft">
-          This scope is still being built. Switch back to Club from the header to keep working.
-        </p>
-      </div>
-    </div>
-  );
-}
 
 interface AppShellProps {
   children?: React.ReactNode;
@@ -359,7 +341,11 @@ export function AppShell({ children, actions, notificationCount = 0 }: AppShellP
    * across route changes. */
   const collapsed = useAppSelector(selectSidebarCollapsed);
   const mobileNavOpen = useAppSelector(selectMobileNavOpen);
-  const activeUnit = useAppSelector(selectActiveUnit);
+  /* Derived from `contextKey`, not a separate piece of state. A Super
+   * Admin in `global` context has `activeUnit === 'super-admin'` on first
+   * paint (no more default-to-club stale flash). */
+  const contextKey = useAppSelector(selectActiveContextKey);
+  const activeUnit = unitKeyForContext(contextKey);
   const breadcrumbSlot = useAppSelector(selectBreadcrumb);
   const sessionUser = useAppSelector(selectSessionUser);
   const account = sessionUser
@@ -368,17 +354,13 @@ export function AppShell({ children, actions, notificationCount = 0 }: AppShellP
   const dispatch = useAppDispatch();
   const closeMobileNav = () => dispatch(mobileNavClosed());
 
-  /* `club`, the org-tree scopes (district/division/area/super-admin) and
-   * Club Admin all have real surfaces now. Content gating reads the pathname
-   * rather than `activeUnit` alone so a bookmarked or freshly-loaded URL
-   * renders correctly before the switcher state (which is not persisted)
-   * catches up. */
-  const onOrgRoute = isOrgRoute(pathname);
-  const onClubAdminRoute = isClubAdminRoute(pathname);
-  const showContent = activeUnit === 'club' || onOrgRoute || onClubAdminRoute;
   /* Org dashboards navigate by breadcrumb and card drill-down — no sidebar
    * nav needed. Club Admin has its own three-entry nav; the primary nav is
-   * club-specific for everything else. */
+   * club-specific for everything else. A Super Admin in `global` context
+   * gets `null` here (blank rail) rather than the stale-default club nav
+   * they used to see on first paint. */
+  const onOrgRoute = isOrgRoute(pathname);
+  const onClubAdminRoute = isClubAdminRoute(pathname);
   const rawNavEntries: NavEntry[] | null = onClubAdminRoute
     ? clubAdminNav
     : activeUnit === 'club' && !onOrgRoute
@@ -544,9 +526,7 @@ export function AppShell({ children, actions, notificationCount = 0 }: AppShellP
             </div>
           </header>
 
-          <main className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
-            {showContent ? children : <ComingSoonPanel />}
-          </main>
+          <main className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
         </div>
       </div>
     </Layout>

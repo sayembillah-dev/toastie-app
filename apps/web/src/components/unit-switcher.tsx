@@ -24,7 +24,6 @@ import {
   selectSessionOrgAssignments,
   selectSessionUser,
 } from '@/store/session-slice';
-import { activeUnitChanged, selectActiveUnit, type UnitKey } from '@/store/ui-slice';
 
 type IconComponent = React.ComponentType<{
   size?: number;
@@ -34,9 +33,6 @@ type IconComponent = React.ComponentType<{
 
 interface UnitEntry {
   contextKey: ActiveContextKey;
-  /** The nav-shape hint driving `AppShell`'s sidebar contents. Every club
-   * membership maps to `'club'`; every org assignment to its unit tier. */
-  unitKey: UnitKey;
   name: string;
   description: string;
   Icon: IconComponent;
@@ -57,7 +53,6 @@ const ORG_NAME: Record<'area' | 'division' | 'district', string> = {
 export function UnitSwitcher() {
   const dispatch = useAppDispatch();
   const router = useRouter();
-  const activeUnit = useAppSelector(selectActiveUnit);
   const contextKey = useAppSelector(selectActiveContextKey);
   const user = useAppSelector(selectSessionUser);
   const memberships = useAppSelector(selectSessionMemberships);
@@ -70,14 +65,12 @@ export function UnitSwitcher() {
   const entries: UnitEntry[] = [
     ...memberships.map<UnitEntry>((m) => ({
       contextKey: `club:${m.clubId}` as ActiveContextKey,
-      unitKey: 'club',
       name: m.clubName,
       description: 'Club context',
       Icon: Buildings,
     })),
     ...orgAssignments.map<UnitEntry>((a) => ({
       contextKey: `${a.unitType}:${a.unitId}` as ActiveContextKey,
-      unitKey: a.unitType as UnitKey,
       name: a.unitName || ORG_NAME[a.unitType],
       description: `${ORG_NAME[a.unitType]} director scope`,
       Icon: ORG_ICON[a.unitType],
@@ -86,7 +79,6 @@ export function UnitSwitcher() {
       ? [
           {
             contextKey: 'global' as ActiveContextKey,
-            unitKey: 'super-admin' as UnitKey,
             name: 'Super Admin',
             description: 'Full access',
             Icon: Crown,
@@ -97,7 +89,6 @@ export function UnitSwitcher() {
 
   const fallback: UnitEntry = {
     contextKey: 'club:local' as ActiveContextKey,
-    unitKey: 'club',
     name: 'Club',
     description: 'Your home club',
     Icon: Buildings,
@@ -108,9 +99,10 @@ export function UnitSwitcher() {
 
   /* Context switch: cache reset is the load-bearing part. Every cache entry
    * is tenant-scoped but RTKQ keys aren't, so anything from the old context
-   * would masquerade as the new one on the next render. */
+   * would masquerade as the new one on the next render. `activeUnit` is
+   * derived from `contextKey` in `ui-slice`, so this single dispatch drives
+   * the sidebar shape too. */
   const selectEntry = (entry: UnitEntry) => {
-    dispatch(activeUnitChanged(entry.unitKey));
     dispatch(contextChanged(entry.contextKey));
     writeStoredContext(entry.contextKey);
     dispatch(toastlyApi.util.resetApiState());

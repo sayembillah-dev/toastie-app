@@ -1,18 +1,26 @@
 import type { PayloadAction } from '@reduxjs/toolkit';
+import type { ActiveContextKey } from '@toastly/access';
 import { createSlice } from '@reduxjs/toolkit';
 
-/** The scope the user is currently acting inside. `club` is the built-out
- * experience; the higher tiers are placeholders while their surfaces are
- * designed. */
-export const UNIT_KEYS = [
-  'club',
-  'club-admin',
-  'area',
-  'division',
-  'district',
-  'super-admin',
-] as const;
-export type UnitKey = (typeof UNIT_KEYS)[number];
+/** The scope the shell is currently rendering for. Derived from
+ * `session.contextKey` via `unitKeyForContext` — no separate state.
+ * Prior versions carried an `activeUnit` field on ui-slice that defaulted
+ * to `'club'` and was only updated on switcher click, which meant a
+ * Super Admin in `global` context saw the club sidebar on first load. */
+export type UnitKey = 'club' | 'area' | 'division' | 'district' | 'super-admin';
+
+/** Maps the session's `contextKey` to the shell's nav-shape hint. Returns
+ * `null` when the context is missing or unrecognised — callers render an
+ * empty rail rather than guessing at a fallback. */
+export function unitKeyForContext(key: ActiveContextKey | string | null | undefined): UnitKey | null {
+  if (!key) return null;
+  if (key === 'global') return 'super-admin';
+  if (key.startsWith('club:')) return 'club';
+  if (key.startsWith('area:')) return 'area';
+  if (key.startsWith('division:')) return 'division';
+  if (key.startsWith('district:')) return 'district';
+  return null;
+}
 
 /**
  * Client-only view state — the bits of UI that outlive a single component but
@@ -43,10 +51,6 @@ export interface UiState {
   /** Filter text for the members directory. Lives here so a future saved-view or
    * command-palette can drive the same grid. */
   memberSearchQuery: string;
-  /** Which organisational tier the shell is scoped to. Drives the sidebar
-   * contents and the routed page — anything other than `club` is a stub for
-   * now. */
-  activeUnit: UnitKey;
   /** Screen-supplied breadcrumb slot. Written by `PageBreadcrumb`, read by
    * `AppShell`. Kept in the store rather than passed as a prop because the
    * shell is now mounted by `app/(app)/layout.tsx` rather than by each page. */
@@ -57,7 +61,6 @@ const initialState: UiState = {
   sidebarCollapsed: false,
   mobileNavOpen: false,
   memberSearchQuery: '',
-  activeUnit: 'club',
   breadcrumb: { trail: null, label: null },
 };
 
@@ -80,9 +83,6 @@ export const uiSlice = createSlice({
     memberSearchQueryChanged(state, action: PayloadAction<string>) {
       state.memberSearchQuery = action.payload;
     },
-    activeUnitChanged(state, action: PayloadAction<UnitKey>) {
-      state.activeUnit = action.payload;
-    },
     breadcrumbSet(state, action: PayloadAction<BreadcrumbSlot>) {
       state.breadcrumb = action.payload;
     },
@@ -94,7 +94,6 @@ export const uiSlice = createSlice({
     selectSidebarCollapsed: (state) => state.sidebarCollapsed,
     selectMobileNavOpen: (state) => state.mobileNavOpen,
     selectMemberSearchQuery: (state) => state.memberSearchQuery,
-    selectActiveUnit: (state) => state.activeUnit,
     selectBreadcrumb: (state) => state.breadcrumb,
   },
 });
@@ -105,7 +104,6 @@ export const {
   mobileNavOpened,
   mobileNavClosed,
   memberSearchQueryChanged,
-  activeUnitChanged,
   breadcrumbSet,
   breadcrumbCleared,
 } = uiSlice.actions;
@@ -113,6 +111,5 @@ export const {
   selectSidebarCollapsed,
   selectMobileNavOpen,
   selectMemberSearchQuery,
-  selectActiveUnit,
   selectBreadcrumb,
 } = uiSlice.selectors;
