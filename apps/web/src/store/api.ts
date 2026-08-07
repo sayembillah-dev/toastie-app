@@ -220,6 +220,40 @@ export const toastlyApi = createApi({
         method: 'PATCH',
         body: overrides,
       }),
+      /* Optimistic so the permissions grid's checkboxes flip on click rather
+       * than after the round-trip. Mirrors the server's merge semantics —
+       * `default` deletes the key, anything else sets it — so the patched
+       * cache matches what the refetch will bring back. */
+      onQueryStarted: async ({ memberId, overrides }, { dispatch, getState, queryFulfilled }) => {
+        const affected = toastlyApi.util.selectInvalidatedBy(getState(), [
+          { type: 'Member', id: 'LIST' },
+        ]);
+        const patches = affected
+          .filter((entry) => entry.endpointName === 'getMembers')
+          .map((entry) =>
+            dispatch(
+              toastlyApi.util.updateQueryData(
+                'getMembers',
+                entry.originalArgs as { includeRemoved?: boolean } | undefined,
+                (draft) => {
+                  const member = draft.find((item) => item.id === memberId);
+                  if (!member) return;
+                  const next = { ...(member.overrides ?? {}) };
+                  for (const [key, value] of Object.entries(overrides)) {
+                    if (value === 'default') delete next[key];
+                    else next[key] = value;
+                  }
+                  member.overrides = next;
+                },
+              ),
+            ),
+          );
+        try {
+          await queryFulfilled;
+        } catch {
+          for (const patch of patches) patch.undo();
+        }
+      },
       invalidatesTags: (_member, _error, { memberId }) => [
         { type: 'Member', id: memberId },
         { type: 'Member', id: 'LIST' },
