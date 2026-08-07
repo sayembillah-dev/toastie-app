@@ -1,4 +1,8 @@
 export const RESOURCE_KEYS = [
+  /** Platform-level User account. Only reachable via the Super Admin
+   * bypass — no club/org role grants `user:*`, so a plain Member's or
+   * Director's `can(update, user)` decision returns false by default. */
+  'user',
   'club',
   'member',
   'memberRole',

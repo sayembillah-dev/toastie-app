@@ -25,6 +25,7 @@ import { OrgModule } from './org';
 import { PeopleModule } from './people';
 import { PrismaModule } from './prisma';
 import { TasksModule } from './tasks';
+import { UsersModule } from './users';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { TasksModule } from './tasks';
     InventoryModule,
     FinanceModule,
     TasksModule,
+    UsersModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

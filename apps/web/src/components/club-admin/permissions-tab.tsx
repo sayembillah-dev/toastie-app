@@ -18,6 +18,7 @@ import { selectActiveContextKey, selectSessionMemberships } from '@/store/sessio
  * even though granting them at this level has no effect (the engine clamps
  * a club-anchored allow-override down to `club` scope). */
 const RESOURCE_LABELS: Record<ResourceKey, string> = {
+  user: 'User accounts',
   club: 'Club',
   member: 'Members — directory',
   memberRole: 'Members — roles',

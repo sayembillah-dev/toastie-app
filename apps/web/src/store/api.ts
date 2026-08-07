@@ -137,6 +137,7 @@ export const toastlyApi = createApi({
     'Area',
     'OrgClub',
     'Invite',
+    'PlatformUser',
   ],
   endpoints: (build) => ({
     /* `includeRemoved` opts into seeing soft-removed members — the Club Admin
@@ -1298,8 +1299,77 @@ export const toastlyApi = createApi({
     getAuthSession: build.query<SessionResponse, void>({
       query: () => ({ url: '/auth/session', method: 'GET' }),
     }),
+
+    /* Super Admin cross-tenant users list. Backend gates on `user:read`,
+     * only reachable via the SuperAdmin bypass. `search` matches phone,
+     * email, first name or last name; `page` is 1-indexed and returns
+     * `USERS_PAGE_SIZE`-sized pages. */
+    listPlatformUsers: build.query<PlatformUsersPage, ListPlatformUsersArgs | void>({
+      query: (args) => {
+        const params = new URLSearchParams();
+        if (args?.search) params.set('search', args.search);
+        if (args?.page && args.page > 1) params.set('page', String(args.page));
+        const qs = params.toString();
+        return { url: qs ? `/users?${qs}` : '/users', method: 'GET' };
+      },
+      providesTags: (page) => [
+        { type: 'PlatformUser', id: 'LIST' },
+        ...(page?.items ?? []).map((u) => ({ type: 'PlatformUser' as const, id: u.id })),
+      ],
+    }),
+
+    setPlatformUserStatus: build.mutation<
+      PlatformUser,
+      { userId: string; status: 'active' | 'suspended' }
+    >({
+      query: ({ userId, status }) => ({
+        url: `/users/${userId}/status`,
+        method: 'PATCH',
+        body: { status },
+      }),
+      invalidatesTags: (_user, _error, { userId }) => [
+        { type: 'PlatformUser', id: userId },
+        { type: 'PlatformUser', id: 'LIST' },
+      ],
+    }),
+
+    setPlatformUserAdmin: build.mutation<PlatformUser, { userId: string; isSuperAdmin: boolean }>({
+      query: ({ userId, isSuperAdmin }) => ({
+        url: `/users/${userId}/admin`,
+        method: 'PATCH',
+        body: { isSuperAdmin },
+      }),
+      invalidatesTags: (_user, _error, { userId }) => [
+        { type: 'PlatformUser', id: userId },
+        { type: 'PlatformUser', id: 'LIST' },
+      ],
+    }),
   }),
 });
+
+export interface PlatformUser {
+  id: string;
+  phone: string;
+  email: string | null;
+  firstName: string;
+  lastName: string;
+  status: 'active' | 'suspended';
+  isSuperAdmin: boolean;
+  membershipCount: number;
+  orgAssignmentCount: number;
+  createdAt: string;
+}
+
+export interface PlatformUsersPage {
+  items: PlatformUser[];
+  total: number;
+  hasMore: boolean;
+}
+
+export interface ListPlatformUsersArgs {
+  search?: string;
+  page?: number;
+}
 
 export const {
   useGetMembersQuery,
@@ -1389,4 +1459,7 @@ export const {
   useAuthLogoutMutation,
   useGetAuthSessionQuery,
   useLazyGetAuthSessionQuery,
+  useListPlatformUsersQuery,
+  useSetPlatformUserStatusMutation,
+  useSetPlatformUserAdminMutation,
 } = toastlyApi;
