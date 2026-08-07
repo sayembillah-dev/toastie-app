@@ -1,14 +1,23 @@
 'use client';
 
-import { CaretLeft, CaretRight } from '@phosphor-icons/react/dist/ssr';
+import { CaretLeft, CaretRight, WarningCircle } from '@phosphor-icons/react/dist/ssr';
 import type { CalendarProps } from 'antd';
-import { Button, Calendar, Drawer } from 'antd';
+import { App, Button, Calendar, Drawer } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { useEffect, useMemo, useState } from 'react';
 
-import type { Idea, IdeaStatus } from '@/components/library/planner-day-panel';
 import { PlannerDayPanel } from '@/components/library/planner-day-panel';
+import type { CreatePlannerIdeaInput, IdeaStatus } from '@/lib/library/planner';
+import { groupIdeasByDay } from '@/lib/library/planner';
+import { useCan } from '@/lib/permissions/use-can';
+import {
+  useCreatePlannerIdeaMutation,
+  useDeletePlannerIdeaMutation,
+  useListPlannerIdeasQuery,
+  useUpdatePlannerIdeaMutation,
+} from '@/store/api';
+import { getApiErrorMessage } from '@/store/api-error';
 
 /** Tracks antd's `md` breakpoint. Above it we render the full month grid;
  * below, antd's compact card variant is the mobile-friendly form. Initial
@@ -26,58 +35,81 @@ function useIsDesktop() {
   return isDesktop;
 }
 
-/** Every day owns its own bucket of ideas keyed by YYYY-MM-DD. Client state
- * only for now — persistence lands with the backend pass. */
-type IdeasByDay = Record<string, Idea[]>;
+/** Days of slack on either side of the month when fetching. The month grid
+ * renders trailing days of the previous month and leading days of the next
+ * one, and how many depends on the locale's first-day-of-week — a flat week
+ * of padding covers every arrangement without having to reason about it. */
+const GRID_PADDING_DAYS = 7;
 
-function makeId() {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
+const DAY_FORMAT = 'YYYY-MM-DD';
 
 /** Month-view calendar for the Library planner. Clicking a date opens a
- * right-side drawer with that day's ideas. */
+ * right-side drawer with that day's ideas, which are persisted per club
+ * through `/planner/ideas`. */
 export function PlannerTab() {
   const isDesktop = useIsDesktop();
+  const { message } = App.useApp();
+  const { can } = useCan();
+  const canMutate = can('update', 'library');
+
+  /* The calendar is controlled so the visible month is available as query
+   * state — the fetch window is derived from it. */
+  const [panelDate, setPanelDate] = useState(() => dayjs());
   const [selected, setSelected] = useState<Dayjs | null>(null);
   const [open, setOpen] = useState(false);
-  const [ideasByDay, setIdeasByDay] = useState<IdeasByDay>({});
+
+  const range = useMemo(
+    () => ({
+      from: panelDate.startOf('month').subtract(GRID_PADDING_DAYS, 'day').format(DAY_FORMAT),
+      to: panelDate.endOf('month').add(GRID_PADDING_DAYS, 'day').format(DAY_FORMAT),
+    }),
+    [panelDate],
+  );
+
+  const { data, isLoading, isError, error, refetch } = useListPlannerIdeasQuery(range);
+  const [createIdea] = useCreatePlannerIdeaMutation();
+  const [updateIdea] = useUpdatePlannerIdeaMutation();
+  const [deleteIdea] = useDeletePlannerIdeaMutation();
+
+  const ideasByDay = useMemo(() => groupIdeasByDay(data ?? []), [data]);
 
   /* onSelect fires for both date picks AND header navigation (month/year
    * dropdowns in compact mode). Only 'date' should open the drawer. */
   const handleSelect: NonNullable<CalendarProps<Dayjs>['onSelect']> = (date, info) => {
+    setPanelDate(date);
     if (info?.source && info.source !== 'date') return;
     setSelected(date);
     setOpen(true);
   };
 
-  const selectedKey = selected ? selected.format('YYYY-MM-DD') : '';
+  const selectedKey = selected ? selected.format(DAY_FORMAT) : '';
   const ideas = useMemo(() => ideasByDay[selectedKey] ?? [], [ideasByDay, selectedKey]);
 
-  const addIdea = (draft: Omit<Idea, 'id' | 'status'>) => {
-    if (!selectedKey) return;
-    setIdeasByDay((prev) => ({
-      ...prev,
-      [selectedKey]: [...(prev[selectedKey] ?? []), { ...draft, id: makeId(), status: 'created' }],
-    }));
+  const addIdea = async (draft: Omit<CreatePlannerIdeaInput, 'day'>) => {
+    if (!selectedKey) return false;
+    try {
+      await createIdea({ ...draft, day: selectedKey }).unwrap();
+      return true;
+    } catch (err) {
+      message.error(getApiErrorMessage(err, 'Could not save the idea'));
+      return false;
+    }
   };
 
-  const removeIdea = (id: string) => {
-    if (!selectedKey) return;
-    setIdeasByDay((prev) => ({
-      ...prev,
-      [selectedKey]: (prev[selectedKey] ?? []).filter((idea) => idea.id !== id),
-    }));
+  const removeIdea = async (id: string) => {
+    try {
+      await deleteIdea(id).unwrap();
+    } catch (err) {
+      message.error(getApiErrorMessage(err, 'Could not delete the idea'));
+    }
   };
 
-  const updateIdeaStatus = (id: string, status: IdeaStatus) => {
-    if (!selectedKey) return;
-    setIdeasByDay((prev) => ({
-      ...prev,
-      [selectedKey]: (prev[selectedKey] ?? []).map((idea) =>
-        idea.id === id ? { ...idea, status } : idea,
-      ),
-    }));
+  const updateIdeaStatus = async (id: string, status: IdeaStatus) => {
+    try {
+      await updateIdea({ ideaId: id, status }).unwrap();
+    } catch (err) {
+      message.error(getApiErrorMessage(err, 'Could not update the status'));
+    }
   };
 
   /* Cell decoration: a count chip on desktop, a dot on mobile. When every
@@ -85,7 +117,7 @@ export function PlannerTab() {
    * doubles as an at-a-glance progress view. */
   const cellRender: CalendarProps<Dayjs>['cellRender'] = (current, info) => {
     if (info.type !== 'date') return null;
-    const dayIdeas = ideasByDay[current.format('YYYY-MM-DD')] ?? [];
+    const dayIdeas = ideasByDay[current.format(DAY_FORMAT)] ?? [];
     if (dayIdeas.length === 0) return null;
     const allPublished = dayIdeas.every((idea) => idea.status === 'published');
 
@@ -116,7 +148,19 @@ export function PlannerTab() {
 
   return (
     <>
+      {isError ? (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-line bg-fill/40 px-3 py-2 text-sm text-ink-soft">
+          <WarningCircle size={16} className="text-amber-500" />
+          {getApiErrorMessage(error, 'Could not load the planner')}
+          <Button size="small" onClick={() => refetch()}>
+            Retry
+          </Button>
+        </div>
+      ) : null}
+
       <Calendar
+        value={panelDate}
+        onChange={setPanelDate}
         onSelect={handleSelect}
         fullscreen={isDesktop}
         cellRender={cellRender}
@@ -159,6 +203,8 @@ export function PlannerTab() {
         <PlannerDayPanel
           key={selectedKey}
           ideas={ideas}
+          loading={isLoading}
+          canMutate={canMutate}
           onAdd={addIdea}
           onRemove={removeIdea}
           onStatusChange={updateIdeaStatus}

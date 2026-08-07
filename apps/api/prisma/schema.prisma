@@ -126,6 +126,15 @@ enum SpeechSlotRequestStatus {
   declined
 }
 
+/// Lifecycle of a Library › Planner idea, read as a progression:
+/// fresh → in progress → shipped. String-identical to the `IdeaStatus`
+/// union in `components/library/planner-day-panel.tsx`.
+enum PlannerIdeaStatus {
+  created
+  drafted
+  published
+}
+
 // -------------------------------------------------------- identity --
 
 model User {
@@ -292,6 +301,7 @@ model Club {
   prospects        Prospect[]
   assets           Asset[]
   libraryDocuments LibraryDocument[]
+  plannerIdeas     PlannerIdea[]
   inventoryItems   InventoryItem[]
   transactions     Transaction[]
   budgetLines      BudgetLine[]
@@ -701,6 +711,34 @@ model LibraryDocument {
   club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
 
   @@index([clubId, createdAt])
+}
+
+/// One idea pinned to one calendar day on the Library › Planner board.
+///
+/// `day` is date-only and stored as `String` for the same reason as
+/// `Transaction.date`: the planner is a calendar surface, and giving the
+/// column timezone semantics would make "which cell does this land in"
+/// depend on the reader's offset. The month query is a plain string range
+/// (`gte`/`lte`) against the yyyy-mm-dd form, which sorts lexicographically.
+model PlannerIdea {
+  id     String @id @default(cuid())
+  clubId String
+  /// yyyy-mm-dd — the day cell this idea belongs to.
+  day    String
+  title  String
+  body   String @db.Text
+  /// `[{ uid, name }]`. Filenames only: the planner form holds attachments
+  /// client-side (`beforeUpload` returns `false`, so antd never posts the
+  /// bytes anywhere), and only the names were ever part of an idea. When a
+  /// real upload flow lands these become `LibraryDocument` references.
+  attachments Json              @default("[]")
+  status      PlannerIdeaStatus @default(created)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime?
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId, day])
 }
 
 // ------------------------------------------------------- inventory --

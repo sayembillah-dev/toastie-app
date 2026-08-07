@@ -2,8 +2,16 @@
 
 import { Paperclip, Plus, Trash } from '@phosphor-icons/react/dist/ssr';
 import type { UploadFile } from 'antd';
-import { Button, Input, Select, Typography, Upload } from 'antd';
+import { Button, Input, Select, Skeleton, Typography, Upload } from 'antd';
 import { useState } from 'react';
+
+import type { CreatePlannerIdeaInput, IdeaStatus, PlannerIdea } from '@/lib/library/planner';
+import {
+  IDEA_STATUS_ORDER,
+  PLANNER_IDEA_ATTACHMENTS_MAX,
+  PLANNER_IDEA_BODY_MAX,
+  PLANNER_IDEA_TITLE_MAX,
+} from '@/lib/library/planner';
 
 const { TextArea } = Input;
 const { Paragraph } = Typography;
@@ -12,30 +20,13 @@ const { Paragraph } = Typography;
  * lines feels roughly like a card preview without dominating the list. */
 const BODY_CLAMP_ROWS = 3;
 
-export type IdeaStatus = 'created' | 'drafted' | 'published';
-
-export interface IdeaAttachment {
-  uid: string;
-  name: string;
-}
-
-export interface Idea {
-  id: string;
-  title: string;
-  body: string;
-  attachments: IdeaAttachment[];
-  status: IdeaStatus;
-}
-
-/** Ordered so the Select dropdown reads as a progression: fresh → in
- * progress → shipped. Dot tones are Tailwind defaults so the palette isn't
- * dependent on a status token that doesn't yet exist in the theme. */
+/** Dot tones are Tailwind defaults so the palette isn't dependent on a status
+ * token that doesn't yet exist in the theme. */
 const STATUS_META: Record<IdeaStatus, { label: string; dot: string }> = {
   created: { label: 'Created', dot: 'bg-slate-400' },
   drafted: { label: 'Drafted', dot: 'bg-amber-500' },
   published: { label: 'Published', dot: 'bg-emerald-500' },
 };
-const STATUS_ORDER: IdeaStatus[] = ['created', 'drafted', 'published'];
 
 function StatusOptionLabel({ status }: { status: IdeaStatus }) {
   const meta = STATUS_META[status];
@@ -47,70 +38,99 @@ function StatusOptionLabel({ status }: { status: IdeaStatus }) {
   );
 }
 
-const STATUS_OPTIONS = STATUS_ORDER.map((status) => ({
+const STATUS_OPTIONS = IDEA_STATUS_ORDER.map((status) => ({
   value: status,
   label: <StatusOptionLabel status={status} />,
 }));
 
 interface PlannerDayPanelProps {
-  ideas: Idea[];
-  /* Form supplies the mutable fields; parent stamps id + initial status so
-   * the panel stays agnostic of persistence and defaulting concerns. */
-  onAdd: (idea: Omit<Idea, 'id' | 'status'>) => void;
+  ideas: PlannerIdea[];
+  /** True while the month's ideas are still in flight — the list shows a
+   * skeleton rather than the "No ideas yet" empty state, which would
+   * otherwise flash on every drawer open. */
+  loading?: boolean;
+  /** False for viewers with read-only `library` access: the Add button and
+   * every per-card control disappear rather than failing with a 403. */
+  canMutate?: boolean;
+  /* The form supplies the mutable fields; the parent stamps the day and
+   * persists, so the panel stays agnostic of the endpoint. Resolves `true`
+   * when the write landed — the form only collapses on success, so a failed
+   * save doesn't discard what the user typed. */
+  onAdd: (idea: Omit<CreatePlannerIdeaInput, 'day'>) => Promise<boolean>;
   onRemove: (id: string) => void;
   onStatusChange: (id: string, status: IdeaStatus) => void;
 }
 
 /** Right-drawer body for a selected day. Two modes: a list of ideas with an
  * Add button, and an inline form that collapses back to the list on save or
- * cancel. The parent owns the ideas array so state survives day switches. */
-export function PlannerDayPanel({ ideas, onAdd, onRemove, onStatusChange }: PlannerDayPanelProps) {
+ * cancel. */
+export function PlannerDayPanel({
+  ideas,
+  loading = false,
+  canMutate = true,
+  onAdd,
+  onRemove,
+  onStatusChange,
+}: PlannerDayPanelProps) {
   const [adding, setAdding] = useState(false);
 
   return (
     <div className="flex flex-col gap-3">
-      {adding ? (
-        <IdeaForm
-          onSave={(idea) => {
-            onAdd(idea);
-            setAdding(false);
-          }}
-          onCancel={() => setAdding(false)}
-        />
-      ) : (
-        <Button block icon={<Plus size={14} />} onClick={() => setAdding(true)}>
-          Add idea
-        </Button>
-      )}
+      {canMutate &&
+        (adding ? (
+          <IdeaForm
+            onSave={async (idea) => {
+              const saved = await onAdd(idea);
+              if (saved) setAdding(false);
+            }}
+            onCancel={() => setAdding(false)}
+          />
+        ) : (
+          <Button block icon={<Plus size={14} />} onClick={() => setAdding(true)}>
+            Add idea
+          </Button>
+        ))}
 
-      <IdeasList ideas={ideas} onRemove={onRemove} onStatusChange={onStatusChange} />
+      <IdeasList
+        ideas={ideas}
+        loading={loading}
+        canMutate={canMutate}
+        onRemove={onRemove}
+        onStatusChange={onStatusChange}
+      />
     </div>
   );
 }
 
 interface IdeaFormProps {
-  onSave: (idea: Omit<Idea, 'id' | 'status'>) => void;
+  onSave: (idea: Omit<CreatePlannerIdeaInput, 'day'>) => Promise<void>;
   onCancel: () => void;
 }
 
 /** Inline card form. Attachments are captured locally — `beforeUpload`
- * returns `false` so antd never posts them anywhere; only the file names
- * are snapshotted into the idea on save. */
+ * returns `false` so antd never posts them anywhere; only the file names are
+ * persisted with the idea. */
 function IdeaForm({ onSave, onCancel }: IdeaFormProps) {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [fileList, setFileList] = useState<UploadFile[]>([]);
+  const [saving, setSaving] = useState(false);
 
   const trimmedTitle = title.trim();
-  const canSave = trimmedTitle.length > 0;
+  const canSave = trimmedTitle.length > 0 && !saving;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!canSave) return;
-    onSave({
-      title: trimmedTitle,
-      body: body.trim(),
-      attachments: fileList.map((file) => ({ uid: file.uid, name: file.name })),
-    });
+    setSaving(true);
+    try {
+      await onSave({
+        title: trimmedTitle,
+        body: body.trim(),
+        attachments: fileList.map((file) => ({ uid: file.uid, name: file.name })),
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -119,30 +139,43 @@ function IdeaForm({ onSave, onCancel }: IdeaFormProps) {
         placeholder="Idea title"
         value={title}
         onChange={(event) => setTitle(event.target.value)}
+        maxLength={PLANNER_IDEA_TITLE_MAX}
+        disabled={saving}
         autoFocus
       />
       <TextArea
         placeholder="Notes"
         value={body}
         onChange={(event) => setBody(event.target.value)}
+        maxLength={PLANNER_IDEA_BODY_MAX}
         rows={3}
         autoSize={{ minRows: 3, maxRows: 8 }}
+        disabled={saving}
       />
       <Upload
         multiple
         beforeUpload={() => false}
         fileList={fileList}
-        onChange={(info) => setFileList(info.fileList)}
+        /* Trim to the server's cap here rather than letting the POST come
+         * back a 400 — the extra files were never uploaded anyway. */
+        onChange={(info) => setFileList(info.fileList.slice(0, PLANNER_IDEA_ATTACHMENTS_MAX))}
+        disabled={saving}
       >
-        <Button size="small" icon={<Paperclip size={14} />}>
+        <Button size="small" icon={<Paperclip size={14} />} disabled={saving}>
           Attach files
         </Button>
       </Upload>
       <div className="mt-1 flex justify-end gap-2">
-        <Button size="small" onClick={onCancel}>
+        <Button size="small" onClick={onCancel} disabled={saving}>
           Cancel
         </Button>
-        <Button size="small" type="primary" disabled={!canSave} onClick={handleSave}>
+        <Button
+          size="small"
+          type="primary"
+          disabled={!canSave}
+          loading={saving}
+          onClick={handleSave}
+        >
           Save
         </Button>
       </div>
@@ -151,12 +184,21 @@ function IdeaForm({ onSave, onCancel }: IdeaFormProps) {
 }
 
 interface IdeasListProps {
-  ideas: Idea[];
+  ideas: PlannerIdea[];
+  loading: boolean;
+  canMutate: boolean;
   onRemove: (id: string) => void;
   onStatusChange: (id: string, status: IdeaStatus) => void;
 }
 
-function IdeasList({ ideas, onRemove, onStatusChange }: IdeasListProps) {
+function IdeasList({ ideas, loading, canMutate, onRemove, onStatusChange }: IdeasListProps) {
+  if (loading && ideas.length === 0) {
+    return (
+      <div className="rounded-lg border border-line p-3">
+        <Skeleton active title={false} paragraph={{ rows: 3 }} />
+      </div>
+    );
+  }
   if (ideas.length === 0) {
     return (
       <p className="rounded-lg border border-dashed border-line px-3 py-6 text-center text-sm text-ink-muted">
@@ -170,13 +212,15 @@ function IdeasList({ ideas, onRemove, onStatusChange }: IdeasListProps) {
         <li key={idea.id} className="rounded-lg border border-line p-3">
           <div className="flex items-start justify-between gap-2">
             <h3 className="text-sm font-medium text-ink">{idea.title}</h3>
-            <Button
-              type="text"
-              size="small"
-              aria-label={`Delete idea ${idea.title}`}
-              icon={<Trash size={14} className="text-ink-muted" />}
-              onClick={() => onRemove(idea.id)}
-            />
+            {canMutate ? (
+              <Button
+                type="text"
+                size="small"
+                aria-label={`Delete idea ${idea.title}`}
+                icon={<Trash size={14} className="text-ink-muted" />}
+                onClick={() => onRemove(idea.id)}
+              />
+            ) : null}
           </div>
           {idea.body ? (
             /* `!mb-0` cancels antd Typography's default paragraph margin so the
@@ -219,6 +263,7 @@ function IdeasList({ ideas, onRemove, onStatusChange }: IdeasListProps) {
               options={STATUS_OPTIONS}
               aria-label={`Status for ${idea.title}`}
               popupMatchSelectWidth={false}
+              disabled={!canMutate}
             />
           </div>
         </li>

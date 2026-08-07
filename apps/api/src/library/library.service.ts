@@ -1,4 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { can, type PermissionSubject } from '@toastly/access';
 
 import { ActivityService } from '@/activity';
@@ -10,13 +11,16 @@ import type {
   UpdateAssetDto,
   UpdateDocumentDto,
 } from './dto/library.dto';
+import type { CreatePlannerIdeaDto, UpdatePlannerIdeaDto } from './dto/planner.dto';
 import {
   type AssetsPageWire,
   type AssetWire,
   type DocumentsPageWire,
   type DocumentWire,
+  type PlannerIdeaWire,
   toAssetWire,
   toDocumentWire,
+  toPlannerIdeaWire,
 } from './serializers';
 
 const ASSETS_PAGE_SIZE = 12;
@@ -305,6 +309,136 @@ export class LibraryService {
           action: 'deleted a document',
           summary: `Deleted document "${existing.title}"`,
           entityType: 'document',
+          entityId: existing.id,
+        },
+        tx,
+      );
+    });
+    return null;
+  }
+
+  /** ---------------------------------------------------------- planner -- */
+
+  /** Every idea whose day falls inside `[from, to]` inclusive. The planner
+   * asks for the whole visible calendar grid in one call rather than paging:
+   * a month of ideas is small, and the cell markers need the entire range up
+   * front to render counts. */
+  async listIdeas(
+    subject: PermissionSubject,
+    clubId: string,
+    from: string,
+    to: string,
+  ): Promise<PlannerIdeaWire[]> {
+    this.assertLibrary(subject, clubId, 'read');
+    const rows = await this.prisma.plannerIdea.findMany({
+      where: { clubId, day: { gte: from, lte: to } },
+      // Oldest-first inside a day so a day's list keeps the order the ideas
+      // were added in — the panel appends, so this matches what the user saw
+      // before the refresh.
+      orderBy: [{ day: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map(toPlannerIdeaWire);
+  }
+
+  async createIdea(
+    subject: PermissionSubject,
+    clubId: string,
+    actorMembershipId: string | null,
+    dto: CreatePlannerIdeaDto,
+  ): Promise<PlannerIdeaWire> {
+    this.assertLibrary(subject, clubId, 'create');
+    const row = await this.prisma.$transaction(async (tx) => {
+      const idea = await tx.plannerIdea.create({
+        data: {
+          clubId,
+          day: dto.day,
+          title: dto.title.trim(),
+          body: dto.body?.trim() ?? '',
+          attachments: (dto.attachments ?? []) as unknown as Prisma.InputJsonValue,
+        },
+      });
+      await this.activity.record(
+        {
+          clubId,
+          actorMembershipId,
+          category: 'library',
+          action: 'added a planner idea',
+          summary: `Added "${idea.title}" to the planner for ${idea.day}`,
+          entityType: 'plannerIdea',
+          entityId: idea.id,
+        },
+        tx,
+      );
+      return idea;
+    });
+    return toPlannerIdeaWire(row);
+  }
+
+  async updateIdea(
+    subject: PermissionSubject,
+    ideaId: string,
+    actorMembershipId: string | null,
+    dto: UpdatePlannerIdeaDto,
+  ): Promise<PlannerIdeaWire> {
+    const existing = await this.prisma.plannerIdea.findUnique({ where: { id: ideaId } });
+    if (!existing) throw new NotFoundException(`No planner idea with id "${ideaId}"`);
+    this.assertLibrary(subject, existing.clubId, 'update');
+
+    const row = await this.prisma.$transaction(async (tx) => {
+      const idea = await tx.plannerIdea.update({
+        where: { id: ideaId },
+        data: {
+          ...(dto.day !== undefined ? { day: dto.day } : {}),
+          ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
+          ...(dto.body !== undefined ? { body: dto.body.trim() } : {}),
+          ...(dto.attachments !== undefined
+            ? { attachments: dto.attachments as unknown as Prisma.InputJsonValue }
+            : {}),
+          ...(dto.status !== undefined ? { status: dto.status } : {}),
+          updatedAt: new Date(),
+        },
+      });
+      await this.activity.record(
+        {
+          clubId: idea.clubId,
+          actorMembershipId,
+          category: 'library',
+          action: 'updated a planner idea',
+          // A status flip is the overwhelmingly common edit, so it gets the
+          // specific line; anything else collapses to the generic one.
+          summary:
+            dto.status !== undefined
+              ? `Moved "${idea.title}" to ${idea.status}`
+              : `Updated planner idea "${idea.title}"`,
+          entityType: 'plannerIdea',
+          entityId: idea.id,
+        },
+        tx,
+      );
+      return idea;
+    });
+    return toPlannerIdeaWire(row);
+  }
+
+  async deleteIdea(
+    subject: PermissionSubject,
+    ideaId: string,
+    actorMembershipId: string | null,
+  ): Promise<null> {
+    const existing = await this.prisma.plannerIdea.findUnique({ where: { id: ideaId } });
+    if (!existing) throw new NotFoundException(`No planner idea with id "${ideaId}"`);
+    this.assertLibrary(subject, existing.clubId, 'delete');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.plannerIdea.delete({ where: { id: ideaId } });
+      await this.activity.record(
+        {
+          clubId: existing.clubId,
+          actorMembershipId,
+          category: 'library',
+          action: 'deleted a planner idea',
+          summary: `Deleted planner idea "${existing.title}"`,
+          entityType: 'plannerIdea',
           entityId: existing.id,
         },
         tx,

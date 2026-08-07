@@ -45,6 +45,11 @@ import type {
   UpdateDocumentInput,
 } from '@/lib/library/documents';
 import { DOCUMENTS_PAGE_SIZE } from '@/lib/library/documents';
+import type {
+  CreatePlannerIdeaInput,
+  PlannerIdea,
+  UpdatePlannerIdeaInput,
+} from '@/lib/library/planner';
 import type { AhCounterEntry } from '@/lib/meetings/ah-counter-reports';
 import type {
   CreateMeetingInput,
@@ -122,6 +127,7 @@ export const toastlyApi = createApi({
     'VisitLog',
     'Asset',
     'Document',
+    'PlannerIdea',
     'Checklist',
     'InventoryItem',
     'Transaction',
@@ -802,6 +808,98 @@ export const toastlyApi = createApi({
       },
       invalidatesTags: [
         { type: 'Document', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    /* Planner ideas come back as a flat list for the whole visible calendar
+     * grid — a month's worth is small, and the day-cell markers need every
+     * day in the range at once, so paging would only add round-trips. Each
+     * (from, to) window is its own cache entry; mutations invalidate the
+     * LIST tag so every loaded month refetches. */
+    listPlannerIdeas: build.query<PlannerIdea[], { from: string; to: string }>({
+      query: ({ from, to }) => {
+        const params = new URLSearchParams({ from, to });
+        return { url: `/planner/ideas?${params.toString()}`, method: 'GET' };
+      },
+      providesTags: (ideas) => [
+        { type: 'PlannerIdea' as const, id: 'LIST' },
+        ...(ideas ?? []).map((idea) => ({ type: 'PlannerIdea' as const, id: idea.id })),
+      ],
+    }),
+
+    createPlannerIdea: build.mutation<PlannerIdea, CreatePlannerIdeaInput>({
+      query: (body) => ({ url: '/planner/ideas', method: 'POST', body }),
+      invalidatesTags: [
+        { type: 'PlannerIdea', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    /* Optimistic across every cached month window: the status dropdown should
+     * settle in the same beat it is clicked, and a failed write rolls the
+     * pill back rather than leaving the UI ahead of the database. */
+    updatePlannerIdea: build.mutation<PlannerIdea, { ideaId: string } & UpdatePlannerIdeaInput>({
+      query: ({ ideaId, ...body }) => ({
+        url: `/planner/ideas/${ideaId}`,
+        method: 'PATCH',
+        body,
+      }),
+      onQueryStarted: async ({ ideaId, ...changes }, { dispatch, getState, queryFulfilled }) => {
+        const affected = toastlyApi.util.selectInvalidatedBy(getState(), [
+          { type: 'PlannerIdea', id: 'LIST' },
+        ]);
+        const patches = affected
+          .filter((entry) => entry.endpointName === 'listPlannerIdeas')
+          .map((entry) =>
+            dispatch(
+              toastlyApi.util.updateQueryData(
+                'listPlannerIdeas',
+                entry.originalArgs as { from: string; to: string },
+                (draft) => {
+                  const idea = draft.find((item) => item.id === ideaId);
+                  if (idea) Object.assign(idea, changes);
+                },
+              ),
+            ),
+          );
+        try {
+          await queryFulfilled;
+        } catch {
+          for (const patch of patches) patch.undo();
+        }
+      },
+      invalidatesTags: (_idea, _error, { ideaId }) => [
+        { type: 'PlannerIdea', id: ideaId },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    deletePlannerIdea: build.mutation<null, string>({
+      query: (ideaId) => ({ url: `/planner/ideas/${ideaId}`, method: 'DELETE' }),
+      onQueryStarted: async (ideaId, { dispatch, getState, queryFulfilled }) => {
+        const affected = toastlyApi.util.selectInvalidatedBy(getState(), [
+          { type: 'PlannerIdea', id: 'LIST' },
+        ]);
+        const patches = affected
+          .filter((entry) => entry.endpointName === 'listPlannerIdeas')
+          .map((entry) =>
+            dispatch(
+              toastlyApi.util.updateQueryData(
+                'listPlannerIdeas',
+                entry.originalArgs as { from: string; to: string },
+                (draft) => draft.filter((idea) => idea.id !== ideaId),
+              ),
+            ),
+          );
+        try {
+          await queryFulfilled;
+        } catch {
+          for (const patch of patches) patch.undo();
+        }
+      },
+      invalidatesTags: [
+        { type: 'PlannerIdea', id: 'LIST' },
         { type: 'ActivityLog', id: 'LIST' },
       ],
     }),
@@ -1657,6 +1755,10 @@ export const {
   useCreateDocumentMutation,
   useUpdateDocumentMutation,
   useDeleteDocumentMutation,
+  useListPlannerIdeasQuery,
+  useCreatePlannerIdeaMutation,
+  useUpdatePlannerIdeaMutation,
+  useDeletePlannerIdeaMutation,
   useGetChecklistQuery,
   useCreateChecklistItemMutation,
   useUpdateChecklistItemMutation,

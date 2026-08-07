@@ -1,4 +1,8 @@
-import type { Asset as AssetRow, LibraryDocument as LibraryDocumentRow } from '@prisma/client';
+import type {
+  Asset as AssetRow,
+  LibraryDocument as LibraryDocumentRow,
+  PlannerIdea as PlannerIdeaRow,
+} from '@prisma/client';
 
 /** Wire shape matches the web `lib/library/assets.ts` `Asset` interface. */
 export interface AssetWire {
@@ -69,4 +73,51 @@ export interface DocumentsPageWire {
   items: DocumentWire[];
   total: number;
   nextOffset: number | null;
+}
+
+/** Wire shape matches the web `lib/library/planner.ts` `PlannerIdea`
+ * interface. */
+export interface PlannerAttachmentWire {
+  uid: string;
+  name: string;
+}
+
+export interface PlannerIdeaWire {
+  id: string;
+  clubId: string;
+  day: string;
+  title: string;
+  body: string;
+  attachments: PlannerAttachmentWire[];
+  status: 'created' | 'drafted' | 'published';
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export function toPlannerIdeaWire(row: PlannerIdeaRow): PlannerIdeaWire {
+  const wire: PlannerIdeaWire = {
+    id: row.id,
+    clubId: row.clubId,
+    day: row.day,
+    title: row.title,
+    body: row.body,
+    attachments: parsePlannerAttachments(row.attachments),
+    status: row.status,
+    createdAt: row.createdAt.toISOString(),
+  };
+  if (row.updatedAt) wire.updatedAt = row.updatedAt.toISOString();
+  return wire;
+}
+
+/** The Json column is `unknown` as far as the type system is concerned, so
+ * every entry is re-checked on the way out. A row written by an older shape
+ * degrades to an empty list rather than crashing the whole month's fetch. */
+function parsePlannerAttachments(value: unknown): PlannerAttachmentWire[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (typeof entry !== 'object' || entry === null) return [];
+    const { uid, name } = entry as { uid?: unknown; name?: unknown };
+    if (typeof uid !== 'string' || typeof name !== 'string') return [];
+    return [{ uid, name }];
+  });
 }

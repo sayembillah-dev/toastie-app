@@ -18,13 +18,19 @@ import {
   UpdateAssetDto,
   UpdateDocumentDto,
 } from './dto/library.dto';
+import { CreatePlannerIdeaDto, UpdatePlannerIdeaDto } from './dto/planner.dto';
 import { LibraryService } from './library.service';
 import {
   type AssetsPageWire,
   type AssetWire,
   type DocumentsPageWire,
   type DocumentWire,
+  type PlannerIdeaWire,
 } from './serializers';
+
+/** yyyy-mm-dd. Mirrors the DTO guard so a bad `from`/`to` on the list query
+ * is a 400 rather than a silently empty month. */
+const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 @Controller()
 export class LibraryController {
@@ -163,6 +169,74 @@ export class LibraryController {
       clubId ? actorMembershipIdFor(ctx, clubId) : null,
     );
   }
+
+  /** ----------------------------------------------------- planner -- */
+
+  @Requires('library', 'read')
+  @Get('planner/ideas')
+  listPlannerIdeas(
+    @CurrentContext() ctx: RequestContext,
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ): Promise<PlannerIdeaWire[]> {
+    const clubId = requireClubContext(ctx);
+    return this.library.listIdeas(
+      ctx.subject,
+      clubId,
+      requireDay(from, 'from'),
+      requireDay(to, 'to'),
+    );
+  }
+
+  @Requires('library', 'create')
+  @Post('planner/ideas')
+  createPlannerIdea(
+    @CurrentContext() ctx: RequestContext,
+    @Body() dto: CreatePlannerIdeaDto,
+  ): Promise<PlannerIdeaWire> {
+    const clubId = requireClubContext(ctx);
+    return this.library.createIdea(ctx.subject, clubId, actorMembershipIdFor(ctx, clubId), dto);
+  }
+
+  @Requires('library', 'update')
+  @Patch('planner/ideas/:ideaId')
+  updatePlannerIdea(
+    @CurrentContext() ctx: RequestContext,
+    @Param('ideaId') ideaId: string,
+    @Body() dto: UpdatePlannerIdeaDto,
+  ): Promise<PlannerIdeaWire> {
+    const clubId = ctx.clubId;
+    return this.library.updateIdea(
+      ctx.subject,
+      ideaId,
+      clubId ? actorMembershipIdFor(ctx, clubId) : null,
+      dto,
+    );
+  }
+
+  @Requires('library', 'delete')
+  @Delete('planner/ideas/:ideaId')
+  deletePlannerIdea(
+    @CurrentContext() ctx: RequestContext,
+    @Param('ideaId') ideaId: string,
+  ): Promise<null> {
+    const clubId = ctx.clubId;
+    return this.library.deleteIdea(
+      ctx.subject,
+      ideaId,
+      clubId ? actorMembershipIdFor(ctx, clubId) : null,
+    );
+  }
+}
+
+function requireDay(value: string | undefined, param: string): string {
+  if (!value || !DAY_PATTERN.test(value)) {
+    throw new BadRequestException({
+      code: 'INVALID_DAY',
+      message: `"${param}" must be a yyyy-mm-dd date`,
+    });
+  }
+  return value;
 }
 
 function requireClubContext(ctx: RequestContext): string {
