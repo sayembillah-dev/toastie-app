@@ -7,6 +7,7 @@ import type { HistoryEvent, MemberStats } from '@/lib/education/history';
 import type {
   CreateMemberInput,
   Member,
+  OfficerRole,
   StartPathwayInput,
   UpdateMemberInput,
 } from '@/lib/education/members';
@@ -1344,6 +1345,19 @@ export const toastlyApi = createApi({
         { type: 'PlatformUser', id: 'LIST' },
       ],
     }),
+
+    /* Direct-provision — creates the account and (optionally) claims a
+     * Membership in one step. Never echoes the password back; the caller's
+     * own form already holds it for the credentials card it renders on
+     * success. */
+    createPlatformUser: build.mutation<CreatePlatformUserResult, CreatePlatformUserInput>({
+      query: (body) => ({ url: '/users', method: 'POST', body }),
+      invalidatesTags: [
+        { type: 'PlatformUser', id: 'LIST' },
+        { type: 'Member', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
   }),
 });
 
@@ -1369,6 +1383,27 @@ export interface PlatformUsersPage {
 export interface ListPlatformUsersArgs {
   search?: string;
   page?: number;
+}
+
+export interface CreatePlatformUserInput {
+  phone: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  /** Omit to create a bare account with no club membership. */
+  clubId?: string;
+  /** Only meaningful alongside `clubId`. Absent/empty → `['Member']`. */
+  roles?: OfficerRole[];
+  /** Only meaningful alongside `clubId`. */
+  isClubAdmin?: boolean;
+}
+
+export interface CreatePlatformUserResult extends PlatformUser {
+  clubId: string | null;
+  clubName: string | null;
+  roles: OfficerRole[];
+  isClubAdmin: boolean;
 }
 
 export const {
@@ -1462,4 +1497,5 @@ export const {
   useListPlatformUsersQuery,
   useSetPlatformUserStatusMutation,
   useSetPlatformUserAdminMutation,
+  useCreatePlatformUserMutation,
 } = toastlyApi;

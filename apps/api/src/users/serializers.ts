@@ -1,5 +1,7 @@
 import type { User } from '@prisma/client';
 
+import type { OfficerRole } from '@/memberships';
+
 /** Wire shape returned by `/users` — the Super Admin's cross-tenant view.
  * Never returned by any other endpoint (which would leak cross-club data).
  * `passwordHash` is deliberately omitted; `phone` is exposed because the
@@ -43,3 +45,17 @@ export function toUserWire(
 }
 
 export const USERS_PAGE_SIZE = 25;
+
+/** Response for `POST /users`. Deliberately does NOT echo the password
+ * back — the caller (the SA's own form) already has it in memory, and an
+ * API response is the wrong place for a second copy of a plaintext
+ * credential to end up in logs or browser devtools history. The club/role
+ * fields are included so the client's "copy these credentials" card is
+ * built from what the server actually persisted, not what the form
+ * assumed would be accepted. */
+export interface CreateUserResultWire extends UserWire {
+  clubId: string | null;
+  clubName: string | null;
+  roles: OfficerRole[];
+  isClubAdmin: boolean;
+}

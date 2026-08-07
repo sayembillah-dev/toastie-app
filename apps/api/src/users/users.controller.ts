@@ -1,9 +1,14 @@
-import { Body, Controller, Get, Param, Patch, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 
 import { CurrentContext, type RequestContext, Requires } from '@/access';
 
-import { ListUsersQueryDto, SetUserAdminDto, SetUserStatusDto } from './dto/users.dto';
-import { type UsersPageWire, type UserWire } from './serializers';
+import {
+  CreateUserDto,
+  ListUsersQueryDto,
+  SetUserAdminDto,
+  SetUserStatusDto,
+} from './dto/users.dto';
+import { type CreateUserResultWire, type UsersPageWire, type UserWire } from './serializers';
 import { UsersService } from './users.service';
 
 /** Cross-tenant User management. Only reachable via the Super Admin
@@ -23,6 +28,18 @@ export class UsersController {
       search: query.search,
       page: query.page,
     });
+  }
+
+  /** Direct-provision: creates the account and (optionally) claims a
+   * Membership in one step — the SA hands the phone + password to the
+   * person out of band, there's no accept-invite round trip. */
+  @Requires('user', 'create')
+  @Post()
+  create(
+    @CurrentContext() ctx: RequestContext,
+    @Body() dto: CreateUserDto,
+  ): Promise<CreateUserResultWire> {
+    return this.users.create(ctx.subject, dto);
   }
 
   @Requires('user', 'update')

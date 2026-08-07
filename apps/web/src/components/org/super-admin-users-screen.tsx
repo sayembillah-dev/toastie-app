@@ -1,6 +1,6 @@
 'use client';
 
-import { Crown, MagnifyingGlass, ShieldCheck } from '@phosphor-icons/react/dist/ssr';
+import { Crown, MagnifyingGlass, ShieldCheck, UserPlus } from '@phosphor-icons/react/dist/ssr';
 import { App, Button, Dropdown, Input, Pagination, Skeleton, Tag } from 'antd';
 import { useMemo, useState } from 'react';
 
@@ -14,6 +14,8 @@ import {
 import { getApiErrorMessage } from '@/store/api-error';
 import { useAppSelector } from '@/store/hooks';
 import { selectSessionUser } from '@/store/session-slice';
+
+import { CreateUserModal } from './create-user-modal';
 
 const DATE_FMT = new Intl.DateTimeFormat('en-GB', {
   day: 'numeric',
@@ -36,6 +38,7 @@ export function SuperAdminUsersScreen() {
   const { data, isFetching, isError, error, refetch } = useListPlatformUsersQuery(args);
   const [setStatus, statusMut] = useSetPlatformUserStatusMutation();
   const [setAdmin, adminMut] = useSetPlatformUserAdminMutation();
+  const [createOpen, setCreateOpen] = useState(false);
 
   const rows = data?.items ?? [];
   const total = data?.total ?? 0;
@@ -94,12 +97,21 @@ export function SuperAdminUsersScreen() {
       />
 
       <div className="mx-auto flex max-w-6xl flex-col gap-4">
-        <header className="flex flex-col gap-1">
-          <h1 className="text-lg font-semibold text-ink">Users</h1>
-          <p className="text-sm text-ink-soft">
-            Every account across the platform. Suspend or promote from here — role and membership
-            changes still live on each club&rsquo;s roster.
-          </p>
+        <header className="flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-lg font-semibold text-ink">Users</h1>
+            <p className="text-sm text-ink-soft">
+              Every account across the platform. Suspend or promote from here — role and membership
+              changes still live on each club&rsquo;s roster.
+            </p>
+          </div>
+          <Button
+            type="primary"
+            icon={<UserPlus size={15} weight="bold" />}
+            onClick={() => setCreateOpen(true)}
+          >
+            Add user
+          </Button>
         </header>
 
         <div className="flex items-center gap-2">
@@ -224,6 +236,8 @@ export function SuperAdminUsersScreen() {
           </div>
         ) : null}
       </div>
+
+      <CreateUserModal open={createOpen} onClose={() => setCreateOpen(false)} />
     </>
   );
 }

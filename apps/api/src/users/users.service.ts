@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -7,9 +8,18 @@ import {
 import { Prisma } from '@prisma/client';
 import { can, type PermissionSubject } from '@toastly/access';
 
+import { TokenService } from '@/auth';
+import { type OfficerRole, toClubRoles } from '@/memberships';
 import { PrismaService } from '@/prisma';
 
-import { toUserWire, USERS_PAGE_SIZE, type UsersPageWire, type UserWire } from './serializers';
+import type { CreateUserDto } from './dto/users.dto';
+import {
+  type CreateUserResultWire,
+  toUserWire,
+  USERS_PAGE_SIZE,
+  type UsersPageWire,
+  type UserWire,
+} from './serializers';
 
 /** Cross-tenant User management, reachable only via the Super Admin
  * bypass — no club/org role grants `user:*`, so the `can()` check falls
@@ -18,7 +28,10 @@ import { toUserWire, USERS_PAGE_SIZE, type UsersPageWire, type UserWire } from '
  * already gates it. */
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tokens: TokenService,
+  ) {}
 
   async list(
     subject: PermissionSubject,
@@ -126,6 +139,85 @@ export class UsersService {
     return toUserWire(updated, updated._count.memberships, updated._count.orgAssignments);
   }
 
+  /** Super Admin's direct-provision flow: creates the `User` row and,
+   * when `clubId` is given, a `Membership` already claimed by that user
+   * — no separate accept-invite step, since the SA is vouching for the
+   * account directly. Both writes are one transaction so a failure
+   * partway through can't leave an unclaimed User with no membership
+   * when one was requested. */
+  async create(subject: PermissionSubject, dto: CreateUserDto): Promise<CreateUserResultWire> {
+    if (!can(subject, 'create', 'user')) {
+      throw new ForbiddenException({
+        code: 'PERMISSION_DENIED',
+        resource: 'user',
+        action: 'create',
+      });
+    }
+
+    const phone = normalisePhone(dto.phone);
+    const email = dto.email?.trim().toLowerCase() || null;
+    const passwordHash = await this.tokens.hashPassword(dto.password);
+    const firstName = dto.firstName.trim();
+    const lastName = dto.lastName.trim();
+
+    let club: { id: string; name: string } | null = null;
+    if (dto.clubId) {
+      club = await this.prisma.club.findUnique({
+        where: { id: dto.clubId },
+        select: { id: true, name: true },
+      });
+      if (!club) throw new NotFoundException(`No club with id "${dto.clubId}"`);
+    }
+
+    const roles: OfficerRole[] = dto.roles && dto.roles.length > 0 ? dto.roles : ['Member'];
+    const isClubAdmin = dto.isClubAdmin ?? false;
+
+    try {
+      const user = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.user.create({
+          data: { phone, email, passwordHash, firstName, lastName, status: 'active' },
+        });
+        if (club) {
+          await tx.membership.create({
+            data: {
+              clubId: club.id,
+              userId: created.id,
+              firstName,
+              lastName,
+              email,
+              roles: toClubRoles(roles),
+              isClubAdmin,
+              status: 'active',
+              grantOverrides: {},
+            },
+          });
+        }
+        return created;
+      });
+
+      return {
+        ...toUserWire(user, club ? 1 : 0, 0),
+        clubId: club?.id ?? null,
+        clubName: club?.name ?? null,
+        roles: club ? roles : [],
+        isClubAdmin: club ? isClubAdmin : false,
+      };
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const target = err.meta?.target;
+        const takenField = Array.isArray(target)
+          ? target.find((t) => t === 'email' || t === 'phone')
+          : typeof target === 'string' && (target === 'email' || target === 'phone')
+            ? target
+            : undefined;
+        throw new ConflictException({
+          code: takenField === 'email' ? 'EMAIL_TAKEN' : 'PHONE_TAKEN',
+        });
+      }
+      throw err;
+    }
+  }
+
   private async loadWithCounts(userId: string) {
     const row = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -134,4 +226,12 @@ export class UsersService {
     if (!row) throw new NotFoundException(`No user with id "${userId}"`);
     return row;
   }
+}
+
+/** Strip user-friendly whitespace and dashes before hitting the DB. Keeps
+ * the leading `+` (E.164 marker). Mirrors `AuthService`'s normalisation
+ * so a phone typed here and one typed at self-registration end up in the
+ * same canonical shape. */
+function normalisePhone(raw: string): string {
+  return raw.trim().replace(/[\s-]/g, '');
 }
