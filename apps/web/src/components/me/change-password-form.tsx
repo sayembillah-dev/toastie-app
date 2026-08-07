@@ -101,7 +101,7 @@ export function ChangePasswordForm() {
           name="newPassword"
           rules={[
             { required: true, message: 'New password is required' },
-            { min: 12, message: 'At least 12 characters' },
+            { min: 8, message: 'At least 8 characters' },
           ]}
         >
           <Input.Password autoComplete="new-password" size="large" />

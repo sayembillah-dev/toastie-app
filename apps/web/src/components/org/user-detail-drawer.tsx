@@ -368,7 +368,7 @@ function PasswordSection({ userId, firstName }: { userId: string; firstName: str
   const [justSet, setJustSet] = useState<string | null>(null);
   const [resetPassword, { isLoading }] = useResetPlatformUserPasswordMutation();
 
-  const passwordValid = password.trim().length >= 12;
+  const passwordValid = password.trim().length >= 8;
 
   async function handleReset() {
     if (!passwordValid) return;
@@ -445,7 +445,7 @@ function PasswordSection({ userId, firstName }: { userId: string; firstName: str
         />
       </div>
       <p className="text-xs text-ink-muted">
-        At least 12 characters. Every active session for this account will be signed out.
+        At least 8 characters. Every active session for this account will be signed out.
       </p>
       <div className="flex justify-end gap-2">
         <Button size="small" onClick={() => setExpanded(false)}>

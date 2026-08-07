@@ -175,7 +175,7 @@ function ModalBody({ onClose }: { onClose: () => void }) {
 
   const { firstName, lastName } = splitFullName(fullName);
   const phoneValid = /^\+?[0-9\s-]{8,20}$/.test(phone.trim());
-  const passwordValid = password.trim().length >= 12;
+  const passwordValid = password.trim().length >= 8;
   const nameValid = firstName.length > 0 && lastName.length > 0;
   const canSave =
     nameValid &&
@@ -281,7 +281,7 @@ function ModalBody({ onClose }: { onClose: () => void }) {
           />
         </div>
         <p className="text-xs text-ink-muted">
-          At least 12 characters. Shown once after creation — copy it before closing this dialog.
+          At least 8 characters. Shown once after creation — copy it before closing this dialog.
         </p>
       </div>
 
