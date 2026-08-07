@@ -6,6 +6,7 @@
     "seed": "ts-node --transpile-only prisma/seed.ts"
   },
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "nest start --watch",
     "build": "nest build",
     "start": "node dist/main.js",

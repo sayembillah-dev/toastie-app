@@ -11,3 +11,18 @@ fi
 # Prettier only ever sees Markdown/YAML; ESLint's startup is the only real cost,
 # and it is skipped entirely unless a web `.ts`/`.tsx` file is staged.
 pnpm exec lint-staged --concurrent false
+
+# Guard against apps/api/prisma/schema.prisma drifting from the generated
+# Prisma Client (missing model/enum exports, `Prisma.XWhereInput` errors,
+# etc.) — that class of bug only surfaces as a wall of `tsc` errors once
+# someone else pulls, since the generated client isn't committed. `prisma
+# generate` is ~100ms so we just always re-run it rather than detect
+# staleness, then typecheck the API. Scoped to apps/api file changes so
+# unrelated commits (docs, web-only, etc.) skip the cost entirely. There is
+# no CI in this repo yet, so this hook is the only backstop — do not remove
+# without adding an equivalent CI check.
+if ! git diff --cached --name-only --diff-filter=ACMR | grep -q '^apps/api/\(src\|prisma\)/'; then
+  exit 0
+fi
+
+pnpm --filter @toastly/api prisma:generate && pnpm --filter @toastly/api typecheck
