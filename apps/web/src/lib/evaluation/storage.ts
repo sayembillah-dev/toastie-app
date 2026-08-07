@@ -237,50 +237,105 @@ export async function submitEvaluation(
   return submission;
 }
 
+const EMPTY_SUBMISSIONS: StoredEvaluationSubmission[] = [];
+
+/* `useSyncExternalStore` compares snapshots with `Object.is`, so a getSnapshot
+ * that allocates a fresh array on every call looks "changed" every render —
+ * React (correctly) treats that as an infinite-loop footgun and errors. These
+ * two caches key on the raw localStorage bytes actually read, so a render
+ * that sees no write in between gets back the exact same array reference. */
+const submissionsCache = new Map<
+  string,
+  { raw: string | null; parsed: StoredEvaluationSubmission[] }
+>();
+const memberSubmissionsCache = new Map<
+  string,
+  { signature: string; parsed: StoredEvaluationSubmission[] }
+>();
+
 /** Read the submissions stored for one speaker slot. Empty array when the
- * key doesn't exist or the JSON is corrupt — never throws. */
+ * key doesn't exist or the JSON is corrupt — never throws. Returns the same
+ * array reference across calls until the underlying localStorage value
+ * actually changes — required for `useSyncExternalStore` (see
+ * `FeedbackBadge` in prepared-speakers-tab.tsx). */
 export function readSubmissions(
   meetingId: string,
   speakerId: string,
 ): StoredEvaluationSubmission[] {
-  if (typeof window === 'undefined') return [];
+  if (typeof window === 'undefined') return EMPTY_SUBMISSIONS;
+  const key = submissionsKey(meetingId, speakerId);
+  let raw: string | null;
   try {
-    const raw = window.localStorage.getItem(submissionsKey(meetingId, speakerId));
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as StoredEvaluationSubmission[];
-    return Array.isArray(parsed) ? parsed : [];
+    raw = window.localStorage.getItem(key);
   } catch {
-    return [];
+    raw = null;
   }
+
+  const cached = submissionsCache.get(key);
+  if (cached && cached.raw === raw) return cached.parsed;
+
+  let parsed: StoredEvaluationSubmission[] = EMPTY_SUBMISSIONS;
+  if (raw) {
+    try {
+      const value = JSON.parse(raw) as StoredEvaluationSubmission[];
+      if (Array.isArray(value)) parsed = value;
+    } catch {
+      /* Corrupt JSON — fall through with the empty default. */
+    }
+  }
+  submissionsCache.set(key, { raw, parsed });
+  return parsed;
 }
 
 /** Read every submission across every slot in this browser and return those
  * that were submitted for the given member. Used by the Me page — the caller
- * groups results by (meetingId, speakerId) themselves. */
+ * groups results by (meetingId, speakerId) themselves.
+ *
+ * Same stable-reference contract as `readSubmissions`: this scans every
+ * matching key, but only allocates a new result array when the combined
+ * content of those keys has actually changed since the last read for this
+ * `memberId`. */
 export function readSubmissionsForMember(memberId: string): StoredEvaluationSubmission[] {
-  if (typeof window === 'undefined') return [];
+  if (typeof window === 'undefined') return EMPTY_SUBMISSIONS;
   const prefix = `${KEY_PREFIX}:submissions:`;
-  const found: StoredEvaluationSubmission[] = [];
+  const entries: [string, string][] = [];
   try {
     for (let index = 0; index < window.localStorage.length; index += 1) {
       const key = window.localStorage.key(index);
       if (!key?.startsWith(prefix)) continue;
       const raw = window.localStorage.getItem(key);
       if (!raw) continue;
-      try {
-        const list = JSON.parse(raw) as StoredEvaluationSubmission[];
-        if (!Array.isArray(list)) continue;
-        for (const entry of list) {
-          if (entry.speakerMemberId === memberId) found.push(entry);
-        }
-      } catch {
-        /* Skip corrupt entries — one bad key shouldn't blank the whole feed. */
-      }
+      entries.push([key, raw]);
     }
   } catch {
-    /* localStorage inaccessible (private mode, quota errors, etc.). */
+    /* localStorage inaccessible (private mode, quota errors, etc.) — proceed
+     * with whatever was collected before the failure (likely nothing). */
   }
-  return found;
+  // Enumeration order across localStorage.key(i) isn't contractually
+  // guaranteed to be stable, so sort before hashing — otherwise two reads of
+  // the exact same data could produce different signatures and defeat the
+  // cache (or, worse, never converge).
+  entries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  const signature = entries.map(([key, raw]) => `${key}=${raw}`).join(' ');
+
+  const cached = memberSubmissionsCache.get(memberId);
+  if (cached && cached.signature === signature) return cached.parsed;
+
+  const found: StoredEvaluationSubmission[] = [];
+  for (const [, raw] of entries) {
+    try {
+      const list = JSON.parse(raw) as StoredEvaluationSubmission[];
+      if (!Array.isArray(list)) continue;
+      for (const entry of list) {
+        if (entry.speakerMemberId === memberId) found.push(entry);
+      }
+    } catch {
+      /* Skip corrupt entries — one bad key shouldn't blank the whole feed. */
+    }
+  }
+  const parsed = found.length > 0 ? found : EMPTY_SUBMISSIONS;
+  memberSubmissionsCache.set(memberId, { signature, parsed });
+  return parsed;
 }
 
 /** Subscribe to writes for a single speaker slot — used by the Prepared
