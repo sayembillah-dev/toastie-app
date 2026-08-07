@@ -17,6 +17,7 @@ import {
   Question,
   ShieldCheck,
   SidebarSimple,
+  SignOut,
   SquaresFour,
   UserCircle,
   Users,
@@ -24,15 +25,21 @@ import {
   X,
 } from '@phosphor-icons/react/dist/ssr';
 import type { Action, ResourceKey } from '@toastly/access';
-import { Avatar, Badge, Button, Drawer, Input, Layout, Menu } from 'antd';
+import { App, Avatar, Badge, Button, Drawer, Dropdown, Input, Layout, Menu } from 'antd';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Fragment, useMemo } from 'react';
 
+import { clearAuthStorage, readRefreshToken } from '@/lib/auth/token-storage';
 import { useCan } from '@/lib/permissions/use-can';
+import { toastlyApi, useAuthLogoutMutation } from '@/store/api';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { selectActiveContextKey, selectSessionUser } from '@/store/session-slice';
+import {
+  selectActiveContextKey,
+  selectSessionUser,
+  sessionUnauthenticated,
+} from '@/store/session-slice';
 import {
   mobileNavClosed,
   mobileNavOpened,
@@ -202,12 +209,15 @@ interface SidebarBodyProps {
   brandAction: React.ReactNode;
   /** Fires when a nav entry is followed, so the drawer can dismiss itself. */
   onNavigate?: () => void;
-  /** Which set of nav entries to render. Null means the sidebar is blank —
+  /** Which set of nav entries to render. Null means the nav list is blank —
    * org-tree scopes (Area, Division, District, Super Admin) navigate by
-   * breadcrumb and card drill-down and don't need a sidebar nav list. */
+   * breadcrumb and card drill-down and don't need a sidebar nav list. The
+   * Help/Notifications/Account block below still renders regardless — a
+   * blank nav list must never take the sign-out control down with it. */
   navEntries: NavEntry[] | null;
   /** Show the search bar above the nav. Only shown for the primary (club) nav. */
   showSearch?: boolean;
+  onLogout: () => void;
 }
 
 /** The sidebar's contents, independent of what is holding them — the desktop
@@ -221,6 +231,7 @@ function SidebarBody({
   onNavigate,
   navEntries,
   showSearch = true,
+  onLogout,
 }: SidebarBodyProps) {
   return (
     /* pt-2 matches the content panel's inset so the brand row and the
@@ -277,39 +288,53 @@ function SidebarBody({
               ),
             }))}
           />
-
-          {/* Everything past this point is pinned to the bottom of the sidebar. */}
-          <div className="mt-auto shrink-0 px-2 pb-3">
-            <SideRow Icon={Question} label="Help center" collapsed={collapsed} />
-            <SideRow
-              Icon={Bell}
-              label="Notifications"
-              collapsed={collapsed}
-              trailing={
-                notificationCount > 0 ? <Badge count={notificationCount} size="small" /> : null
-              }
-            />
-            {account ? (
-              <div
-                className={`mt-2 flex h-9 items-center rounded-lg ${
-                  collapsed ? 'justify-center' : 'gap-2.5 px-2.5'
-                }`}
-              >
-                <Avatar size={22} src={account.avatarUrl}>
-                  {account.name.charAt(0).toUpperCase()}
-                </Avatar>
-                {collapsed ? null : (
-                  <span className="truncate text-sm text-ink">{account.name}</span>
-                )}
-              </div>
-            ) : null}
-          </div>
         </>
       ) : null}
+
+      {/* Pinned to the bottom of the sidebar regardless of whether a nav
+       * list rendered above — a blank rail (org-tree scopes) must not take
+       * the sign-out control down with it. */}
+      <div className="mt-auto shrink-0 px-2 pb-3">
+        <SideRow Icon={Question} label="Help center" collapsed={collapsed} />
+        <SideRow
+          Icon={Bell}
+          label="Notifications"
+          collapsed={collapsed}
+          trailing={notificationCount > 0 ? <Badge count={notificationCount} size="small" /> : null}
+        />
+        {account ? (
+          <Dropdown
+            trigger={['click']}
+            placement={collapsed ? 'topLeft' : 'top'}
+            menu={{
+              items: [
+                {
+                  key: 'logout',
+                  label: 'Log out',
+                  icon: <SignOut size={15} />,
+                  onClick: onLogout,
+                },
+              ],
+            }}
+          >
+            <button
+              type="button"
+              title={collapsed ? account.name : undefined}
+              className={`mt-2 flex h-9 w-full items-center rounded-lg transition-colors hover:bg-fill ${
+                collapsed ? 'justify-center' : 'gap-2.5 px-2.5'
+              }`}
+            >
+              <Avatar size={22} src={account.avatarUrl}>
+                {account.name.charAt(0).toUpperCase()}
+              </Avatar>
+              {collapsed ? null : <span className="truncate text-sm text-ink">{account.name}</span>}
+            </button>
+          </Dropdown>
+        ) : null}
+      </div>
     </div>
   );
 }
-
 
 interface AppShellProps {
   children?: React.ReactNode;
@@ -353,6 +378,26 @@ export function AppShell({ children, actions, notificationCount = 0 }: AppShellP
     : undefined;
   const dispatch = useAppDispatch();
   const closeMobileNav = () => dispatch(mobileNavClosed());
+
+  const { message } = App.useApp();
+  const [authLogout] = useAuthLogoutMutation();
+  /* Best-effort server-side revoke (kills this refresh token's family), then
+   * unconditionally clear local state — a failed revoke call must never
+   * leave the user stuck signed in on their own machine. */
+  const handleLogout = async () => {
+    const refreshToken = readRefreshToken();
+    try {
+      if (refreshToken) await authLogout({ refreshToken }).unwrap();
+    } catch {
+      // Ignore — the token may already be expired/revoked server-side.
+    } finally {
+      clearAuthStorage();
+      dispatch(toastlyApi.util.resetApiState());
+      dispatch(sessionUnauthenticated());
+      message.success('Signed out');
+      router.replace('/login');
+    }
+  };
 
   /* Org dashboards navigate by breadcrumb and card drill-down — no sidebar
    * nav needed. Club Admin has its own three-entry nav; the primary nav is
@@ -412,6 +457,7 @@ export function AppShell({ children, actions, notificationCount = 0 }: AppShellP
           account={account}
           navEntries={navEntries}
           showSearch={isPrimaryNav}
+          onLogout={handleLogout}
           brandAction={
             <Button
               type="text"
@@ -443,6 +489,7 @@ export function AppShell({ children, actions, notificationCount = 0 }: AppShellP
           navEntries={navEntries}
           showSearch={isPrimaryNav}
           onNavigate={closeMobileNav}
+          onLogout={handleLogout}
           brandAction={
             <Button
               type="text"

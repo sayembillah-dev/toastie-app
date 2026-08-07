@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { writeAccessToken, writeRefreshToken, writeStoredContext } from '@/lib/auth/token-storage';
 import { useAuthLoginMutation } from '@/store/api';
 import { useAppDispatch } from '@/store/hooks';
-import { isContextKeyValid, sessionLoaded } from '@/store/session-slice';
+import { defaultRouteForContext, isContextKeyValid, sessionLoaded } from '@/store/session-slice';
 
 import toastieLogo from '../../../../assets/toastie.svg';
 
@@ -24,8 +24,11 @@ interface FormValues {
  *
  * Sign-in is phone + password (email is a contact field, not a credential
  * — see project_phone_auth memory). On success writes the token pair to
- * localStorage, hydrates the session slice, and pushes to `/` where
- * `AppFrame` picks between dashboard / onboarding based on memberships. */
+ * localStorage, hydrates the session slice, and pushes straight to the
+ * caller's default context's own dashboard (`/super-admin` for a Super
+ * Admin, `/area` etc. for a Director, `/` for a club member) — `/` itself
+ * has no built surface outside a club context, so routing everyone
+ * through it first would flash a blank page. */
 export default function LoginPage() {
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -49,7 +52,7 @@ export default function LoginPage() {
       if (contextKey) writeStoredContext(contextKey);
 
       dispatch(sessionLoaded({ payload: res.session, contextKey }));
-      router.replace('/');
+      router.replace(contextKey ? defaultRouteForContext(contextKey) : '/');
     } catch (err) {
       const code = extractErrorCode(err);
       setError(messageForCode(code));
