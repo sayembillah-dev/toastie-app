@@ -3,9 +3,10 @@
 import { Alert, Button, Form, Input, Typography } from 'antd';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
+import { safeNextPath } from '@/lib/auth/next-path';
 import { writeAccessToken, writeRefreshToken, writeStoredContext } from '@/lib/auth/token-storage';
 import { useAuthRegisterMutation } from '@/store/api';
 import { useAppDispatch } from '@/store/hooks';
@@ -29,6 +30,7 @@ interface FormValues {
  * which `AppFrame` recognises and swaps in the onboarding screen. */
 export default function RegisterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
   const [register, { isLoading }] = useAuthRegisterMutation();
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +56,8 @@ export default function RegisterPage() {
       if (contextKey) writeStoredContext(contextKey);
 
       dispatch(sessionLoaded({ payload: res.session, contextKey }));
-      router.replace('/');
+      const next = safeNextPath(searchParams.get('next'));
+      router.replace(next ?? '/');
     } catch (err) {
       const code = extractErrorCode(err);
       setError(messageForCode(code));

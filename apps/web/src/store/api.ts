@@ -299,8 +299,19 @@ export const toastlyApi = createApi({
       ],
     }),
 
-    convertInviteToMember: build.mutation<Member, string>({
-      query: (inviteId) => ({ url: `/invites/${inviteId}/convert`, method: 'POST' }),
+    /* Anonymous landing-page preview — matched by `isPublicUrl` in
+     * `routed-base-query.ts`, so no `Authorization` header goes out. Tells
+     * `/invite/:token` which club/role(s) the link grants (or that it's
+     * expired/used/revoked) before the visitor signs in. */
+    getPublicInvitePreview: build.query<InvitePreview, string>({
+      query: (token) => ({ url: `/public/invites/${token}`, method: 'GET' }),
+    }),
+
+    /* Authed accept — the caller isn't a member of the target club yet, so
+     * there's no club context to send; the invite's own clubId drives it
+     * server-side. */
+    acceptInvite: build.mutation<AcceptedInvite, string>({
+      query: (token) => ({ url: `/invites/${token}/accept`, method: 'POST' }),
       invalidatesTags: [
         { type: 'Invite', id: 'LIST' },
         { type: 'Member', id: 'LIST' },
@@ -1701,6 +1712,21 @@ export interface CredentialShare {
   password: string;
 }
 
+/** Wire shape from `GET /public/invites/:token` — what `/invite/:token`
+ * shows before the visitor signs in or signs up. */
+export interface InvitePreview {
+  state: 'valid' | 'expired' | 'accepted' | 'revoked';
+  clubName: string;
+  roles: OfficerRole[];
+}
+
+/** Response from `POST /invites/:token/accept` — enough for the accept page
+ * to switch context and redirect into the new club's dashboard. */
+export interface AcceptedInvite {
+  clubId: string;
+  clubName: string;
+}
+
 /** The Super Admin user-detail panel's edit form — every field optional,
  * a save only sends what changed. */
 export interface UpdatePlatformUserProfileInput {
@@ -1838,7 +1864,8 @@ export const {
   useGetInvitesQuery,
   useCreateInviteMutation,
   useRevokeInviteMutation,
-  useConvertInviteToMemberMutation,
+  useGetPublicInvitePreviewQuery,
+  useAcceptInviteMutation,
   useAuthLoginMutation,
   useAuthRegisterMutation,
   useAuthLogoutMutation,

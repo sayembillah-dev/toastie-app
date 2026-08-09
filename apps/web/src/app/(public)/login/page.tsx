@@ -3,9 +3,10 @@
 import { Alert, Button, Form, Input, Typography } from 'antd';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
+import { safeNextPath } from '@/lib/auth/next-path';
 import { writeAccessToken, writeRefreshToken, writeStoredContext } from '@/lib/auth/token-storage';
 import { useAuthLoginMutation } from '@/store/api';
 import { useAppDispatch } from '@/store/hooks';
@@ -31,6 +32,7 @@ interface FormValues {
  * through it first would flash a blank page. */
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
   const [login, { isLoading }] = useAuthLoginMutation();
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +54,11 @@ export default function LoginPage() {
       if (contextKey) writeStoredContext(contextKey);
 
       dispatch(sessionLoaded({ payload: res.session, contextKey }));
-      const destination = contextKey ? defaultRouteForContext(contextKey) : '/';
+      // `next` (e.g. `/invite/:token/accept`) wins over the caller's own
+      // context default — an invite link takes someone straight to the
+      // accept page regardless of what club they'd otherwise land on.
+      const next = safeNextPath(searchParams.get('next'));
+      const destination = next ?? (contextKey ? defaultRouteForContext(contextKey) : '/');
       // A temporary (admin-set) password — land on the "set your own"
       // prompt instead, carrying the real destination through so Skip (or
       // a successful change) still lands them where they were headed.

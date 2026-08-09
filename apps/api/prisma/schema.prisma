@@ -401,27 +401,24 @@ model OrgAssignment {
 // -------------------------------------------------------- onboarding --
 
 model Invite {
-  id              String       @id @default(cuid())
-  clubId          String
-  email           String
-  /// Optional roster names the admin typed on the invite form. Kept next to
-  /// the invite (rather than pre-created on a placeholder Membership) so an
-  /// invite never doubles the invitee in the members list; convert copies
-  /// them onto the new Membership.
-  firstName       String?
-  lastName        String?
-  roles           ClubRole[]
-  status          InviteStatus @default(pending)
-  /// sha256 of the emailed link token. The raw token is never stored.
-  tokenHash       String       @unique
-  /// Pre-created roster row an admin populated when sending the invite.
-  /// Accepting the invite claims this row (sets `Membership.userId`)
-  /// instead of creating a duplicate. Left null by default — the current
-  /// convert flow creates the Membership on accept.
-  membershipId    String?      @unique
+  id     String @id @default(cuid())
+  clubId String
+  /// Left null by the link-based invite flow (an admin picks role(s), not a
+  /// specific person). Only ever set by legacy rows created before that
+  /// flow existed.
+  email     String?
+  firstName String?
+  lastName  String?
+  roles     ClubRole[]
+  status    InviteStatus @default(pending)
+  /// Plaintext — unlike a password, this token has to be redisplayed to the
+  /// admin later (the pending-invites list re-shares the same link), which
+  /// a one-way hash can't support. Same tradeoff as `CredentialShare.token`.
+  token           String    @unique
+  membershipId    String?   @unique
   invitedByUserId String
   expiresAt       DateTime
-  createdAt       DateTime     @default(now())
+  createdAt       DateTime  @default(now())
   acceptedAt      DateTime?
   revokedAt       DateTime?
 
@@ -430,8 +427,8 @@ model Invite {
   preMembership Membership? @relation("InvitePreCreatedMembership", fields: [membershipId], references: [id], onDelete: SetNull)
   /// The partial index `invite_one_pending_per_club_email` is added by a
   /// raw-SQL migration — Prisma cannot express a `WHERE status = 'pending'`
-  /// clause on a UNIQUE index. Without it, double-clicking Invite creates
-  /// two pending rows for the same (club, email).
+  /// clause on a UNIQUE index. `lower(email)` treats every NULL as distinct,
+  /// so link invites (no email) never collide on it.
 
   @@index([clubId, status])
   @@index([email])

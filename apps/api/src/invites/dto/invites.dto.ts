@@ -1,28 +1,18 @@
-import { IsArray, IsEmail, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsEmail, IsEnum, IsOptional } from 'class-validator';
 
 import { OFFICER_ROLES, type OfficerRole } from '@/memberships';
 
-const NAME_MAX = 60;
-
-/** Body for `POST /invites`. `roles` is optional — an empty selection means
- * "invite as a plain Member" and is normalised in the service, mirroring the
- * web modal in `components/club-admin/invite-modal.tsx`. */
+/** Body for `POST /invites`. The invite is a shareable link, not addressed
+ * to anyone in particular — `email` only survives for legacy callers and is
+ * never set by the current invite modal. `roles` is what the admin actually
+ * picks and must be non-empty. */
 export class CreateInviteDto {
+  @IsOptional()
   @IsEmail()
-  email!: string;
+  email?: string;
 
-  @IsOptional()
-  @IsString()
-  @MaxLength(NAME_MAX)
-  firstName?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(NAME_MAX)
-  lastName?: string;
-
-  @IsOptional()
   @IsArray()
+  @ArrayNotEmpty()
   @IsEnum(OFFICER_ROLES, { each: true })
-  roles?: OfficerRole[];
+  roles!: OfficerRole[];
 }

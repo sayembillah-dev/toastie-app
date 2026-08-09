@@ -2,7 +2,6 @@
 
 import {
   MagnifyingGlass,
-  Plus,
   ShieldCheck,
   UserPlus,
   Users,
@@ -12,16 +11,13 @@ import { App, Button, Dropdown, Input, Segmented, Skeleton, Tag } from 'antd';
 import { useMemo, useState } from 'react';
 
 import { ConvertGuestModal } from '@/components/club-admin/convert-guest-modal';
-import { InviteModal } from '@/components/club-admin/invite-modal';
+import { InvitePanel } from '@/components/club-admin/invite-panel';
 import { MemberFormModal } from '@/components/club-admin/member-form-modal';
 import type { Member } from '@/lib/education/members';
 import { formatRoles, getInitials } from '@/lib/education/members';
 import { useCan } from '@/lib/permissions/use-can';
 import {
-  useConvertInviteToMemberMutation,
-  useGetInvitesQuery,
   useGetMembersQuery,
-  useRevokeInviteMutation,
   useSetMemberAdminMutation,
   useSetMemberStatusMutation,
 } from '@/store/api';
@@ -49,19 +45,14 @@ export function MembersTab() {
     error,
     refetch,
   } = useGetMembersQuery({ includeRemoved: true });
-  const { data: invites } = useGetInvitesQuery();
 
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<RosterFilter>('active');
-  const [addOpen, setAddOpen] = useState(false);
-  const [inviteOpen, setInviteOpen] = useState(false);
   const [convertOpen, setConvertOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
 
   const [setStatus] = useSetMemberStatusMutation();
   const [setAdmin] = useSetMemberAdminMutation();
-  const [revokeInvite] = useRevokeInviteMutation();
-  const [convertInvite] = useConvertInviteToMemberMutation();
 
   const filtered = useMemo(() => {
     if (!members) return [];
@@ -71,16 +62,6 @@ export function MembersTab() {
       .filter((member) => (needle ? matchesQuery(member, needle) : true))
       .sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`));
   }, [members, query, filter]);
-
-  const pendingInvites = useMemo(
-    () => (invites ?? []).filter((invite) => invite.status === 'pending'),
-    [invites],
-  );
-
-  function closeMemberForm() {
-    setAddOpen(false);
-    setEditingMember(null);
-  }
 
   async function handleStatusChange(member: Member, status: Member['status']) {
     try {
@@ -103,24 +84,6 @@ export function MembersTab() {
       );
     } catch (err) {
       message.error(getApiErrorMessage(err, 'Could not update Club Admin rights'));
-    }
-  }
-
-  async function handleRevokeInvite(inviteId: string, email: string) {
-    try {
-      await revokeInvite(inviteId).unwrap();
-      message.success(`Revoked the invite to ${email}`);
-    } catch (err) {
-      message.error(getApiErrorMessage(err, 'Could not revoke this invite'));
-    }
-  }
-
-  async function handleConvertInvite(inviteId: string) {
-    try {
-      const member = await convertInvite(inviteId).unwrap();
-      message.success(`${member.firstName} ${member.lastName} joined as a member`);
-    } catch (err) {
-      message.error(getApiErrorMessage(err, 'Could not convert this invite'));
     }
   }
 
@@ -152,12 +115,6 @@ export function MembersTab() {
             <div className="flex flex-wrap items-center gap-2">
               <Button icon={<UserPlus size={14} />} onClick={() => setConvertOpen(true)}>
                 Add from guests
-              </Button>
-              <Button icon={<Plus size={14} />} onClick={() => setInviteOpen(true)}>
-                Invite member
-              </Button>
-              <Button type="primary" icon={<Plus size={14} />} onClick={() => setAddOpen(true)}>
-                Add member
               </Button>
             </div>
           ) : null}
@@ -256,52 +213,13 @@ export function MembersTab() {
         ) : null}
       </div>
 
-      {canMutate && pendingInvites.length > 0 ? (
-        <div>
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
-            Pending invites
-          </h2>
-          <ul className="flex flex-col gap-2">
-            {pendingInvites.map((invite) => (
-              <li
-                key={invite.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-canvas p-3"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-ink">
-                    {invite.firstName || invite.lastName
-                      ? `${invite.firstName ?? ''} ${invite.lastName ?? ''}`.trim()
-                      : invite.email}
-                  </p>
-                  <p className="truncate text-xs text-ink-muted">
-                    {invite.email}
-                    {invite.roles.length > 0 ? ` · ${invite.roles.join(', ')}` : ''}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Button size="small" onClick={() => void handleConvertInvite(invite.id)}>
-                    Mark as joined
-                  </Button>
-                  <Button
-                    size="small"
-                    danger
-                    onClick={() => void handleRevokeInvite(invite.id, invite.email)}
-                  >
-                    Revoke
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+      <InvitePanel />
 
       <MemberFormModal
-        open={addOpen || editingMember !== null}
+        open={editingMember !== null}
         member={editingMember}
-        onClose={closeMemberForm}
+        onClose={() => setEditingMember(null)}
       />
-      <InviteModal open={inviteOpen} onClose={() => setInviteOpen(false)} />
       <ConvertGuestModal open={convertOpen} onClose={() => setConvertOpen(false)} />
     </div>
   );

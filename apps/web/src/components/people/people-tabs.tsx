@@ -3,6 +3,7 @@
 import { UserCircle, UsersThree } from '@phosphor-icons/react/dist/ssr';
 import { Tabs } from 'antd';
 
+import { InvitePanel } from '@/components/club-admin/invite-panel';
 import { MembersDirectory } from '@/components/education/directory';
 import { GuestsDirectory } from '@/components/people/guests-directory';
 
@@ -42,7 +43,12 @@ export function PeopleTabs() {
                 Members
               </span>
             ),
-            children: <MembersDirectory variant="engagement" />,
+            children: (
+              <div className="flex flex-col gap-4">
+                <InvitePanel />
+                <MembersDirectory variant="engagement" />
+              </div>
+            ),
           },
         ]}
       />

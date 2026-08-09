@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 
 import {
   BadRequestException,
@@ -9,25 +9,19 @@ import {
 } from '@nestjs/common';
 import { Prisma, type ClubRole as PrismaClubRole } from '@prisma/client';
 import { can, type PermissionSubject } from '@toastly/access';
-import { type MemberWire, toClubRoles, toMemberWire } from '@/memberships';
+import { toClubRoles, toOfficerRoles } from '@/memberships';
 import { PrismaService } from '@/prisma';
 
 import type { CreateInviteDto } from './dto/invites.dto';
-import { type InviteWire, toInviteWire } from './serializers';
+import { type InvitePreview, type InviteWire, toInviteWire } from './serializers';
 
 const INVITE_TTL_DAYS = 30;
 
-/** Handles `/invites` — the pending-invite tracker a Club Admin (or VP
- * Membership, who has `invite:create`+`invite:read`) uses to record and
- * later close-the-loop when a person joins.
- *
- * Two flows write the roster:
- *   - `convertToMember(inviteId)`   — the admin's manual "mark as joined"
- *     button on the members tab. Creates an unclaimed Membership and marks
- *     the invite accepted, matching the current web behaviour.
- *   - (S13) accept-by-token — an authed signup claims the placeholder or
- *     creates a new Membership atomically.
- */
+/** Handles `/invites` — a Club Admin (or VP Membership, who has
+ * `invite:create`+`invite:read`) generates a role-scoped join link, tracks
+ * who's still mid-invite, and can revoke or re-share it. The link itself is
+ * consumed by `acceptByToken`/`previewByToken`, called from the public
+ * `/invite/:token` pages once the invitee signs in or signs up. */
 @Injectable()
 export class InvitesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -66,15 +60,9 @@ export class InvitesService {
         reason: 'You do not manage this club',
       });
     }
-    const email = dto.email.trim().toLowerCase();
-    const roles: PrismaClubRole[] = dto.roles && dto.roles.length > 0 ? toClubRoles(dto.roles) : [];
-
-    // The raw token would be part of the emailed link (S13 introduces the
-    // accept-by-token endpoint that reads it). For now the token is minted
-    // and its hash stored so the DB shape matches the plan; the admin's
-    // manual convert flow doesn't consume it.
-    const rawToken = randomBytes(32).toString('base64url');
-    const tokenHash = createHash('sha256').update(rawToken).digest('hex');
+    const email = dto.email?.trim().toLowerCase() || null;
+    const roles: PrismaClubRole[] = toClubRoles(dto.roles);
+    const token = randomBytes(32).toString('base64url');
     const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 86_400_000);
 
     try {
@@ -82,11 +70,9 @@ export class InvitesService {
         data: {
           clubId,
           email,
-          firstName: dto.firstName?.trim() || null,
-          lastName: dto.lastName?.trim() || null,
           roles,
           status: 'pending',
-          tokenHash,
+          token,
           invitedByUserId: userId,
           expiresAt,
         },
@@ -95,8 +81,8 @@ export class InvitesService {
       return toInviteWire(row, invitedByMembershipId ?? '');
     } catch (err) {
       // The partial index `invite_one_pending_per_club_email` collapses
-      // double-clicks — surface it as a 409 rather than a 500 so the modal
-      // can retry cleanly.
+      // double-clicks for the legacy email-addressed path — surface it as a
+      // 409 rather than a 500. Link invites (no email) never hit this.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         throw new ConflictException({
           code: 'INVITE_ALREADY_PENDING',
@@ -135,49 +121,103 @@ export class InvitesService {
     return toInviteWire(updated, invitedByMembershipId ?? '');
   }
 
-  /** Admin's manual "mark as joined" — creates an unclaimed Membership and
-   * marks the invite accepted in one transaction so a mid-flight failure
-   * can't produce a member without closing the invite (or vice versa). */
-  async convertToMember(subject: PermissionSubject, inviteId: string): Promise<MemberWire> {
-    const existing = await this.load(inviteId);
-    if (!can(subject, 'update', 'invite', { clubId: existing.clubId })) {
-      throw new ForbiddenException({
-        code: 'PERMISSION_DENIED',
-        resource: 'invite',
-        action: 'update',
-        reason: 'You do not manage this club',
-      });
+  /** Public preview for `/invite/:token` — no auth, no permission check.
+   * Tells the landing page whether the link is still good and, if so, which
+   * club and role(s) it grants, before asking the visitor to sign in. */
+  async previewByToken(token: string): Promise<InvitePreview> {
+    const row = await this.prisma.invite.findUnique({
+      where: { token },
+      include: { club: { select: { name: true } } },
+    });
+    if (!row) throw new NotFoundException('No invite matches that link');
+
+    return {
+      state: this.stateOf(row),
+      clubName: row.club.name,
+      roles: toOfficerRoles(row.roles),
+    };
+  }
+
+  /** An authed signup/login claims the link — creates the Membership from
+   * the *caller's* identity (not the invite's, which no longer carries one)
+   * and the invite's roles, atomically with closing the invite out. Mirrors
+   * `JoinRequestsService.approve`. */
+  async acceptByToken(
+    userId: string,
+    token: string,
+  ): Promise<{ clubId: string; clubName: string }> {
+    const row = await this.prisma.invite.findUnique({
+      where: { token },
+      include: { club: { select: { name: true } } },
+    });
+    if (!row) throw new NotFoundException('No invite matches that link');
+
+    const state = this.stateOf(row);
+    if (state === 'expired') {
+      throw new BadRequestException({ code: 'INVITE_EXPIRED', message: 'This invite has expired' });
     }
-    if (existing.status !== 'pending') {
+    if (state === 'accepted') {
       throw new BadRequestException({
-        code: 'INVITE_NOT_PENDING',
-        message: 'Only a pending invite can be converted',
+        code: 'INVITE_ALREADY_USED',
+        message: 'This invite has already been used',
       });
     }
+    if (state === 'revoked') {
+      throw new BadRequestException({
+        code: 'INVITE_REVOKED',
+        message: 'This invite has been revoked',
+      });
+    }
+
+    const existingMembership = await this.prisma.membership.findFirst({
+      where: { clubId: row.clubId, userId, status: 'active' },
+      select: { id: true },
+    });
+    if (existingMembership) {
+      throw new ConflictException({
+        code: 'ALREADY_MEMBER',
+        message: 'You are already a member of this club',
+      });
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, lastName: true, email: true },
+    });
+    if (!user) throw new NotFoundException(`No user with id "${userId}"`);
 
     const now = new Date();
-    const roles: PrismaClubRole[] =
-      existing.roles.length > 0 ? existing.roles : ['Member' as PrismaClubRole];
-
-    const [, membership] = await this.prisma.$transaction([
+    await this.prisma.$transaction([
       this.prisma.invite.update({
-        where: { id: inviteId },
+        where: { id: row.id },
         data: { status: 'accepted', acceptedAt: now },
       }),
       this.prisma.membership.create({
         data: {
-          clubId: existing.clubId,
-          firstName: existing.firstName ?? existing.email.split('@')[0] ?? existing.email,
-          lastName: existing.lastName ?? '',
-          email: existing.email,
-          roles,
+          clubId: row.clubId,
+          userId,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          roles: row.roles,
           isClubAdmin: false,
           status: 'active',
           grantOverrides: {},
         },
       }),
     ]);
-    return toMemberWire(membership);
+
+    return { clubId: row.clubId, clubName: row.club.name };
+  }
+
+  private stateOf(row: {
+    status: string;
+    expiresAt: Date;
+  }): 'valid' | 'expired' | 'accepted' | 'revoked' {
+    if (row.status === 'accepted') return 'accepted';
+    if (row.status === 'revoked') return 'revoked';
+    if (row.expiresAt.getTime() < Date.now()) return 'expired';
+    return 'valid';
   }
 
   private async load(inviteId: string) {

@@ -1,7 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
 
 import { CurrentContext, type RequestContext, Requires } from '@/access';
-import { type MemberWire } from '@/memberships';
 
 import { CreateInviteDto } from './dto/invites.dto';
 import { InvitesService } from './invites.service';
@@ -34,17 +33,16 @@ export class InvitesController {
     return this.invites.revoke(ctx.subject, inviteId);
   }
 
-  /** `invite:update` matches the resource metadata the web already carries
-   * on this route (`handlers.ts:3185`). The response is the freshly-created
-   * `Member` — the frontend's `convertInviteToMember` mutation writes
-   * straight into the members cache. */
-  @Requires('invite', 'update')
-  @Post(':inviteId/convert')
-  convertToMember(
+  /** No `@Requires` — the caller isn't a member of the target club yet, so
+   * no grant could ever match. Same reasoning as the requester-side routes
+   * on `JoinRequestsController`: ownership/validity is enforced in the
+   * service, not the permission engine. */
+  @Post(':token/accept')
+  accept(
     @CurrentContext() ctx: RequestContext,
-    @Param('inviteId') inviteId: string,
-  ): Promise<MemberWire> {
-    return this.invites.convertToMember(ctx.subject, inviteId);
+    @Param('token') token: string,
+  ): Promise<{ clubId: string; clubName: string }> {
+    return this.invites.acceptByToken(ctx.session.user.id, token);
   }
 }
 

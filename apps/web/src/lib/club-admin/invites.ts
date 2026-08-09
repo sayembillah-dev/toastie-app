@@ -1,27 +1,26 @@
 import type { OfficerRole } from '@/lib/education/members';
 
-export const INVITE_STATUSES = ['pending', 'accepted', 'revoked'] as const;
+export const INVITE_STATUSES = ['pending', 'accepted', 'revoked', 'expired'] as const;
 export type InviteStatus = (typeof INVITE_STATUSES)[number];
 
-/** A club invitation. There is no email infrastructure in this app and no
- * sign-up flow for an invitee to accept from — this is a trackable pending
- * record a Club Admin manages by hand: revoke it, or once the person
- * actually joins, convert it into a real `Member` via `convertInviteToMember`. */
+/** A club invite — a role-scoped, shareable join link (`/invite/:token`),
+ * not addressed to anyone in particular. `token` is plaintext on the wire so
+ * the pending-invites list can re-display (and re-copy) the same link later. */
 export interface Invite {
   id: string;
   /** Tenant boundary — the club this invite is for. */
   clubId: string;
-  email: string;
-  firstName?: string;
-  lastName?: string;
+  email?: string;
   roles: OfficerRole[];
   status: InviteStatus;
-  /** Member id of the Club Admin who sent it. */
+  token: string;
+  expiresAt: string;
+  /** Member id of the Club Admin (or VP Membership) who created it. */
   invitedBy: string;
   invitedAt: string;
   respondedAt?: string;
 }
 
-export type CreateInviteInput = Pick<Invite, 'email' | 'firstName' | 'lastName' | 'roles'>;
+export type CreateInviteInput = { roles: OfficerRole[] };
 
 export const SEED_INVITES: Omit<Invite, 'clubId'>[] = [];
