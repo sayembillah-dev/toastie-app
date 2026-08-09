@@ -43,6 +43,8 @@ const CLUB_BASE_READ: Grant[] = [
   { resource: 'guestLog', action: 'read', scope: 'club' },
   { resource: 'education', action: 'read', scope: 'club' },
   { resource: 'checklist', action: 'read', scope: 'club' },
+  { resource: 'tableTopic', action: 'read', scope: 'club' },
+  { resource: 'attendance', action: 'read', scope: 'club' },
   { resource: 'inventory', action: 'read', scope: 'club' },
   { resource: 'transaction', action: 'read', scope: 'club' },
   { resource: 'budget', action: 'read', scope: 'club' },
@@ -62,12 +64,19 @@ const GUEST_ROLE: Grant[] = [{ resource: 'club', action: 'read', scope: 'club' }
 
 const MEMBER_ROLE: Grant[] = [...CLUB_BASE_READ, ...OWN_TASK_ACCESS];
 
-const SERGEANT_AT_ARMS_ROLE: Grant[] = [...MEMBER_ROLE, ...rw('checklist'), ...rw('inventory')];
+const SERGEANT_AT_ARMS_ROLE: Grant[] = [
+  ...MEMBER_ROLE,
+  ...rw('checklist'),
+  ...rw('inventory'),
+  ...rw('attendance'),
+];
 
 const PRESIDENT_ROLE: Grant[] = [
   ...MEMBER_ROLE,
   ...rw('meeting'),
   ...rw('meetingRole'),
+  ...rw('tableTopic'),
+  ...rw('attendance'),
   ...rmu('education'),
   ...r('activityLog'),
   ...r('report'),
@@ -93,6 +102,7 @@ const VP_EDUCATION_ROLE: Grant[] = [
   ...MEMBER_ROLE,
   ...rw('education'),
   ...rw('meetingRole'),
+  ...rw('tableTopic'),
   ...rw('speechRequest'),
   ...rw('evaluation'),
   ...rw('task'),
@@ -100,7 +110,12 @@ const VP_EDUCATION_ROLE: Grant[] = [
 
 const IPP_ROLE: Grant[] = [...MEMBER_ROLE, ...r('report'), ...r('activityLog')];
 
-const SECRETARY_ROLE: Grant[] = [...MEMBER_ROLE, ...rw('meeting'), ...rw('meetingRole')];
+const SECRETARY_ROLE: Grant[] = [
+  ...MEMBER_ROLE,
+  ...rw('meeting'),
+  ...rw('meetingRole'),
+  ...rw('attendance'),
+];
 
 const CLUB_ADMIN_ROLE: Grant[] = [
   ...rw('club'),
@@ -110,6 +125,8 @@ const CLUB_ADMIN_ROLE: Grant[] = [
   ...rw('meeting'),
   ...rw('meetingRole'),
   ...rw('checklist'),
+  ...rw('tableTopic'),
+  ...rw('attendance'),
   ...rw('education'),
   ...rw('guest'),
   ...rw('guestLog'),
@@ -152,6 +169,8 @@ const DIRECTOR_READ_RESOURCES: ResourceKey[] = [
   'meeting',
   'meetingRole',
   'checklist',
+  'tableTopic',
+  'attendance',
   'guest',
   'guestLog',
   'library',

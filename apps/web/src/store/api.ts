@@ -11,6 +11,7 @@ import type {
   StartPathwayInput,
   UpdateMemberInput,
 } from '@/lib/education/members';
+import type { PlannerRowWire, UpdatePlannerRowInput } from '@/lib/education/planner';
 import type {
   CreateSpeechSlotRequestInput,
   SpeechSlotRequest,
@@ -52,11 +53,24 @@ import type {
 } from '@/lib/library/planner';
 import type { AhCounterEntry } from '@/lib/meetings/ah-counter-reports';
 import type {
+  CreateGuestAttendanceInput,
+  GuestAttendance,
+  MarkAllAttendanceResult,
+  MemberAttendance,
+  UpdateGuestAttendanceInput,
+} from '@/lib/meetings/attendance';
+import type {
   CreateMeetingInput,
   Meeting,
   PublicMeeting,
   UpdateMeetingInput,
 } from '@/lib/meetings/meetings';
+import type { RoleAssignment } from '@/lib/meetings/role-assignments';
+import type {
+  CreateTableTopicQuestionInput,
+  TableTopicQuestion,
+  UpdateTableTopicQuestionInput,
+} from '@/lib/meetings/table-topics';
 import type { TimerEntry } from '@/lib/meetings/timer-reports';
 import type {
   Area,
@@ -122,6 +136,7 @@ export const toastlyApi = createApi({
   tagTypes: [
     'Member',
     'History',
+    'PlannerRow',
     'Meeting',
     'Guest',
     'ContactLog',
@@ -130,6 +145,10 @@ export const toastlyApi = createApi({
     'Document',
     'PlannerIdea',
     'Checklist',
+    'MeetingRoleAssignment',
+    'TableTopicQuestion',
+    'MeetingAttendance',
+    'MeetingGuestAttendance',
     'InventoryItem',
     'Transaction',
     'DuesRecord',
@@ -354,6 +373,56 @@ export const toastlyApi = createApi({
         { type: 'History', id: memberId },
         { type: 'ActivityLog', id: 'LIST' },
       ],
+    }),
+
+    /* Education > Planner grid rows. Every cell edit is its own mutation —
+     * optimistic so a wide, fast-typing grid never visibly reverts mid-edit. */
+    getPlannerRows: build.query<PlannerRowWire[], void>({
+      query: () => ({ url: '/planner-rows', method: 'GET' }),
+      providesTags: (rows) => [
+        { type: 'PlannerRow', id: 'LIST' },
+        ...(rows ?? []).map((row) => ({ type: 'PlannerRow' as const, id: row.id })),
+      ],
+    }),
+
+    createPlannerRow: build.mutation<PlannerRowWire, void>({
+      query: () => ({ url: '/planner-rows', method: 'POST' }),
+      invalidatesTags: [{ type: 'PlannerRow', id: 'LIST' }],
+    }),
+
+    updatePlannerRow: build.mutation<PlannerRowWire, { rowId: string } & UpdatePlannerRowInput>({
+      query: ({ rowId, ...body }) => ({ url: `/planner-rows/${rowId}`, method: 'PATCH', body }),
+      onQueryStarted: async ({ rowId, ...changes }, { dispatch, queryFulfilled }) => {
+        const patch = dispatch(
+          toastlyApi.util.updateQueryData('getPlannerRows', undefined, (draft) => {
+            const entry = draft.find((row) => row.id === rowId);
+            if (entry) Object.assign(entry, changes);
+          }),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+      invalidatesTags: (_row, _error, { rowId }) => [{ type: 'PlannerRow', id: rowId }],
+    }),
+
+    deletePlannerRow: build.mutation<null, { rowId: string }>({
+      query: ({ rowId }) => ({ url: `/planner-rows/${rowId}`, method: 'DELETE' }),
+      onQueryStarted: async ({ rowId }, { dispatch, queryFulfilled }) => {
+        const patch = dispatch(
+          toastlyApi.util.updateQueryData('getPlannerRows', undefined, (draft) =>
+            draft.filter((row) => row.id !== rowId),
+          ),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+      invalidatesTags: [{ type: 'PlannerRow', id: 'LIST' }],
     }),
 
     getMeetings: build.query<Meeting[], void>({
@@ -1023,6 +1092,254 @@ export const toastlyApi = createApi({
       },
       invalidatesTags: (_item, _error, { meetingId }) => [
         { type: 'Checklist', id: meetingId },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    /* Role assignments — keyed by meeting, one row per role key that has
+     * been touched. The Roles tab, Overview readiness card, and Agenda
+     * preview all read this same cache entry. */
+    getMeetingRoles: build.query<RoleAssignment[], string>({
+      query: (meetingId) => ({ url: `/meetings/${meetingId}/roles`, method: 'GET' }),
+      providesTags: (_rows, _error, meetingId) => [
+        { type: 'MeetingRoleAssignment', id: meetingId },
+      ],
+    }),
+
+    setMeetingRole: build.mutation<
+      RoleAssignment,
+      { meetingId: string; roleKey: string; membershipId: string | null }
+    >({
+      query: ({ meetingId, roleKey, membershipId }) => ({
+        url: `/meetings/${meetingId}/roles/${roleKey}`,
+        method: 'PUT',
+        body: { membershipId },
+      }),
+      onQueryStarted: async (
+        { meetingId, roleKey, membershipId },
+        { dispatch, queryFulfilled },
+      ) => {
+        const patch = dispatch(
+          toastlyApi.util.updateQueryData('getMeetingRoles', meetingId, (draft) => {
+            const entry = draft.find((row) => row.roleKey === roleKey);
+            if (entry) entry.membershipId = membershipId;
+            else draft.push({ roleKey, membershipId });
+          }),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+      invalidatesTags: (_row, _error, { meetingId }) => [
+        { type: 'MeetingRoleAssignment', id: meetingId },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    /* Table Topics questions — the Add flow only calls `create` once the
+     * draft has real text, so every row in the list is already persisted. */
+    getTableTopics: build.query<TableTopicQuestion[], string>({
+      query: (meetingId) => ({ url: `/meetings/${meetingId}/table-topics`, method: 'GET' }),
+      providesTags: (_items, _error, meetingId) => [{ type: 'TableTopicQuestion', id: meetingId }],
+    }),
+
+    createTableTopicQuestion: build.mutation<
+      TableTopicQuestion,
+      { meetingId: string } & CreateTableTopicQuestionInput
+    >({
+      query: ({ meetingId, ...body }) => ({
+        url: `/meetings/${meetingId}/table-topics`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_item, _error, { meetingId }) => [
+        { type: 'TableTopicQuestion', id: meetingId },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    /* Toggling "asked" is the hot path during a meeting — optimistic so the
+     * checkmark feels instant. */
+    updateTableTopicQuestion: build.mutation<
+      TableTopicQuestion,
+      { meetingId: string; itemId: string } & UpdateTableTopicQuestionInput
+    >({
+      query: ({ meetingId, itemId, ...body }) => ({
+        url: `/meetings/${meetingId}/table-topics/${itemId}`,
+        method: 'PATCH',
+        body,
+      }),
+      onQueryStarted: async ({ meetingId, itemId, ...changes }, { dispatch, queryFulfilled }) => {
+        const patch = dispatch(
+          toastlyApi.util.updateQueryData('getTableTopics', meetingId, (draft) => {
+            const entry = draft.find((row) => row.id === itemId);
+            if (entry) Object.assign(entry, changes);
+          }),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+      invalidatesTags: (_item, _error, { meetingId }) => [
+        { type: 'TableTopicQuestion', id: meetingId },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    deleteTableTopicQuestion: build.mutation<null, { meetingId: string; itemId: string }>({
+      query: ({ meetingId, itemId }) => ({
+        url: `/meetings/${meetingId}/table-topics/${itemId}`,
+        method: 'DELETE',
+      }),
+      onQueryStarted: async ({ meetingId, itemId }, { dispatch, queryFulfilled }) => {
+        const patch = dispatch(
+          toastlyApi.util.updateQueryData('getTableTopics', meetingId, (draft) =>
+            draft.filter((entry) => entry.id !== itemId),
+          ),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+      invalidatesTags: (_item, _error, { meetingId }) => [
+        { type: 'TableTopicQuestion', id: meetingId },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    /* Attendance — club-roster check-in and guest rows are separate lists so
+     * toggling one member doesn't refetch the whole guest set. */
+    getAttendanceMembers: build.query<MemberAttendance[], string>({
+      query: (meetingId) => ({ url: `/meetings/${meetingId}/attendance/members`, method: 'GET' }),
+      providesTags: (_rows, _error, meetingId) => [{ type: 'MeetingAttendance', id: meetingId }],
+    }),
+
+    setAttendanceMember: build.mutation<
+      MemberAttendance,
+      { meetingId: string; membershipId: string; present: boolean }
+    >({
+      query: ({ meetingId, membershipId, present }) => ({
+        url: `/meetings/${meetingId}/attendance/members/${membershipId}`,
+        method: 'PUT',
+        body: { present },
+      }),
+      onQueryStarted: async (
+        { meetingId, membershipId, present },
+        { dispatch, queryFulfilled },
+      ) => {
+        const patch = dispatch(
+          toastlyApi.util.updateQueryData('getAttendanceMembers', meetingId, (draft) => {
+            const entry = draft.find((row) => row.membershipId === membershipId);
+            if (entry) entry.present = present;
+            else draft.push({ membershipId, present });
+          }),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+      invalidatesTags: (_row, _error, { meetingId }) => [
+        { type: 'MeetingAttendance', id: meetingId },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    getAttendanceGuests: build.query<GuestAttendance[], string>({
+      query: (meetingId) => ({ url: `/meetings/${meetingId}/attendance/guests`, method: 'GET' }),
+      providesTags: (_rows, _error, meetingId) => [
+        { type: 'MeetingGuestAttendance', id: meetingId },
+      ],
+    }),
+
+    createAttendanceGuest: build.mutation<
+      GuestAttendance,
+      { meetingId: string } & CreateGuestAttendanceInput
+    >({
+      query: ({ meetingId, ...body }) => ({
+        url: `/meetings/${meetingId}/attendance/guests`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_item, _error, { meetingId }) => [
+        { type: 'MeetingGuestAttendance', id: meetingId },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    updateAttendanceGuest: build.mutation<
+      GuestAttendance,
+      { meetingId: string; guestId: string } & UpdateGuestAttendanceInput
+    >({
+      query: ({ meetingId, guestId, ...body }) => ({
+        url: `/meetings/${meetingId}/attendance/guests/${guestId}`,
+        method: 'PATCH',
+        body,
+      }),
+      onQueryStarted: async ({ meetingId, guestId, ...changes }, { dispatch, queryFulfilled }) => {
+        const patch = dispatch(
+          toastlyApi.util.updateQueryData('getAttendanceGuests', meetingId, (draft) => {
+            const entry = draft.find((row) => row.id === guestId);
+            if (entry) Object.assign(entry, changes);
+          }),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+      invalidatesTags: (_item, _error, { meetingId }) => [
+        { type: 'MeetingGuestAttendance', id: meetingId },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    deleteAttendanceGuest: build.mutation<null, { meetingId: string; guestId: string }>({
+      query: ({ meetingId, guestId }) => ({
+        url: `/meetings/${meetingId}/attendance/guests/${guestId}`,
+        method: 'DELETE',
+      }),
+      onQueryStarted: async ({ meetingId, guestId }, { dispatch, queryFulfilled }) => {
+        const patch = dispatch(
+          toastlyApi.util.updateQueryData('getAttendanceGuests', meetingId, (draft) =>
+            draft.filter((entry) => entry.id !== guestId),
+          ),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+      invalidatesTags: (_item, _error, { meetingId }) => [
+        { type: 'MeetingGuestAttendance', id: meetingId },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    /* "Mark all" / "Clear" touch every roster member plus every guest in one
+     * request — simplest to just refetch both lists on success rather than
+     * hand-patch every row. */
+    markAllAttendance: build.mutation<
+      MarkAllAttendanceResult,
+      { meetingId: string; present: boolean }
+    >({
+      query: ({ meetingId, present }) => ({
+        url: `/meetings/${meetingId}/attendance/mark-all`,
+        method: 'PUT',
+        body: { present },
+      }),
+      invalidatesTags: (_result, _error, { meetingId }) => [
+        { type: 'MeetingAttendance', id: meetingId },
+        { type: 'MeetingGuestAttendance', id: meetingId },
         { type: 'ActivityLog', id: 'LIST' },
       ],
     }),
@@ -1797,6 +2114,10 @@ export const {
   useGetMemberQuery,
   useGetMemberHistoryQuery,
   useGetMemberStatsQuery,
+  useGetPlannerRowsQuery,
+  useCreatePlannerRowMutation,
+  useUpdatePlannerRowMutation,
+  useDeletePlannerRowMutation,
   useStartPathwayMutation,
   useCreateMemberMutation,
   useUpdateMemberMutation,
@@ -1837,6 +2158,19 @@ export const {
   useCreateChecklistItemMutation,
   useUpdateChecklistItemMutation,
   useDeleteChecklistItemMutation,
+  useGetMeetingRolesQuery,
+  useSetMeetingRoleMutation,
+  useGetTableTopicsQuery,
+  useCreateTableTopicQuestionMutation,
+  useUpdateTableTopicQuestionMutation,
+  useDeleteTableTopicQuestionMutation,
+  useGetAttendanceMembersQuery,
+  useSetAttendanceMemberMutation,
+  useGetAttendanceGuestsQuery,
+  useCreateAttendanceGuestMutation,
+  useUpdateAttendanceGuestMutation,
+  useDeleteAttendanceGuestMutation,
+  useMarkAllAttendanceMutation,
   useListInventoryItemsQuery,
   useCreateInventoryItemMutation,
   useUpdateInventoryItemMutation,

@@ -11,6 +11,8 @@ export const RESOURCE_KEYS = [
   'meeting',
   'meetingRole',
   'checklist',
+  'tableTopic',
+  'attendance',
   'guest',
   'guestLog',
   'library',

@@ -22,6 +22,24 @@ export type AssigneeField =
   | 'ahCounter'
   | 'grammarian';
 
+/** Drives the wire (un)packing below — every assignee field, in no
+ * particular order. */
+const ASSIGNEE_FIELDS: AssigneeField[] = [
+  'tmod',
+  'ttm',
+  'ttEvaluator',
+  'speaker1',
+  'evaluator1',
+  'speaker2',
+  'evaluator2',
+  'speaker3',
+  'evaluator3',
+  'generalEvaluator',
+  'timer',
+  'ahCounter',
+  'grammarian',
+];
+
 export interface PlannerRow {
   id: string;
   /** Typed in by the VPE, not derived: clubs number meetings on their own
@@ -45,6 +63,9 @@ export interface PlannerRow {
   grammarian: Assignee | null;
   theme: string;
   notes: string;
+  /** Set once "Create meeting" succeeds — the join the grid uses to shade a
+   * row green, replacing a fragile meetingNumber-matching heuristic. */
+  meetingId: string | null;
 }
 
 export function createEmptyRow(id: string, meetingNumber: number | null = null): PlannerRow {
@@ -67,7 +88,58 @@ export function createEmptyRow(id: string, meetingNumber: number | null = null):
     grammarian: null,
     theme: '',
     notes: '',
+    meetingId: null,
   };
+}
+
+/** Wire shape from `GET/POST/PATCH /planner-rows` — `assignees` travels as
+ * one JSON blob rather than 13 columns; `fromPlannerRowWire` unpacks it into
+ * the flat shape every component already works with. */
+export interface PlannerRowWire {
+  id: string;
+  meetingNumber: number | null;
+  dateTime: string | null;
+  theme: string;
+  notes: string;
+  assignees: Partial<Record<AssigneeField, Assignee | null>>;
+  meetingId: string | null;
+}
+
+export interface UpdatePlannerRowInput {
+  meetingNumber?: number | null;
+  dateTime?: string | null;
+  theme?: string;
+  notes?: string;
+  assignees?: Partial<Record<AssigneeField, Assignee | null>>;
+  meetingId?: string | null;
+}
+
+function isAssignee(value: unknown): value is Assignee {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  if (v.kind === 'member') return typeof v.memberId === 'string';
+  if (v.kind === 'guest') return typeof v.name === 'string';
+  return false;
+}
+
+export function fromPlannerRowWire(wire: PlannerRowWire): PlannerRow {
+  const row = createEmptyRow(wire.id, wire.meetingNumber);
+  row.dateTime = wire.dateTime;
+  row.theme = wire.theme;
+  row.notes = wire.notes;
+  row.meetingId = wire.meetingId;
+  for (const field of ASSIGNEE_FIELDS) {
+    const value = wire.assignees[field];
+    row[field] = isAssignee(value) ? value : null;
+  }
+  return row;
+}
+
+/** Packs the row's 13 assignee fields into the JSON shape the API stores. */
+export function toAssigneesJson(row: PlannerRow): Partial<Record<AssigneeField, Assignee | null>> {
+  const out: Partial<Record<AssigneeField, Assignee | null>> = {};
+  for (const field of ASSIGNEE_FIELDS) out[field] = row[field];
+  return out;
 }
 
 /** How a row refers to itself in aria labels and dialog titles before it has a

@@ -29,10 +29,11 @@ import { TimerTab } from '@/components/meetings/tabs/timer-tab';
 import { PageBreadcrumb } from '@/components/page-breadcrumb';
 import { AccessGate } from '@/components/permissions/access-gate';
 import type { Meeting } from '@/lib/meetings/meetings';
-import { useGetMeetingQuery } from '@/store/api';
+import { toRoleAssignmentMap } from '@/lib/meetings/role-assignments';
+import { useGetMeetingQuery, useGetMeetingRolesQuery } from '@/store/api';
 import { getApiErrorMessage, isNotFoundError } from '@/store/api-error';
 import { useAppDispatch } from '@/store/hooks';
-import { draftHydrated } from '@/store/meeting-draft-slice';
+import { draftHydrated, rolesHydrated } from '@/store/meeting-draft-slice';
 
 interface TabDef {
   key: string;
@@ -81,7 +82,7 @@ function buildTabs(meeting: Meeting): TabDef[] {
       key: 'table-topics',
       label: 'Table Topics',
       Icon: Lightbulb,
-      content: <TableTopicsTab />,
+      content: <TableTopicsTab meetingId={meeting.id} />,
     },
     {
       key: 'ah-counter',
@@ -105,7 +106,7 @@ function buildTabs(meeting: Meeting): TabDef[] {
       key: 'attendance',
       label: 'Attendance',
       Icon: ClipboardText,
-      content: <AttendanceTab />,
+      content: <AttendanceTab meetingId={meeting.id} />,
     },
   ];
 }
@@ -113,6 +114,7 @@ function buildTabs(meeting: Meeting): TabDef[] {
 function DetailContent({ meeting }: { meeting: Meeting }) {
   const tabs = buildTabs(meeting);
   const dispatch = useAppDispatch();
+  const { data: roleRows } = useGetMeetingRolesQuery(meeting.id);
 
   /* Seed the working draft from the saved record once the meeting lands.
    * Done here rather than inside the Theme tab because Overview's readiness
@@ -121,6 +123,17 @@ function DetailContent({ meeting }: { meeting: Meeting }) {
   useEffect(() => {
     dispatch(draftHydrated({ meetingId: meeting.id, theme: meeting.theme, word: meeting.word }));
   }, [dispatch, meeting.id, meeting.theme, meeting.word]);
+
+  /* Mirror the persisted role assignments into the draft so Overview and the
+   * Agenda sheet — which only read the draft, not the API — stay correct
+   * without requiring a visit to the Roles tab. Every role pick already
+   * round-trips through the API, so (unlike theme/word) this can just
+   * overwrite on every fetch rather than guard against clobbering an
+   * unsaved edit. */
+  useEffect(() => {
+    if (!roleRows) return;
+    dispatch(rolesHydrated({ meetingId: meeting.id, roles: toRoleAssignmentMap(roleRows) }));
+  }, [dispatch, meeting.id, roleRows]);
 
   return (
     <div className="mx-auto max-w-6xl">

@@ -3,6 +3,7 @@ import type {
   Evaluation as EvaluationRow,
   HistoryEvent as HistoryEventRow,
   Membership,
+  PlannerRow as PlannerRowRecord,
   SpeechSlotRequest as SpeechSlotRequestRow,
   TimerEntry as TimerEntryRow,
 } from '@prisma/client';
@@ -305,6 +306,39 @@ export function computeMemberStats(
     latestSpeech,
     favouriteRole,
   };
+}
+
+/** ------------------------------------------------------- planner rows -- */
+
+/** Wire shape matches the web `lib/education/planner.ts` `PlannerRow`
+ * interface, minus `id` duplication concerns — `assignees` carries the same
+ * 13-slot `Record<AssigneeField, Assignee | null>` the frontend already
+ * builds, stored and returned as one JSON blob. */
+export interface PlannerRowWire {
+  id: string;
+  meetingNumber: number | null;
+  dateTime: string | null;
+  theme: string;
+  notes: string;
+  assignees: Record<string, unknown>;
+  meetingId: string | null;
+}
+
+export function toPlannerRowWire(row: PlannerRowRecord): PlannerRowWire {
+  return {
+    id: row.id,
+    meetingNumber: row.meetingNumber,
+    dateTime: row.dateTime,
+    theme: row.theme,
+    notes: row.notes,
+    assignees: parseAssignees(row.assignees),
+    meetingId: row.meetingId,
+  };
+}
+
+function parseAssignees(raw: unknown): Record<string, unknown> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  return raw as Record<string, unknown>;
 }
 
 /** ----------------------------------------------------------- helpers -- */

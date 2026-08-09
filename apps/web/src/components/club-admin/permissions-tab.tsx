@@ -33,6 +33,8 @@ const RESOURCE_LABELS: Record<ResourceKey, string> = {
   meeting: 'Meetings',
   meetingRole: 'Meeting roles',
   checklist: 'SAA checklist',
+  tableTopic: 'Table Topics',
+  attendance: 'Attendance',
   guest: 'Guests',
   guestLog: 'Guest log',
   library: 'Library',

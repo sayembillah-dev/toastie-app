@@ -1,14 +1,17 @@
 'use client';
 
 import { UserCircle } from '@phosphor-icons/react/dist/ssr';
-import { Select } from 'antd';
+import { App, Select } from 'antd';
 import { useMemo } from 'react';
-
 import type { Meeting } from '@/lib/meetings/meetings';
+import { toRoleAssignmentMap } from '@/lib/meetings/role-assignments';
 import { buildRoles } from '@/lib/meetings/roles';
-import { useGetMembersQuery } from '@/store/api';
-import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { roleAssigned, selectMeetingDraft } from '@/store/meeting-draft-slice';
+import {
+  useGetMeetingRolesQuery,
+  useGetMembersQuery,
+  useSetMeetingRoleMutation,
+} from '@/store/api';
+import { getApiErrorMessage } from '@/store/api-error';
 
 interface RolesTabProps {
   meeting: Meeting;
@@ -16,14 +19,17 @@ interface RolesTabProps {
 
 /** Roles tab — a two-column grid of member pickers, one per meeting role. The
  * Toastmaster label switches between Day and Evening based on the meeting's
- * scheduled time. Assignments land in the meeting draft, so the Overview →
- * Agenda sheet names the same people. */
+ * scheduled time. Every pick saves immediately — no Save button, matching
+ * the Checklist tab's pattern. */
 export function RolesTab({ meeting }: RolesTabProps) {
-  const { data: members, isLoading } = useGetMembersQuery();
-  const dispatch = useAppDispatch();
-  const assignments = useAppSelector((state) => selectMeetingDraft(state, meeting.id)).roles;
+  const { message } = App.useApp();
+  const { data: members, isLoading: membersLoading } = useGetMembersQuery();
+  const { data: assignmentRows, isLoading: rolesLoading } = useGetMeetingRolesQuery(meeting.id);
+  const [setRole] = useSetMeetingRoleMutation();
 
+  const assignments = useMemo(() => toRoleAssignmentMap(assignmentRows ?? []), [assignmentRows]);
   const roles = useMemo(() => buildRoles(meeting), [meeting]);
+  const isLoading = membersLoading || rolesLoading;
 
   const memberOptions = useMemo(
     () =>
@@ -36,8 +42,12 @@ export function RolesTab({ meeting }: RolesTabProps) {
     [members],
   );
 
-  function handleAssign(roleKey: string, memberId: string | undefined) {
-    dispatch(roleAssigned({ meetingId: meeting.id, roleKey, memberId }));
+  async function handleAssign(roleKey: string, memberId: string | undefined) {
+    try {
+      await setRole({ meetingId: meeting.id, roleKey, membershipId: memberId ?? null }).unwrap();
+    } catch (err) {
+      message.error(getApiErrorMessage(err, 'Could not save the assignment'));
+    }
   }
 
   return (

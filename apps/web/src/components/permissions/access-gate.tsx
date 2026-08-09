@@ -17,6 +17,8 @@ const RESOURCE_LABELS: Partial<Record<ResourceKey, string>> = {
   meeting: 'Meetings',
   meetingRole: 'meeting roles',
   checklist: 'the Sergeant at Arms checklist',
+  tableTopic: 'Table Topics',
+  attendance: 'attendance',
   guest: 'guests',
   guestLog: 'the guest log',
   library: 'Library',

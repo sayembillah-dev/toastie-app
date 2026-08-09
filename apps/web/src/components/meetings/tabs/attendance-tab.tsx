@@ -1,17 +1,21 @@
 'use client';
 
 import { MagnifyingGlass, TrashSimple, UserPlus, X } from '@phosphor-icons/react/dist/ssr';
-import { Button, Checkbox, Input } from 'antd';
+import { App, Button, Checkbox, Input, Skeleton } from 'antd';
 import { useMemo, useState } from 'react';
 
 import { getPrimaryRole } from '@/lib/education/members';
-import { useGetMembersQuery } from '@/store/api';
-
-interface Guest {
-  id: string;
-  name: string;
-  present: boolean;
-}
+import {
+  useCreateAttendanceGuestMutation,
+  useDeleteAttendanceGuestMutation,
+  useGetAttendanceGuestsQuery,
+  useGetAttendanceMembersQuery,
+  useGetMembersQuery,
+  useMarkAllAttendanceMutation,
+  useSetAttendanceMemberMutation,
+  useUpdateAttendanceGuestMutation,
+} from '@/store/api';
+import { getApiErrorMessage } from '@/store/api-error';
 
 interface RosterRow {
   id: string;
@@ -120,17 +124,43 @@ function GuestForm({ onCommit, onCancel }: GuestFormProps) {
   );
 }
 
+interface AttendanceTabProps {
+  meetingId: string;
+}
+
 /** Attendance tab — the club roster with a checkbox per member, plus a
- * secondary section for guests. Search filters both. State is local for now,
- * matching the other meeting tabs. */
-export function AttendanceTab() {
+ * secondary section for guests. Search filters both. Every check-in saves
+ * immediately — no Save button, matching the Checklist tab. */
+export function AttendanceTab({ meetingId }: AttendanceTabProps) {
+  const { message } = App.useApp();
   const { data: members, isLoading: membersLoading } = useGetMembersQuery();
-  /* Keyed by member id so toggling doesn't rebuild the list — and so unknown
-   * ids (present values from removed members) fall out naturally on render. */
-  const [presentById, setPresentById] = useState<Record<string, boolean>>({});
-  const [guests, setGuests] = useState<Guest[]>([]);
+  const {
+    data: attendanceRows,
+    isLoading: attendanceLoading,
+    isError: attendanceError,
+    error: attendanceErrorDetail,
+  } = useGetAttendanceMembersQuery(meetingId);
+  const {
+    data: guests,
+    isLoading: guestsLoading,
+    isError: guestsError,
+    error: guestsErrorDetail,
+  } = useGetAttendanceGuestsQuery(meetingId);
+
+  const [setMemberAttendance] = useSetAttendanceMemberMutation();
+  const [createGuest] = useCreateAttendanceGuestMutation();
+  const [updateGuest] = useUpdateAttendanceGuestMutation();
+  const [deleteGuest] = useDeleteAttendanceGuestMutation();
+  const [markAll, { isLoading: isMarkingAll }] = useMarkAllAttendanceMutation();
+
   const [query, setQuery] = useState('');
   const [addingGuest, setAddingGuest] = useState(false);
+
+  const presentById = useMemo(() => {
+    const map: Record<string, boolean> = {};
+    for (const row of attendanceRows ?? []) map[row.membershipId] = row.present;
+    return map;
+  }, [attendanceRows]);
 
   const memberRows = useMemo<RosterRow[]>(
     () =>
@@ -148,7 +178,7 @@ export function AttendanceTab() {
 
   const guestRows = useMemo<RosterRow[]>(
     () =>
-      guests.map((guest) => ({
+      (guests ?? []).map((guest) => ({
         id: guest.id,
         name: guest.name,
         role: 'Guest',
@@ -158,6 +188,31 @@ export function AttendanceTab() {
     [guests],
   );
 
+  const isLoading = membersLoading || attendanceLoading || guestsLoading;
+
+  if (isLoading) {
+    return (
+      <section className="mx-auto max-w-4xl">
+        <div className="rounded-2xl border border-line bg-canvas p-4 sm:p-6">
+          <Skeleton active title paragraph={{ rows: 5 }} />
+        </div>
+      </section>
+    );
+  }
+
+  if (attendanceError || guestsError) {
+    return (
+      <section className="mx-auto max-w-4xl">
+        <div className="rounded-2xl border border-dashed border-line-strong bg-canvas p-6 text-center">
+          <p className="text-sm font-medium text-ink">Could not load attendance</p>
+          <p className="mt-1 text-xs text-ink-muted">
+            {getApiErrorMessage(attendanceErrorDetail ?? guestsErrorDetail)}
+          </p>
+        </div>
+      </section>
+    );
+  }
+
   const needle = query.trim().toLowerCase();
   const matches = (row: RosterRow) => needle === '' || row.name.toLowerCase().includes(needle);
 
@@ -165,34 +220,55 @@ export function AttendanceTab() {
   const filteredGuests = guestRows.filter(matches);
 
   const presentMembers = memberRows.reduce((count, row) => count + (row.present ? 1 : 0), 0);
-  const presentGuests = guests.reduce((count, guest) => count + (guest.present ? 1 : 0), 0);
+  const presentGuests = guestRows.reduce((count, row) => count + (row.present ? 1 : 0), 0);
   const totalPresent = presentMembers + presentGuests;
-  const totalRoster = memberRows.length + guests.length;
+  const totalRoster = memberRows.length + guestRows.length;
 
-  function handleToggleMember(id: string) {
-    setPresentById((prev) => ({ ...prev, [id]: !prev[id] }));
+  async function handleToggleMember(id: string) {
+    try {
+      await setMemberAttendance({
+        meetingId,
+        membershipId: id,
+        present: !(presentById[id] ?? false),
+      }).unwrap();
+    } catch (err) {
+      message.error(getApiErrorMessage(err, 'Could not update attendance'));
+    }
   }
 
-  function handleToggleGuest(id: string) {
-    setGuests((prev) =>
-      prev.map((guest) => (guest.id === id ? { ...guest, present: !guest.present } : guest)),
-    );
+  async function handleToggleGuest(id: string) {
+    const guest = guestRows.find((row) => row.id === id);
+    if (!guest) return;
+    try {
+      await updateGuest({ meetingId, guestId: id, present: !guest.present }).unwrap();
+    } catch (err) {
+      message.error(getApiErrorMessage(err, 'Could not update attendance'));
+    }
   }
 
-  function handleAddGuest(name: string) {
-    setGuests((prev) => [...prev, { id: crypto.randomUUID(), name, present: true }]);
-    setAddingGuest(false);
+  async function handleAddGuest(name: string) {
+    try {
+      await createGuest({ meetingId, name }).unwrap();
+      setAddingGuest(false);
+    } catch (err) {
+      message.error(getApiErrorMessage(err, 'Could not add the guest'));
+    }
   }
 
-  function handleRemoveGuest(id: string) {
-    setGuests((prev) => prev.filter((guest) => guest.id !== id));
+  async function handleRemoveGuest(id: string) {
+    try {
+      await deleteGuest({ meetingId, guestId: id }).unwrap();
+    } catch (err) {
+      message.error(getApiErrorMessage(err, 'Could not remove the guest'));
+    }
   }
 
-  function handleMarkAll(present: boolean) {
-    const next: Record<string, boolean> = {};
-    if (present) for (const row of memberRows) next[row.id] = true;
-    setPresentById(next);
-    setGuests((prev) => prev.map((guest) => ({ ...guest, present })));
+  async function handleMarkAll(present: boolean) {
+    try {
+      await markAll({ meetingId, present }).unwrap();
+    } catch (err) {
+      message.error(getApiErrorMessage(err, 'Could not update attendance'));
+    }
   }
 
   return (
@@ -223,12 +299,18 @@ export function AttendanceTab() {
           <div className="flex items-center gap-2 sm:shrink-0">
             <Button
               size="large"
+              loading={isMarkingAll}
               onClick={() => handleMarkAll(true)}
               disabled={totalRoster === 0 || totalPresent === totalRoster}
             >
               Mark all
             </Button>
-            <Button size="large" onClick={() => handleMarkAll(false)} disabled={totalPresent === 0}>
+            <Button
+              size="large"
+              loading={isMarkingAll}
+              onClick={() => handleMarkAll(false)}
+              disabled={totalPresent === 0}
+            >
               Clear
             </Button>
           </div>
@@ -243,11 +325,7 @@ export function AttendanceTab() {
           </span>
         </div>
 
-        {membersLoading ? (
-          <div className="rounded-xl border border-dashed border-line-strong px-6 py-10 text-center text-xs text-ink-muted">
-            Loading members…
-          </div>
-        ) : filteredMembers.length === 0 ? (
+        {filteredMembers.length === 0 ? (
           <div className="rounded-xl border border-dashed border-line-strong px-6 py-10 text-center">
             <p className="text-sm font-medium text-ink">
               {memberRows.length === 0 ? 'No members yet' : 'No matches'}
@@ -271,7 +349,7 @@ export function AttendanceTab() {
             Guests
           </span>
           <span className="text-[11px] text-ink-muted">
-            {presentGuests}/{guests.length} present
+            {presentGuests}/{guestRows.length} present
           </span>
         </div>
 

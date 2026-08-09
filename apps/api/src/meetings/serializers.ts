@@ -1,4 +1,10 @@
-import type { Meeting } from '@prisma/client';
+import type {
+  Meeting,
+  MeetingAttendance as MeetingAttendanceRow,
+  MeetingGuestAttendance as MeetingGuestAttendanceRow,
+  MeetingRoleAssignment as MeetingRoleAssignmentRow,
+  TableTopicQuestion as TableTopicQuestionRow,
+} from '@prisma/client';
 
 /** Wire shape for `/meetings` — string-identical to the web
  * `lib/meetings/meetings.ts` `Meeting` interface. The DB stores
@@ -45,4 +51,54 @@ export function toMeetingWire(row: Meeting): MeetingWire {
     if (row.wordPartOfSpeech) wire.word.partOfSpeech = row.wordPartOfSpeech;
   }
   return wire;
+}
+
+/** Wire shape matches the web `lib/meetings/role-assignments.ts`
+ * `RoleAssignment` interface. Meeting id is implicit in the URL. */
+export interface MeetingRoleAssignmentWire {
+  roleKey: string;
+  membershipId: string | null;
+}
+
+export function toMeetingRoleAssignmentWire(
+  row: MeetingRoleAssignmentRow,
+): MeetingRoleAssignmentWire {
+  return { roleKey: row.roleKey, membershipId: row.membershipId };
+}
+
+/** Wire shape matches the web `lib/meetings/table-topics.ts`
+ * `TableTopicQuestion` interface. */
+export interface TableTopicQuestionWire {
+  id: string;
+  text: string;
+  asked: boolean;
+}
+
+export function toTableTopicQuestionWire(row: TableTopicQuestionRow): TableTopicQuestionWire {
+  return { id: row.id, text: row.text, asked: row.asked };
+}
+
+/** Wire shape matches the web `lib/meetings/attendance.ts` `MemberAttendance`
+ * interface. */
+export interface MeetingAttendanceWire {
+  membershipId: string;
+  present: boolean;
+}
+
+export function toMeetingAttendanceWire(row: MeetingAttendanceRow): MeetingAttendanceWire {
+  return { membershipId: row.membershipId, present: row.present };
+}
+
+/** Wire shape matches the web `lib/meetings/attendance.ts` `GuestAttendance`
+ * interface. */
+export interface MeetingGuestAttendanceWire {
+  id: string;
+  name: string;
+  present: boolean;
+}
+
+export function toMeetingGuestAttendanceWire(
+  row: MeetingGuestAttendanceRow,
+): MeetingGuestAttendanceWire {
+  return { id: row.id, name: row.name, present: row.present };
 }

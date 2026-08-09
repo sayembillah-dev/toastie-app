@@ -307,6 +307,7 @@ model Club {
   invites          Invite[]
   joinRequests     JoinRequest[]
   meetings         Meeting[]
+  plannerRows      PlannerRow[]
   prospects        Prospect[]
   assets           Asset[]
   libraryDocuments LibraryDocument[]
@@ -370,6 +371,8 @@ model Membership {
   speechSlotRequests  SpeechSlotRequest[]
   duesRecords         DuesRecord[]
   tasks               Task[]
+  meetingRoleAssignments MeetingRoleAssignment[]
+  meetingAttendance      MeetingAttendance[]
 
   @@unique([clubId, userId])
   /// Enables composite tenant FKs on operational tables: any child row
@@ -489,13 +492,122 @@ model Meeting {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  club           Club            @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  visitLogs      VisitLog[]
-  checklistItems ChecklistItem[] @relation("MeetingChecklist")
+  club                Club                     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  visitLogs           VisitLog[]
+  checklistItems      ChecklistItem[]          @relation("MeetingChecklist")
+  roleAssignments     MeetingRoleAssignment[]  @relation("MeetingRoles")
+  tableTopicQuestions TableTopicQuestion[]     @relation("MeetingTableTopics")
+  attendanceRecords   MeetingAttendance[]      @relation("MeetingAttendance")
+  guestAttendance     MeetingGuestAttendance[] @relation("MeetingGuestAttendance")
+  plannerRows         PlannerRow[]
 
   @@unique([clubId, id])
   @@unique([clubId, meetingNumber])
   @@index([clubId, dateTime])
+}
+
+/// One row per (meeting, role key) — who's assigned to President, Toastmaster,
+/// Ah Counter, etc. `roleKey` matches `RoleDef.key` in the web's
+/// `lib/meetings/roles.ts`; kept as a plain string rather than an enum since
+/// that list is presentation-owned and can grow without a migration.
+/// `membershipId` is nullable so a role can be created "open" and filled in
+/// later — the row itself is only created once someone touches the picker.
+model MeetingRoleAssignment {
+  id           String   @id @default(cuid())
+  clubId       String
+  meetingId    String
+  roleKey      String
+  membershipId String?
+  updatedAt    DateTime @default(now()) @updatedAt
+
+  meeting    Meeting     @relation("MeetingRoles", fields: [clubId, meetingId], references: [clubId, id], onDelete: Cascade)
+  membership Membership? @relation(fields: [clubId, membershipId], references: [clubId, id], onDelete: SetNull)
+
+  @@unique([clubId, meetingId, roleKey])
+  @@index([clubId, meetingId])
+}
+
+/// One Table Topics question, in ask order (`createdAt`). Meeting-scoped like
+/// `ChecklistItem` — capped at 10 by the Table Topics tab, not enforced here.
+model TableTopicQuestion {
+  id        String    @id @default(cuid())
+  clubId    String
+  meetingId String
+  text      String    @db.Text
+  asked     Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime?
+
+  meeting Meeting @relation("MeetingTableTopics", fields: [clubId, meetingId], references: [clubId, id], onDelete: Cascade)
+
+  @@index([clubId, meetingId])
+}
+
+/// Club-roster check-in for one meeting. A row only exists once a member has
+/// been toggled at least once — absence means "not yet marked present",
+/// matching the local-state behaviour the Attendance tab replaces.
+model MeetingAttendance {
+  id           String   @id @default(cuid())
+  clubId       String
+  meetingId    String
+  membershipId String
+  present      Boolean  @default(false)
+  updatedAt    DateTime @default(now()) @updatedAt
+
+  meeting    Meeting    @relation("MeetingAttendance", fields: [clubId, meetingId], references: [clubId, id], onDelete: Cascade)
+  membership Membership @relation(fields: [clubId, membershipId], references: [clubId, id], onDelete: Cascade)
+
+  @@unique([clubId, meetingId, membershipId])
+  @@index([clubId, meetingId])
+}
+
+/// A non-roster attendee added by hand from the Attendance tab. Free-text
+/// name rather than a `Prospect` link — the tab's "type a name and check
+/// them in" flow doesn't collect enough to justify creating a guest-pipeline
+/// record on the spot.
+model MeetingGuestAttendance {
+  id        String    @id @default(cuid())
+  clubId    String
+  meetingId String
+  name      String
+  present   Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime?
+
+  meeting Meeting @relation("MeetingGuestAttendance", fields: [clubId, meetingId], references: [clubId, id], onDelete: Cascade)
+
+  @@index([clubId, meetingId])
+}
+
+/// One row on the Education › Planner grid — a meeting being roughed out
+/// before it's created for real. `meetingNumber`/`dateTime` are typed in by
+/// hand and stay nullable (the row can exist long before either is known);
+/// `assignees` is `Record<AssigneeField, Assignee | null>` (see the web's
+/// `lib/education/planner.ts`) stored as one JSON blob rather than 13
+/// columns — the shape is presentation-owned and always read as a whole.
+/// `meetingId` is set once "Create meeting" succeeds; it's the join the grid
+/// uses to shade a row green, replacing a fragile meetingNumber-matching
+/// heuristic.
+model PlannerRow {
+  id            String    @id @default(cuid())
+  clubId        String
+  meetingNumber Int?
+  /// Raw `datetime-local` string ("YYYY-MM-DDTHH:mm") — same free-text
+  /// storage as the grid's own input, not a `DateTime` column, so a
+  /// half-filled date doesn't need a sentinel value.
+  dateTime      String?
+  theme         String    @default("")
+  notes         String    @default("") @db.Text
+  assignees     Json      @default("{}")
+  meetingId     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime?
+
+  club    Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  meeting Meeting? @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+
+  @@index([clubId, createdAt])
+  @@index([meetingId])
 }
 
 // ------------------------------------------------------- education --

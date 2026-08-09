@@ -96,12 +96,18 @@ export const meetingDraftSlice = createSlice({
       const draft = ensureDraft(state, action.payload.meetingId);
       draft.word = { ...draft.word, ...action.payload.patch };
     },
-    roleAssigned(
+    /** Mirrors the persisted `MeetingRoleAssignment` rows into the draft
+     * whenever the Roles query resolves — dispatched from the meeting page
+     * shell, the same way `draftHydrated` seeds theme/word, so Overview and
+     * the Agenda sheet stay correct even for a tab the user hasn't opened.
+     * Unlike theme/word there's no "unsaved edit" to protect: every role
+     * pick already round-trips through the API, so a fresh fetch always
+     * wins. */
+    rolesHydrated(
       state,
-      action: PayloadAction<MeetingScoped & { roleKey: string; memberId: string | undefined }>,
+      action: PayloadAction<MeetingScoped & { roles: Record<string, string | undefined> }>,
     ) {
-      const draft = ensureDraft(state, action.payload.meetingId);
-      draft.roles[action.payload.roleKey] = action.payload.memberId;
+      ensureDraft(state, action.payload.meetingId).roles = { ...action.payload.roles };
     },
     speakerAdded: {
       reducer(state, action: PayloadAction<MeetingScoped & { id: string }>) {
@@ -159,7 +165,7 @@ export const {
   draftHydrated,
   themeChanged,
   wordChanged,
-  roleAssigned,
+  rolesHydrated,
   speakerAdded,
   speakerChanged,
   speakerRemoved,

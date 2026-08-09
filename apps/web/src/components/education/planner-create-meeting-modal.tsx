@@ -15,10 +15,15 @@ import { useState } from 'react';
 import { AssigneeSelect } from '@/components/education/assignee-select';
 import type { Member } from '@/lib/education/members';
 import type { Assignee, AssigneeField, PlannerRow } from '@/lib/education/planner';
+import { toAssigneesJson } from '@/lib/education/planner';
 import { buildMeetingSeed, countGuestAssignees } from '@/lib/meetings/from-planner';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { DEFAULT_START_TIME } from '@/lib/meetings/meetings';
-import { useCreateMeetingMutation } from '@/store/api';
+import {
+  useCreateMeetingMutation,
+  useSetMeetingRoleMutation,
+  useUpdatePlannerRowMutation,
+} from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 import { useAppDispatch } from '@/store/hooks';
 import { draftSeeded } from '@/store/meeting-draft-slice';
@@ -32,9 +37,6 @@ interface PlannerCreateMeetingModalProps {
   onClose: () => void;
   /** Fired once the dialog has finished animating away. */
   onClosed: () => void;
-  /** Edits made here belong to the planner too — the parent writes them back to
-   * the row so the grid and the new meeting agree. */
-  onCreated: (row: PlannerRow, meeting: Meeting) => void;
 }
 
 interface RoleField {
@@ -123,8 +125,10 @@ function Labelled({
  * holds, laid out at a glance and still editable, because the planner grid is
  * wide enough that a missed slot is easy to scroll past.
  *
- * Creating leaves the meeting as a draft on the Meetings page and carries the
- * roles and speaker pairs into its working draft.
+ * Creating leaves the meeting as a draft on the Meetings page, writes the
+ * planner's role picks straight to the meeting's own role assignments, links
+ * the row to the new meeting (the grid's green-shading join), and saves back
+ * anything edited in this dialog.
  */
 export function PlannerCreateMeetingModal({
   open,
@@ -132,7 +136,6 @@ export function PlannerCreateMeetingModal({
   members,
   onClose,
   onClosed,
-  onCreated,
 }: PlannerCreateMeetingModalProps) {
   /* `null` means "untouched" — the row itself is the value until the user
    * changes something, so a reopened dialog always shows current row data
@@ -140,6 +143,8 @@ export function PlannerCreateMeetingModal({
   const [edits, setEdits] = useState<PlannerRow | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [createMeeting, { isLoading: isSubmitting }] = useCreateMeetingMutation();
+  const [setMeetingRole] = useSetMeetingRoleMutation();
+  const [updatePlannerRow] = useUpdatePlannerRowMutation();
   const dispatch = useAppDispatch();
   const { message } = App.useApp();
 
@@ -169,24 +174,55 @@ export function PlannerCreateMeetingModal({
     if (!form || !canSubmit || isSubmitting) return;
     setSubmitError(null);
 
+    const meetingNumber = form.meetingNumber as number;
+    let created: Meeting;
     try {
-      const created = await createMeeting({
-        meetingNumber: form.meetingNumber as number,
+      created = await createMeeting({
+        meetingNumber,
         /* Seconds appended to match the shape the meeting record stores. */
         dateTime: `${date}T${time}:00`,
         theme,
       }).unwrap();
-
-      /* The roles and speaker pairs the planner already settled, so the meeting
-       * opens with its Roles and Prepared Speakers tabs part-filled. */
-      dispatch(draftSeeded(created.id, buildMeetingSeed(form)));
-
-      message.success(`Meeting #${created.meetingNumber} created as a draft`);
-      onCreated(form, created);
-      onClose();
     } catch (error) {
       setSubmitError(getApiErrorMessage(error, 'Could not create the meeting'));
+      return;
     }
+
+    message.success(`Meeting #${created.meetingNumber} created as a draft`);
+
+    /* Everything past this point is best-effort follow-up — the meeting
+     * itself already exists, so a hiccup here surfaces as a toast rather
+     * than blocking the dialog on a meeting that was, in fact, created. */
+    try {
+      const seed = buildMeetingSeed(form);
+      await Promise.all(
+        Object.entries(seed.roles).map(([roleKey, memberId]) =>
+          setMeetingRole({ meetingId: created.id, roleKey, membershipId: memberId }).unwrap(),
+        ),
+      );
+      /* Speaker pairs still seed into the client-only draft — Prepared
+       * Speakers has no backend of its own yet. */
+      dispatch(draftSeeded(created.id, seed));
+
+      await updatePlannerRow({
+        rowId: form.id,
+        meetingId: created.id,
+        meetingNumber: form.meetingNumber,
+        dateTime: form.dateTime,
+        theme: form.theme,
+        notes: form.notes,
+        assignees: toAssigneesJson(form),
+      }).unwrap();
+    } catch (error) {
+      message.warning(
+        getApiErrorMessage(
+          error,
+          'Meeting created, but some details did not carry over — check the Roles tab',
+        ),
+      );
+    }
+
+    onClose();
   }
 
   return (

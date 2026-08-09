@@ -8,22 +8,26 @@ import {
   Plus,
   TrashSimple,
 } from '@phosphor-icons/react/dist/ssr';
-import { Button, Dropdown, Input } from 'antd';
+import { App, Button, Dropdown, Input, Skeleton } from 'antd';
 import { useState } from 'react';
+import type { TableTopicQuestion } from '@/lib/meetings/table-topics';
+import { MAX_TABLE_TOPIC_QUESTIONS, TABLE_TOPIC_TEXT_MAX } from '@/lib/meetings/table-topics';
+import {
+  useCreateTableTopicQuestionMutation,
+  useDeleteTableTopicQuestionMutation,
+  useGetTableTopicsQuery,
+  useUpdateTableTopicQuestionMutation,
+} from '@/store/api';
+import { getApiErrorMessage } from '@/store/api-error';
 
-const MAX_QUESTIONS = 10;
-
-interface Question {
-  id: string;
-  /** Body of the topic — new lines survive to become follow-up prompts under
-   * the main question when the row renders. */
-  text: string;
-  asked: boolean;
-}
+/** Sentinel `editingId` for a question that hasn't been created yet — the Add
+ * flow opens the editor first and only calls `create` once there's real text
+ * to save, so every row in the list is already persisted. */
+const NEW_QUESTION = 'new';
 
 interface QuestionRowProps {
   number: number;
-  question: Question;
+  question: TableTopicQuestion;
   isEditing: boolean;
   draftText: string;
   onDraftChange: (text: string) => void;
@@ -82,7 +86,7 @@ function QuestionRow({
                 }
               }}
               autoSize={{ minRows: 2, maxRows: 6 }}
-              maxLength={400}
+              maxLength={TABLE_TOPIC_TEXT_MAX}
             />
             <div className="flex items-center justify-end gap-2">
               <Button size="small" onClick={onCancel}>
@@ -164,73 +168,100 @@ function QuestionRow({
   );
 }
 
-/** Table Topics tab — a numbered question bank capped at MAX_QUESTIONS. The
- * Table Topics master can add, edit, delete, and mark questions as asked
- * during the meeting. Add sits at the top so it's always in reach on long
- * lists. Questions persist to local state for now. */
-export function TableTopicsTab() {
-  const [questions, setQuestions] = useState<Question[]>([]);
+interface TableTopicsTabProps {
+  meetingId: string;
+}
+
+/** Table Topics tab — a numbered question bank capped at
+ * `MAX_TABLE_TOPIC_QUESTIONS`. The Table Topics master can add, edit,
+ * delete, and mark questions as asked during the meeting. Every change
+ * saves immediately — no Save button, matching the Checklist tab. */
+export function TableTopicsTab({ meetingId }: TableTopicsTabProps) {
+  const { message } = App.useApp();
+  const { data: questions, isLoading, isError, error, refetch } = useGetTableTopicsQuery(meetingId);
+  const [createQuestion, { isLoading: isCreating }] = useCreateTableTopicQuestionMutation();
+  const [updateQuestion] = useUpdateTableTopicQuestionMutation();
+  const [deleteQuestion] = useDeleteTableTopicQuestionMutation();
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftText, setDraftText] = useState('');
 
+  if (isLoading) {
+    return (
+      <section className="mx-auto max-w-3xl">
+        <div className="rounded-2xl border border-line bg-canvas p-4 sm:p-6">
+          <Skeleton active title paragraph={{ rows: 4 }} />
+        </div>
+      </section>
+    );
+  }
+
+  if (isError || !questions) {
+    return (
+      <section className="mx-auto max-w-3xl">
+        <div className="rounded-2xl border border-dashed border-line-strong bg-canvas p-6 text-center">
+          <p className="text-sm font-medium text-ink">Could not load the questions</p>
+          <p className="mt-1 text-xs text-ink-muted">{getApiErrorMessage(error)}</p>
+          <Button className="mt-4" size="small" onClick={() => refetch()}>
+            Try again
+          </Button>
+        </div>
+      </section>
+    );
+  }
+
   const askedCount = questions.filter((question) => question.asked).length;
-  const canAdd = questions.length < MAX_QUESTIONS && editingId === null;
+  const canAdd = questions.length < MAX_TABLE_TOPIC_QUESTIONS && editingId === null && !isCreating;
 
   function handleAdd() {
     if (!canAdd) return;
-    const id = crypto.randomUUID();
-    setQuestions((prev) => [...prev, { id, text: '', asked: false }]);
-    setEditingId(id);
+    setEditingId(NEW_QUESTION);
     setDraftText('');
   }
 
-  function handleStartEdit(question: Question) {
+  function handleStartEdit(question: TableTopicQuestion) {
     setEditingId(question.id);
     setDraftText(question.text);
   }
 
-  function handleSaveEdit() {
-    if (!editingId) return;
+  function handleCancelEdit() {
+    setEditingId(null);
+    setDraftText('');
+  }
+
+  async function handleSaveEdit() {
     const trimmed = draftText.trim();
     if (trimmed.length === 0) {
-      /* Saving an empty draft is the same as cancelling on a fresh row —
-       * remove blank additions, keep existing questions unchanged. */
       handleCancelEdit();
       return;
     }
-    setQuestions((prev) =>
-      prev.map((question) =>
-        question.id === editingId ? { ...question, text: trimmed } : question,
-      ),
-    );
-    setEditingId(null);
-    setDraftText('');
-  }
-
-  function handleCancelEdit() {
-    /* If the row was newly added it has an empty saved text — drop it. Rows
-     * being re-edited keep their previous text, so they survive the filter. */
-    setQuestions((prev) =>
-      prev.filter((question) => question.id !== editingId || question.text.length > 0),
-    );
-    setEditingId(null);
-    setDraftText('');
-  }
-
-  function handleDelete(id: string) {
-    setQuestions((prev) => prev.filter((question) => question.id !== id));
-    if (editingId === id) {
-      setEditingId(null);
-      setDraftText('');
+    try {
+      if (editingId === NEW_QUESTION) {
+        await createQuestion({ meetingId, text: trimmed }).unwrap();
+      } else if (editingId) {
+        await updateQuestion({ meetingId, itemId: editingId, text: trimmed }).unwrap();
+      }
+      handleCancelEdit();
+    } catch (err) {
+      message.error(getApiErrorMessage(err, 'Could not save the question'));
     }
   }
 
-  function handleToggleAsked(id: string) {
-    setQuestions((prev) =>
-      prev.map((question) =>
-        question.id === id ? { ...question, asked: !question.asked } : question,
-      ),
-    );
+  async function handleDelete(id: string) {
+    if (editingId === id) handleCancelEdit();
+    try {
+      await deleteQuestion({ meetingId, itemId: id }).unwrap();
+    } catch (err) {
+      message.error(getApiErrorMessage(err, 'Could not delete the question'));
+    }
+  }
+
+  async function handleToggleAsked(question: TableTopicQuestion) {
+    try {
+      await updateQuestion({ meetingId, itemId: question.id, asked: !question.asked }).unwrap();
+    } catch (err) {
+      message.error(getApiErrorMessage(err, 'Could not update the question'));
+    }
   }
 
   return (
@@ -240,12 +271,12 @@ export function TableTopicsTab() {
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-ink">Table Topic Questions</h2>
             <p className="mt-1 text-xs text-ink-soft">
-              Up to {MAX_QUESTIONS} questions. Mark each as asked during the meeting.
+              Up to {MAX_TABLE_TOPIC_QUESTIONS} questions. Mark each as asked during the meeting.
             </p>
           </div>
           <div className="shrink-0 text-right">
             <div className="text-xs font-medium text-ink-muted">
-              {questions.length}/{MAX_QUESTIONS}
+              {questions.length}/{MAX_TABLE_TOPIC_QUESTIONS}
             </div>
             <div
               className={`mt-0.5 text-xs font-medium ${
@@ -272,7 +303,24 @@ export function TableTopicsTab() {
           </Button>
         </div>
 
-        {questions.length === 0 ? (
+        {editingId === NEW_QUESTION ? (
+          <ul className="mb-2 flex flex-col gap-2">
+            <QuestionRow
+              number={questions.length + 1}
+              question={{ id: NEW_QUESTION, text: '', asked: false }}
+              isEditing
+              draftText={draftText}
+              onDraftChange={setDraftText}
+              onSave={handleSaveEdit}
+              onCancel={handleCancelEdit}
+              onEdit={() => {}}
+              onDelete={() => {}}
+              onToggleAsked={() => {}}
+            />
+          </ul>
+        ) : null}
+
+        {questions.length === 0 && editingId !== NEW_QUESTION ? (
           <div className="rounded-xl border border-dashed border-line-strong px-6 py-10 text-center">
             <p className="text-sm font-medium text-ink">No questions yet</p>
             <p className="mt-1 text-xs text-ink-muted">
@@ -293,7 +341,7 @@ export function TableTopicsTab() {
                 onCancel={handleCancelEdit}
                 onEdit={() => handleStartEdit(question)}
                 onDelete={() => handleDelete(question.id)}
-                onToggleAsked={() => handleToggleAsked(question.id)}
+                onToggleAsked={() => handleToggleAsked(question)}
               />
             ))}
           </ul>
