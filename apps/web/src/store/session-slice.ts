@@ -64,6 +64,18 @@ export const sessionSlice = createSlice({
     passwordChanged(state) {
       if (state.user) state.user.mustChangePassword = false;
     },
+    /** Patches the identity fields the profile page can edit straight onto
+     * the session, mirroring `passwordChanged` — the mutation already
+     * returns the fresh values, so a full session reload would be waste. */
+    profileUpdated(
+      state,
+      action: PayloadAction<
+        Pick<SessionUser, 'firstName' | 'lastName' | 'email' | 'phone' | 'avatarUrl'>
+      >,
+    ) {
+      if (!state.user) return;
+      Object.assign(state.user, action.payload);
+    },
     sessionCleared() {
       return initialState;
     },
@@ -82,6 +94,7 @@ export const {
   sessionUnauthenticated,
   contextChanged,
   passwordChanged,
+  profileUpdated,
   sessionCleared,
 } = sessionSlice.actions;
 export const {

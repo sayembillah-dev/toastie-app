@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { createId } from '@paralleldrive/cuid2';
 import { Prisma } from '@prisma/client';
@@ -13,9 +14,12 @@ import { TokenService } from '@/auth';
 import { type OfficerRole, toClubRoles } from '@/memberships';
 import { PrismaService } from '@/prisma';
 
+import type { UpdateProfileDto } from './dto/profile.dto';
 import type { CreateUserDto, SetUserPasswordDto, UpdateUserDto } from './dto/users.dto';
 import {
   type CreateUserResultWire,
+  type ProfileWire,
+  toProfileWire,
   toUserWire,
   USERS_PAGE_SIZE,
   type UsersPageWire,
@@ -362,6 +366,70 @@ export class UsersService {
     });
     if (!row) throw new NotFoundException(`No user with id "${userId}"`);
     return row;
+  }
+
+  /** Self-service read — the account holder's own view of themselves,
+   * including bio/avatar/socials and a read-only pathway summary per club.
+   * No permission check: `userId` always comes from `@CurrentUser()`, never
+   * a param, so there's nothing to authorise beyond "is signed in". */
+  async getProfile(userId: string): Promise<ProfileWire> {
+    const row = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!row) throw new NotFoundException(`No user with id "${userId}"`);
+    return toProfileWire(row, await this.loadProfileMemberships(userId));
+  }
+
+  /** Self-service edit — same trust boundary as `AuthService.changePassword`:
+   * `userId` comes from `@CurrentUser()`, so the account holder can only ever
+   * touch their own row. `email`/`phone` double as contact/sign-in
+   * credentials, so changing either requires re-confirming the current
+   * password in the same request — everything else (name, bio, avatar,
+   * socials) is a plain field edit. */
+  async updateProfile(userId: string, dto: UpdateProfileDto): Promise<ProfileWire> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException(`No user with id "${userId}"`);
+
+    if (dto.email !== undefined || dto.phone !== undefined) {
+      if (!dto.currentPassword) {
+        throw new BadRequestException({ code: 'CURRENT_PASSWORD_REQUIRED' });
+      }
+      const currentOk = await this.tokens.verifyPassword(user.passwordHash, dto.currentPassword);
+      if (!currentOk) {
+        throw new UnauthorizedException({ code: 'INVALID_CREDENTIALS' });
+      }
+    }
+
+    const data: Prisma.UserUpdateInput = {};
+    if (dto.firstName !== undefined) data.firstName = dto.firstName.trim();
+    if (dto.lastName !== undefined) data.lastName = dto.lastName.trim();
+    if (dto.email !== undefined) data.email = dto.email.trim().toLowerCase() || null;
+    if (dto.phone !== undefined) data.phone = normalisePhone(dto.phone);
+    if (dto.bio !== undefined) data.bio = dto.bio.trim() || null;
+    if (dto.avatarUrl !== undefined) data.avatarUrl = dto.avatarUrl || null;
+    if (dto.socials !== undefined) {
+      data.socials = dto.socials.map((s) => ({ platform: s.platform, url: s.url.trim() }));
+    }
+
+    try {
+      const updated = await this.prisma.user.update({ where: { id: userId }, data });
+      return toProfileWire(updated, await this.loadProfileMemberships(userId));
+    } catch (err) {
+      throw this.mapUniqueConflict(err);
+    }
+  }
+
+  /** Read-only pathway summary for the profile screen — pathway/level stay
+   * editable only through the Education module. */
+  private async loadProfileMemberships(userId: string) {
+    const memberships = await this.prisma.membership.findMany({
+      where: { userId, status: 'active' },
+      select: { clubId: true, pathway: true, level: true, club: { select: { name: true } } },
+    });
+    return memberships.map((m) => ({
+      clubId: m.clubId,
+      clubName: m.club.name,
+      pathway: m.pathway,
+      level: m.level,
+    }));
   }
 
   private async loadWithCounts(userId: string) {

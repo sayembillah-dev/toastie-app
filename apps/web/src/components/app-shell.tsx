@@ -13,7 +13,6 @@ import {
   Gear,
   GraduationCap,
   List,
-  LockKey,
   MagnifyingGlass,
   Question,
   ShieldCheck,
@@ -26,7 +25,7 @@ import {
   X,
 } from '@phosphor-icons/react/dist/ssr';
 import type { Action, ResourceKey } from '@toastly/access';
-import { App, Avatar, Badge, Button, Drawer, Dropdown, Input, Layout, Menu } from 'antd';
+import { App, Avatar, Badge, Button, Drawer, Input, Layout, Menu } from 'antd';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -324,31 +323,10 @@ function SidebarBody({
           trailing={notificationCount > 0 ? <Badge count={notificationCount} size="small" /> : null}
         />
         {account ? (
-          <Dropdown
-            trigger={['click']}
-            placement={collapsed ? 'topLeft' : 'top'}
-            menu={{
-              items: [
-                {
-                  key: 'change-password',
-                  label: (
-                    <Link href="/change-password" onClick={onNavigate}>
-                      Change password
-                    </Link>
-                  ),
-                  icon: <LockKey size={15} />,
-                },
-                {
-                  key: 'logout',
-                  label: 'Log out',
-                  icon: <SignOut size={15} />,
-                  onClick: onLogout,
-                },
-              ],
-            }}
-          >
-            <button
-              type="button"
+          <>
+            <Link
+              href="/profile"
+              onClick={onNavigate}
               title={collapsed ? account.name : undefined}
               className={`mt-2 flex h-9 w-full items-center rounded-lg transition-colors hover:bg-fill ${
                 collapsed ? 'justify-center' : 'gap-2.5 px-2.5'
@@ -358,8 +336,9 @@ function SidebarBody({
                 {account.name.charAt(0).toUpperCase()}
               </Avatar>
               {collapsed ? null : <span className="truncate text-sm text-ink">{account.name}</span>}
-            </button>
-          </Dropdown>
+            </Link>
+            <SideRow Icon={SignOut} label="Log out" collapsed={collapsed} onClick={onLogout} />
+          </>
         ) : null}
       </div>
     </div>
@@ -408,7 +387,10 @@ export function AppShell({ children, actions, notificationCount = 0 }: AppShellP
   const breadcrumbSlot = useAppSelector(selectBreadcrumb);
   const sessionUser = useAppSelector(selectSessionUser);
   const account = sessionUser
-    ? { name: `${sessionUser.firstName} ${sessionUser.lastName}` }
+    ? {
+        name: `${sessionUser.firstName} ${sessionUser.lastName}`,
+        avatarUrl: sessionUser.avatarUrl ?? undefined,
+      }
     : undefined;
   const dispatch = useAppDispatch();
   const closeMobileNav = () => dispatch(mobileNavClosed());

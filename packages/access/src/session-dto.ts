@@ -12,6 +12,8 @@ export interface SessionUser {
   email: string | null;
   firstName: string;
   lastName: string;
+  /** Data-URL or absolute image URL, self-service via `PATCH /profile`. */
+  avatarUrl: string | null;
   isSuperAdmin: boolean;
   /** True when someone other than the account holder chose the current
    * password (creation, admin-driven reset). Drives a post-login "set your

@@ -167,6 +167,15 @@ model User {
   /// Drives the post-login "set your own password" prompt; it's a nudge,
   /// not an enforced gate, so the rest of the app stays reachable either way.
   mustChangePassword Boolean    @default(false)
+  /// Short public-facing paragraph — self-service, edited from the profile
+  /// page. Same shape as `Prospect.bio`.
+  bio                String?    @db.Text
+  /// Data-URL or absolute image URL, same convention as `Prospect.avatarUrl`
+  /// — no upload service exists, so this is a client-side base64 encode.
+  avatarUrl          String?    @db.Text
+  /// `ProfileSocial[]` — a small array (0–12 items) embedded rather than a
+  /// join table, same trade-off as `Prospect.socials`.
+  socials            Json       @default("[]")
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
 

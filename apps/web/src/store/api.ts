@@ -79,6 +79,7 @@ import type {
 } from '@/lib/people/contact-logs';
 import type { Guest, UpdateGuestInput } from '@/lib/people/guests';
 import type { CreateVisitLogInput, UpdateVisitLogInput, VisitLog } from '@/lib/people/visit-logs';
+import type { Profile, UpdateProfileInput } from '@/lib/profile/profile';
 import type { Task, UpdateTaskInput } from '@/lib/tasks/tasks';
 
 import { routedBaseQuery } from './routed-base-query';
@@ -147,6 +148,7 @@ export const toastlyApi = createApi({
     'PlatformUser',
     'PlatformUserMembership',
     'OrgAssignment',
+    'Profile',
   ],
   endpoints: (build) => ({
     /* `includeRemoved` opts into seeing soft-removed members — the Club Admin
@@ -1451,6 +1453,18 @@ export const toastlyApi = createApi({
     changePassword: build.mutation<void, ChangePasswordInput>({
       query: (body) => ({ url: '/auth/password', method: 'PATCH', body }),
     }),
+    /* Self-service profile — the signed-in account holder's own view of
+     * themselves (bio/avatar/socials + a read-only pathway summary),
+     * distinct from `listPlatformUsers` (the Super Admin's cross-tenant
+     * view of everyone else). */
+    getMyProfile: build.query<Profile, void>({
+      query: () => ({ url: '/profile', method: 'GET' }),
+      providesTags: ['Profile'],
+    }),
+    updateMyProfile: build.mutation<Profile, UpdateProfileInput>({
+      query: (body) => ({ url: '/profile', method: 'PATCH', body }),
+      invalidatesTags: ['Profile'],
+    }),
     /* Anonymous credential handoff — same shape as `getPublicMeeting`:
      * matched by `isPublicUrl` in `routed-base-query.ts`, so no
      * `Authorization` header goes out. The row (and so this query) stops
@@ -1872,6 +1886,8 @@ export const {
   useGetAuthSessionQuery,
   useLazyGetAuthSessionQuery,
   useChangePasswordMutation,
+  useGetMyProfileQuery,
+  useUpdateMyProfileMutation,
   useGetCredentialShareQuery,
   useListPlatformUsersQuery,
   useSetPlatformUserStatusMutation,

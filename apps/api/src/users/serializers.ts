@@ -57,6 +57,61 @@ export const USERS_PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
  * fields are included so the client's "copy these credentials" card is
  * built from what the server actually persisted, not what the form
  * assumed would be accepted. */
+/** One club's pathway standing, as shown read-only on the profile page. The
+ * profile never writes these — pathway/level stay editable only through the
+ * Education module. */
+export interface ProfileMembershipWire {
+  clubId: string;
+  clubName: string;
+  pathway: string | null;
+  level: number | null;
+}
+
+/** Wire shape for `GET/PATCH /profile` — the account holder's own view of
+ * themselves. Unlike `UserWire` (the Super Admin's cross-tenant list row),
+ * this also carries the self-service bio/avatar/socials fields and the
+ * read-only pathway summary. */
+export interface ProfileWire {
+  id: string;
+  phone: string;
+  email: string | null;
+  firstName: string;
+  lastName: string;
+  bio: string | null;
+  avatarUrl: string | null;
+  socials: Array<{ platform: string; url: string }>;
+  createdAt: string;
+  memberships: ProfileMembershipWire[];
+}
+
+export function toProfileWire(row: User, memberships: ProfileMembershipWire[]): ProfileWire {
+  return {
+    id: row.id,
+    phone: row.phone,
+    email: row.email,
+    firstName: row.firstName,
+    lastName: row.lastName,
+    bio: row.bio,
+    avatarUrl: row.avatarUrl,
+    socials: parseSocials(row.socials),
+    createdAt: row.createdAt.toISOString(),
+    memberships,
+  };
+}
+
+function parseSocials(raw: unknown): Array<{ platform: string; url: string }> {
+  if (!Array.isArray(raw)) return [];
+  const out: Array<{ platform: string; url: string }> = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const { platform, url } = entry as { platform?: unknown; url?: unknown };
+    if (typeof platform === 'string' && typeof url === 'string') {
+      out.push({ platform, url });
+    }
+  }
+  return out;
+}
+
 export interface CreateUserResultWire extends UserWire {
   clubId: string | null;
   clubName: string | null;
