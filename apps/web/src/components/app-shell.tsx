@@ -9,7 +9,6 @@ import {
   CaretRight,
   ClipboardText,
   ClockCounterClockwise,
-  DotsThree,
   Gear,
   GraduationCap,
   List,
@@ -573,23 +572,12 @@ export function AppShell({ children, actions, notificationCount = 0 }: AppShellP
 
             <div className="ml-auto flex shrink-0 items-center gap-1">
               <UnitSwitcher />
-              <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-line-strong" />
-              {actions ?? (
+              {actions ? (
                 <>
-                  <Button
-                    type="text"
-                    size="small"
-                    aria-label="Settings"
-                    icon={<Gear size={18} className="text-ink-soft" />}
-                  />
-                  <Button
-                    type="text"
-                    size="small"
-                    aria-label="More options"
-                    icon={<DotsThree size={18} className="text-ink-soft" />}
-                  />
+                  <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-line-strong" />
+                  {actions}
                 </>
-              )}
+              ) : null}
             </div>
           </header>
 
