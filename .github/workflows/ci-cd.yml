@@ -41,10 +41,13 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          # Pinned via .nvmrc to Node 22 — matching the VPS runtime is not
-          # cosmetic: argon2 ships prebuilds keyed to NODE_MODULE_VERSION, so a
-          # bundle built on Node 24 (ABI 137) crashes on a Node 22 host (ABI
-          # 127) the moment it requires argon2.
+          # Pinned via .nvmrc to Node 24 — matching the VPS runtime is not
+          # cosmetic: argon2 ships prebuilds keyed to NODE_MODULE_VERSION, which
+          # is per-major-version. A bundle built on a different major than the
+          # host crashes at require-time the moment it loads argon2. Match
+          # whatever `node --version` reports on the deploy target, not
+          # whatever LTS happens to be current — check with `node --version`
+          # on the VPS before changing this.
           node-version-file: .nvmrc
           cache: pnpm
 

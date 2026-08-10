@@ -39,31 +39,50 @@ kept for rollback.
 
 ```bash
 sudo mkdir -p /srv/toastly/{releases,shared,tmp}
-sudo chown -R deploy:deploy /srv/toastly
+sudo chown -R "$USER":"$USER" /srv/toastly
 
-# Node must match the CI build — see the ABI note below.
-node --version   # expect v22.x
+# Node must match the CI build — see the ABI note below. Whatever this prints
+# is the version .nvmrc must have, not the other way around: match the box.
+node --version
 pm2 --version
 
 # Let PM2 survive reboots.
-pm2 startup systemd -u deploy --hp /home/deploy
+pm2 startup systemd -u "$USER" --hp "$HOME"
+
+# Log rotation — PM2 does not delete a process's logs when you `pm2 delete`
+# it, and without this a runaway or crash-looping process fills the disk
+# silently. Bit us once already during this project's own setup.
+pm2 install pm2-logrotate
+pm2 set pm2-logrotate:max_size 10M
+pm2 set pm2-logrotate:retain 7
+pm2 set pm2-logrotate:compress true
 ```
 
-Nginx: copy [`deploy/nginx.conf.example`](../deploy/nginx.conf.example), set
-`server_name`, then `nginx -t && systemctl reload nginx`.
+Reverse proxy: this deployment sits behind **Caddy**, not Nginx —
+[`deploy/Caddyfile`](../deploy/Caddyfile) is a copy of the live
+`/etc/caddy/Caddyfile`, kept here so routing changes are reviewed with the
+code that needs them. It matters that the `@api` path matcher tracks Nest's
+global prefix (`api`, set in `apps/api/src/main.ts`) — a stale matcher left
+over from whatever ran on this box before is a silent 404, not a crash. After
+editing the real file on the VPS:
+
+```bash
+sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+sudo systemctl reload caddy
+```
 
 ### 2. GitHub
 
 Create an environment named **`production`** (Settings → Environments), then add:
 
-| Secret              | Notes                                                               |
-| ------------------- | ------------------------------------------------------------------- |
-| `SSH_PRIVATE_KEY`   | Deploy user's private key                                           |
-| `SSH_HOST`          | VPS hostname or IP                                                  |
-| `SSH_USER`          | e.g. `deploy`                                                       |
-| `DATABASE_URL`      | Managed Postgres. Set `connection_limit` deliberately — see below   |
-| `JWT_ACCESS_SECRET` | ≥16 chars. Boot fails if it is still the `.env.example` placeholder |
-| `REDIS_URL`         | Only once Redis is live                                             |
+| Secret              | Notes                                                                                                                                                                                                          |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SSH_PRIVATE_KEY`   | Private half of a dedicated deploy keypair — don't reuse a personal key; generate one with `ssh-keygen`, append the `.pub` half to the deploy user's `authorized_keys`, and only the private half goes in here |
+| `SSH_HOST`          | VPS hostname or IP                                                                                                                                                                                             |
+| `SSH_USER`          | Whatever user owns `/srv/toastly` (e.g. `nifty`)                                                                                                                                                               |
+| `DATABASE_URL`      | Managed Postgres. Set `connection_limit` deliberately — see below                                                                                                                                              |
+| `JWT_ACCESS_SECRET` | ≥16 chars. Boot fails if it is still the `.env.example` placeholder                                                                                                                                            |
+| `REDIS_URL`         | Only once Redis is live                                                                                                                                                                                        |
 
 | Variable          | Value                       |
 | ----------------- | --------------------------- |
@@ -82,10 +101,13 @@ back — check `pm2 logs`.
 
 ## Things that will bite you if changed carelessly
 
-**Node 22, not 24.** `argon2` ships prebuilt binaries keyed to
-`NODE_MODULE_VERSION` (Node 22 = ABI 127, Node 24 = ABI 137). A bundle built on
-24 crashes on a 22 host the moment it requires argon2. CI pins the version via
-[`.nvmrc`](../.nvmrc); keep the VPS on the same major.
+**CI's Node major must match the VPS's, whatever that happens to be.** `argon2`
+ships prebuilt binaries keyed to `NODE_MODULE_VERSION`, which is per major Node
+version — a bundle built on one major crashes at require-time on a host running
+a different one. This deployment runs Node 24 on the VPS, so
+[`.nvmrc`](../.nvmrc) pins CI to 24 too — not because 24 is special, but because
+that's what `node --version` reports on the box. If the VPS is ever
+reprovisioned on a different major, `.nvmrc` has to move with it.
 
 **`API_URL` is baked at build time.** Next serialises `rewrites()` into
 `routes-manifest.json` during the build, so this cannot be changed by a restart
@@ -129,6 +151,15 @@ or rename in a _later_ deploy once nothing reads them (expand/contract). A
 migration that drops a column the running code still selects will break
 production during the window between migrate and reload — and rollback will not
 save you, because rolling back the code does not roll back the schema.
+
+**PM2 log files outlive `pm2 delete`.** They are not tied to the process
+registration — `~/.pm2/logs/<name>-out.log` and `-error.log` just keep growing
+until something rotates them, even after the app that wrote them is long gone.
+This filled a 29G disk to 100% on this exact VPS before this pipeline's first
+deploy, from logs belonging to an app removed weeks earlier. `pm2-logrotate`
+(installed in the one-time setup above) caps this going forward; without it,
+disk exhaustion is silent until a deploy fails with no free space to extract
+into.
 
 ## How a bad deploy is caught
 

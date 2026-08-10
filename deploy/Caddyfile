@@ -1,0 +1,32 @@
+# Live on the VPS at /etc/caddy/Caddyfile. Kept here so a change to routing
+# (e.g. a new API prefix) is reviewed alongside the code that needs it,
+# instead of drifting silently on the box. After editing the real file:
+#   sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+#   sudo systemctl reload caddy
+#
+# DNS resolves directly to origin (grey-cloud). Caddy auto-provisions and
+# renews the Let's Encrypt certificate and redirects HTTP → HTTPS.
+
+toastie.niftyitsolution.com {
+        encode zstd gzip
+
+        request_body {
+                max_size 25MB
+        }
+
+        # Nest's global prefix is 'api' (see apps/api/src/main.ts) — this must
+        # stay in sync with that, not with whatever the previous app on this
+        # box used.
+        @api path /api/*
+        handle @api {
+                reverse_proxy 127.0.0.1:4000 {
+                        header_up X-Real-IP {http.request.remote.host}
+                }
+        }
+
+        handle {
+                reverse_proxy 127.0.0.1:3000 {
+                        header_up X-Real-IP {http.request.remote.host}
+                }
+        }
+}
