@@ -7,7 +7,7 @@
   },
   "scripts": {
     "postinstall": "dotenv -e ../../.env -- prisma generate",
-    "dev": "nest start --watch",
+    "dev": "dotenv -e ../../.env -- prisma generate && nest start --watch",
     "build": "nest build",
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
