@@ -4,8 +4,9 @@ import { Alert, Button, Form, Input, Typography } from 'antd';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 
+import { RouteFallback } from '@/components/route-fallback';
 import { safeNextPath } from '@/lib/auth/next-path';
 import { writeAccessToken, writeRefreshToken, writeStoredContext } from '@/lib/auth/token-storage';
 import { phoneRules } from '@/lib/validation/rules';
@@ -31,7 +32,7 @@ interface FormValues {
  * Admin, `/area` etc. for a Director, `/` for a club member) — `/` itself
  * has no built surface outside a club context, so routing everyone
  * through it first would flash a blank page. */
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
@@ -126,6 +127,17 @@ export default function LoginPage() {
         </Text>
       </div>
     </div>
+  );
+}
+
+/** `useSearchParams()` (the `?next=` redirect target) bails out of
+ * prerendering, so the Suspense boundary has to wrap the component that reads
+ * it rather than live inside it. */
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<RouteFallback />}>
+      <LoginPageContent />
+    </Suspense>
   );
 }
 

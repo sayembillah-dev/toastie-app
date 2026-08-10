@@ -1,8 +1,10 @@
 'use client';
 
 import { notFound, useParams } from 'next/navigation';
+import { Suspense } from 'react';
 
 import { PublicRolePage } from '@/components/meetings/public-role-page';
+import { RouteFallback } from '@/components/route-fallback';
 import type { RoleKind } from '@/lib/meetings/role-state';
 
 const VALID_ROLES: readonly RoleKind[] = ['ah-counter', 'timer', 'grammarian'];
@@ -19,5 +21,11 @@ export default function MeetingRolePublicPage() {
     notFound();
   }
 
-  return <PublicRolePage kind={role} />;
+  // PublicRolePage reads useSearchParams(); the boundary keeps the prerender
+  // pass from failing the build.
+  return (
+    <Suspense fallback={<RouteFallback />}>
+      <PublicRolePage kind={role} />
+    </Suspense>
+  );
 }

@@ -2,7 +2,7 @@
 
 import type { Action, ResourceKey, Target } from '@toastly/access';
 import { can as canDecide } from '@toastly/access';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 
 import { sessionToSubject } from '@/lib/permissions/subject';
 import { useAppSelector } from '@/store/hooks';
@@ -43,9 +43,13 @@ export function useCan(): UseCanResult {
     [user, memberships, orgAssignments],
   );
 
-  const check = useMemo(() => {
-    if (!subject) return () => false;
-    return (action: Action, resource: ResourceKey, target?: Target) => {
+  // useCallback rather than a useMemo that returns a function: the React
+  // Compiler's `preserve-manual-memoization` rule cannot verify the memo of a
+  // returned closure and fails the lint. Behaviour is unchanged — with no
+  // subject this still default-denies.
+  const check = useCallback(
+    (action: Action, resource: ResourceKey, target?: Target) => {
+      if (!subject) return false;
       // Default the target to the active club so a call site doesn't have
       // to thread `clubId` through every gated check. Callers that need
       // a different anchor (e.g. an `own`-scoped task check for a
@@ -53,8 +57,9 @@ export function useCan(): UseCanResult {
       const effective: Target | undefined =
         target ?? (activeClubId ? { clubId: activeClubId } : undefined);
       return canDecide(subject, action, resource, effective);
-    };
-  }, [subject, activeClubId]);
+    },
+    [subject, activeClubId],
+  );
 
   return { can: check, isLoading: status === 'idle' };
 }

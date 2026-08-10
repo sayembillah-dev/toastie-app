@@ -4,8 +4,9 @@ import { Alert, Button, Form, Input, Typography } from 'antd';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 
+import { RouteFallback } from '@/components/route-fallback';
 import { safeNextPath } from '@/lib/auth/next-path';
 import { writeAccessToken, writeRefreshToken, writeStoredContext } from '@/lib/auth/token-storage';
 import { emailRules, passwordRules, phoneRules, shortNameRules } from '@/lib/validation/rules';
@@ -29,7 +30,7 @@ interface FormValues {
  * project_phone_auth memory). On success the account is created role-less:
  * the returned session carries `memberships: []` and `orgAssignments: []`,
  * which `AppFrame` recognises and swaps in the onboarding screen. */
-export default function RegisterPage() {
+function RegisterPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
@@ -137,6 +138,17 @@ export default function RegisterPage() {
         </Text>
       </div>
     </div>
+  );
+}
+
+/** `useSearchParams()` (the `?next=` redirect target) bails out of
+ * prerendering, so the Suspense boundary has to wrap the component that reads
+ * it rather than live inside it. */
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<RouteFallback />}>
+      <RegisterPageContent />
+    </Suspense>
   );
 }
 
