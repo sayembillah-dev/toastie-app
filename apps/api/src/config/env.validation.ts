@@ -61,12 +61,17 @@ class EnvironmentVariables {
   @IsNotEmpty({ message: 'CORS_ORIGINS is required when APP_ENV=production' })
   CORS_ORIGINS?: string;
 
-  // BullMQ is production-only by design, so Redis is only demanded there.
-  // Local development never connects to Redis at all.
-  @ValidateIf((env: EnvironmentVariables) => env.APP_ENV === AppEnv.Production)
-  @Matches(/^rediss?:\/\/.+/, {
-    message: 'REDIS_URL must be a redis:// or rediss:// URL when APP_ENV=production',
-  })
+  // NOT required by APP_ENV=production alone — QueueModule always binds the
+  // no-op InlineQueueService today (see queue.module.ts), regardless of
+  // environment, because no job type exists yet. Demanding infrastructure
+  // that nothing connects to turned the first-ever production boot into a
+  // crash loop. Validated for shape if present so a typo'd URL still fails
+  // loudly; move this to a hard requirement (add @IsNotEmpty +
+  // @ValidateIf(APP_ENV===production) back) in the same change that gives
+  // QueueModule a real BullMQ binding — see docs/DEPLOYMENT.md's Redis
+  // rollout section.
+  @IsOptional()
+  @Matches(/^rediss?:\/\/.+/, { message: 'REDIS_URL must be a redis:// or rediss:// URL' })
   REDIS_URL?: string;
 }
 

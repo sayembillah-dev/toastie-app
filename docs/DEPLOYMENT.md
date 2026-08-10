@@ -212,9 +212,13 @@ separate from `NODE_ENV` — the tooling forces `NODE_ENV=production` during
 - **Local**: `APP_ENV=development`. No Redis, no BullMQ.
   [`QueueModule`](../apps/api/src/queue/queue.module.ts) binds a no-op
   `QueueService`.
-- **Production**: `APP_ENV=production`. `REDIS_URL` becomes a hard boot
-  requirement, enforced in
-  [`env.validation.ts`](../apps/api/src/config/env.validation.ts).
+- **Production today**: also the no-op binding. `REDIS_URL` is validated for
+  shape _if present_ but is not yet required — see the note in
+  [`env.validation.ts`](../apps/api/src/config/env.validation.ts). It was
+  originally a hard requirement gated on `APP_ENV=production` alone, which
+  crash-looped the very first production boot demanding infrastructure that
+  no code path used. Don't reintroduce that: gate the requirement on BullMQ
+  actually being wired, not on the environment name.
 
 Call sites inject the abstract `QueueService` and never branch on the
 environment, so turning Redis on does not touch feature code.
@@ -228,3 +232,6 @@ To finish the Redis rollout:
    `QueueService` in the production branch.
 5. Declare each job in the `JobPayloads` map. Until one exists, `JobName` is
    `never` and `enqueue()` is uncallable by construction.
+6. Only now make `REDIS_URL` a hard requirement in `env.validation.ts` — put
+   the `@IsNotEmpty` + `@ValidateIf(APP_ENV===production)` back, since it's
+   finally true that production needs it.
