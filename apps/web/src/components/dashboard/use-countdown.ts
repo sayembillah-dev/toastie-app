@@ -24,13 +24,25 @@ function diffToCountdown(targetMs: number, nowMs: number): Countdown {
   };
 }
 
+/* `useSyncExternalStore` calls `getSnapshot` multiple times per render to
+ * check for tearing — if it returned `Date.now()` directly, two calls a
+ * millisecond apart would almost always differ, which reads as "the store
+ * changed mid-render" and forces another render, forever ("Maximum update
+ * depth exceeded"). Caching the value and only refreshing it from the
+ * interval tick keeps it stable between actual ticks. */
+let cachedNow = Date.now();
+
 function subscribe(onTick: () => void): () => void {
-  const id = setInterval(onTick, 1000);
+  cachedNow = Date.now();
+  const id = setInterval(() => {
+    cachedNow = Date.now();
+    onTick();
+  }, 1000);
   return () => clearInterval(id);
 }
 
 function getSnapshot(): number {
-  return Date.now();
+  return cachedNow;
 }
 
 /** Server and the pre-hydration client have no clock worth ticking — `null`
