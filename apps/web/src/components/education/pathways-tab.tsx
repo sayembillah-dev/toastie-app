@@ -3,6 +3,7 @@
 import {
   CaretRight,
   GraduationCap,
+  Info,
   MagnifyingGlass,
   Path,
   X,
@@ -45,6 +46,23 @@ function slugify(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 }
 
+/** Builds the "tell me about this project" Google search a member can hand
+ * straight to an AI overview or the first result. */
+function projectSearchUrl({
+  level,
+  levelTitle,
+  pathwayName,
+  projectName,
+}: {
+  level: number;
+  levelTitle: string;
+  pathwayName: string;
+  projectName: string;
+}): string {
+  const query = `I am currently Level ${level}: ${levelTitle} of ${pathwayName} and ${projectName} project in toastmaster. Tell me all about the project please.`;
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+}
+
 interface PathwayMatch {
   pathway: PathwayCatalogEntry;
   matchedProjects: string[];
@@ -69,15 +87,37 @@ function matchPathway(pathway: PathwayCatalogEntry, needle: string): PathwayMatc
   return { pathway, matchedProjects: Array.from(matchedProjects) };
 }
 
-function ProjectRow({ project, highlighted }: { project: CatalogProject; highlighted: boolean }) {
+function ProjectRow({
+  project,
+  highlighted,
+  level,
+  levelTitle,
+  pathwayName,
+}: {
+  project: CatalogProject;
+  highlighted: boolean;
+  level: number;
+  levelTitle: string;
+  pathwayName: string;
+}) {
   return (
     <div
       id={`project-${slugify(project.name)}`}
-      className={`rounded-lg border px-3 py-2 text-xs transition-colors sm:text-sm ${
+      className={`relative rounded-lg border px-3 py-2 pr-8 text-xs transition-colors sm:text-sm ${
         highlighted ? 'border-ink bg-fill' : 'border-line bg-canvas'
       }`}
     >
-      <div className="font-medium text-ink">{project.name}</div>
+      <a
+        href={projectSearchUrl({ level, levelTitle, pathwayName, projectName: project.name })}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={`Search for more about ${project.name}`}
+        title="Look this project up"
+        className="absolute right-1.5 top-1.5 flex size-6 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-fill-strong hover:text-ink"
+      >
+        <Info size={14} weight="bold" />
+      </a>
+      <div className="pr-1 font-medium text-ink">{project.name}</div>
       <div className="mt-1 inline-block rounded-full bg-fill-strong px-2 py-0.5 text-[10px] font-medium text-ink-soft sm:text-[11px]">
         {project.speechTime}
       </div>
@@ -85,7 +125,15 @@ function ProjectRow({ project, highlighted }: { project: CatalogProject; highlig
   );
 }
 
-function LevelSection({ level, highlightSet }: { level: CatalogLevel; highlightSet: Set<string> }) {
+function LevelSection({
+  level,
+  highlightSet,
+  pathwayName,
+}: {
+  level: CatalogLevel;
+  highlightSet: Set<string>;
+  pathwayName: string;
+}) {
   return (
     <section className="rounded-xl border border-line bg-sidebar p-4">
       <header className="mb-3 flex flex-wrap items-center gap-2">
@@ -107,6 +155,9 @@ function LevelSection({ level, highlightSet }: { level: CatalogLevel; highlightS
             key={project.name}
             project={project}
             highlighted={highlightSet.has(project.name)}
+            level={level.level}
+            levelTitle={level.title}
+            pathwayName={pathwayName}
           />
         ))}
       </div>
@@ -122,6 +173,9 @@ function LevelSection({ level, highlightSet }: { level: CatalogLevel; highlightS
                 key={project.name}
                 project={project}
                 highlighted={highlightSet.has(project.name)}
+                level={level.level}
+                levelTitle={level.title}
+                pathwayName={pathwayName}
               />
             ))}
           </div>
@@ -257,7 +311,12 @@ function PathwayDetailDrawer({
           <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6">
             <div className="flex flex-col gap-4">
               {pathway.levels.map((level) => (
-                <LevelSection key={level.level} level={level} highlightSet={highlightSet} />
+                <LevelSection
+                  key={level.level}
+                  level={level}
+                  highlightSet={highlightSet}
+                  pathwayName={pathway.name}
+                />
               ))}
             </div>
           </div>
