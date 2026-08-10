@@ -1,4 +1,13 @@
-import { BadRequestException, Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+} from '@nestjs/common';
 
 import { CurrentContext, type RequestContext, Requires } from '@/access';
 
@@ -44,6 +53,15 @@ export class MeetingsController {
     @Body() dto: UpdateMeetingDto,
   ): Promise<MeetingWire> {
     return this.meetings.update(ctx.subject, meetingId, dto);
+  }
+
+  @Requires('meeting', 'delete')
+  @Delete(':meetingId')
+  delete(
+    @CurrentContext() ctx: RequestContext,
+    @Param('meetingId') meetingId: string,
+  ): Promise<null> {
+    return this.meetings.delete(ctx.subject, meetingId);
   }
 }
 

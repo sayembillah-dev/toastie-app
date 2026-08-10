@@ -157,6 +157,20 @@ export class MeetingsService {
     }
   }
 
+  async delete(subject: PermissionSubject, meetingId: string): Promise<null> {
+    const existing = await this.load(meetingId);
+    if (!can(subject, 'delete', 'meeting', { clubId: existing.clubId })) {
+      throw new ForbiddenException({
+        code: 'PERMISSION_DENIED',
+        resource: 'meeting',
+        action: 'delete',
+        reason: 'You do not manage this club',
+      });
+    }
+    await this.prisma.meeting.delete({ where: { id: meetingId } });
+    return null;
+  }
+
   private async load(meetingId: string) {
     const row = await this.prisma.meeting.findUnique({ where: { id: meetingId } });
     if (!row) throw new NotFoundException(`No meeting with id "${meetingId}"`);

@@ -498,6 +498,32 @@ export const toastlyApi = createApi({
       ],
     }),
 
+    /* Removes the meeting and pulls its card out of the roster straight away.
+     * The delete also unlinks any planner row that pointed at it (`SetNull`
+     * server-side), so the grid's cache is busted the same way `updateMeeting`
+     * busts it. */
+    deleteMeeting: build.mutation<null, string>({
+      query: (meetingId) => ({ url: `/meetings/${meetingId}`, method: 'DELETE' }),
+      onQueryStarted: async (meetingId, { dispatch, queryFulfilled }) => {
+        const listPatch = dispatch(
+          toastlyApi.util.updateQueryData('getMeetings', undefined, (draft) =>
+            draft.filter((entry) => entry.id !== meetingId),
+          ),
+        );
+        try {
+          await queryFulfilled;
+          dispatch(toastlyApi.util.invalidateTags([{ type: 'Meeting', id: meetingId }]));
+        } catch {
+          listPatch.undo();
+        }
+      },
+      invalidatesTags: [
+        { type: 'Meeting', id: 'LIST' },
+        { type: 'PlannerRow', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
     getGuests: build.query<Guest[], void>({
       query: () => ({ url: '/guests', method: 'GET' }),
       providesTags: (guests) => [
@@ -2237,6 +2263,7 @@ export const {
   useGetPublicMeetingQuery,
   useCreateMeetingMutation,
   useUpdateMeetingMutation,
+  useDeleteMeetingMutation,
   useGetGuestsQuery,
   useGetGuestQuery,
   useUpdateGuestMutation,

@@ -101,6 +101,7 @@ const VP_PR_ROLE: Grant[] = [...MEMBER_ROLE, ...rw('library')];
 const VP_EDUCATION_ROLE: Grant[] = [
   ...MEMBER_ROLE,
   ...rw('education'),
+  ...rw('meeting'),
   ...rw('meetingRole'),
   ...rw('tableTopic'),
   ...rw('speechRequest'),

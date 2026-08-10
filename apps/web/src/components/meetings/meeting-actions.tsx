@@ -1,11 +1,19 @@
 'use client';
 
-import { CheckCircle, PaperPlaneTilt, PenNib } from '@phosphor-icons/react/dist/ssr';
+import {
+  CheckCircle,
+  PaperPlaneTilt,
+  PenNib,
+  Trash,
+  WarningCircle,
+} from '@phosphor-icons/react/dist/ssr';
 import { App, Button } from 'antd';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import type { Meeting, MeetingStatus } from '@/lib/meetings/meetings';
-import { useUpdateMeetingMutation } from '@/store/api';
+import { useCan } from '@/lib/permissions/use-can';
+import { useDeleteMeetingMutation, useUpdateMeetingMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 import { useAppSelector } from '@/store/hooks';
 import { selectMeetingDraft } from '@/store/meeting-draft-slice';
@@ -30,7 +38,11 @@ export function MeetingActions({ meeting }: MeetingActionsProps) {
    * `isLoading` could not say which spinner to show. */
   const [pending, setPending] = useState<MeetingStatus | null>(null);
   const [updateMeeting] = useUpdateMeetingMutation();
-  const { message } = App.useApp();
+  const [deleteMeeting, { isLoading: isDeleting }] = useDeleteMeetingMutation();
+  const { message, modal } = App.useApp();
+  const router = useRouter();
+  const { can } = useCan();
+  const canDelete = can('delete', 'meeting');
 
   const isPublished = meeting.status === 'published';
   const workingTheme = draft.theme.trim();
@@ -79,6 +91,36 @@ export function MeetingActions({ meeting }: MeetingActionsProps) {
       setPending(null);
     }
   }
+
+  /* Runs the delete inside the confirm modal's `onOk`, same as guest delete —
+   * keeps the dialog open with its own spinner and only navigates away once
+   * the record is actually gone. */
+  const confirmDelete = () => {
+    modal.confirm({
+      title: `Delete meeting #${meeting.meetingNumber}?`,
+      icon: <WarningCircle size={20} weight="fill" className="text-rose-600" />,
+      content: (
+        <p className="text-sm text-ink-soft">
+          This removes the meeting along with its roles, prepared speakers, table topics, and
+          attendance records. This action cannot be undone.
+        </p>
+      ),
+      okText: 'Delete meeting',
+      okButtonProps: { danger: true },
+      cancelText: 'Cancel',
+      centered: true,
+      onOk: async () => {
+        try {
+          await deleteMeeting(meeting.id).unwrap();
+          message.success(`Meeting #${meeting.meetingNumber} was deleted`);
+          router.push('/meetings');
+        } catch (err) {
+          message.error(getApiErrorMessage(err, 'Could not delete the meeting'));
+          throw err;
+        }
+      },
+    });
+  };
 
   return (
     <div className="print-hidden mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-canvas px-4 py-3">
@@ -129,6 +171,21 @@ export function MeetingActions({ meeting }: MeetingActionsProps) {
         >
           Publish
         </Button>
+        {canDelete && (
+          <div className="ml-1 flex items-center gap-2 border-l border-line pl-3">
+            <Button
+              danger
+              type="text"
+              size="middle"
+              icon={<Trash size={14} weight="bold" />}
+              loading={isDeleting}
+              onClick={confirmDelete}
+              aria-label="Delete meeting"
+            >
+              Delete
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
