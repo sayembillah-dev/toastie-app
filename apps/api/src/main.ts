@@ -23,6 +23,14 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // PM2 reloads a cluster worker by sending SIGINT and waiting for the process
+  // to exit before routing traffic to its replacement. Without shutdown hooks
+  // Nest never runs `onModuleDestroy`, so in-flight requests are severed and
+  // Prisma's pool is torn down by process death rather than closed — which is
+  // the difference between a reload being genuinely zero-downtime and merely
+  // looking like it. `enableShutdownHooks` registers the signal listeners.
+  app.enableShutdownHooks();
+
   const port = Number(process.env.PORT ?? 4000);
   await app.listen(port);
 
