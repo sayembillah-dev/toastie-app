@@ -12,6 +12,7 @@ import NextImage from 'next/image';
 import { useMemo, useState } from 'react';
 
 import { InventoryItemModal } from '@/components/inventory/inventory-item-modal';
+import { StaggerList } from '@/components/motion/stagger-list';
 import type { InventoryItem } from '@/lib/inventory/inventory-items';
 import { useCan } from '@/lib/permissions/use-can';
 import { useListInventoryItemsQuery } from '@/store/api';
@@ -142,11 +143,11 @@ export function InventoryTab() {
       ) : null}
 
       {!isLoading && !isError && filtered.length > 0 ? (
-        <div className={GRID_CLASSES}>
+        <StaggerList className={GRID_CLASSES}>
           {filtered.map((item) => (
             <InventoryCard key={item.id} item={item} onEdit={() => setEditingItem(item)} />
           ))}
-        </div>
+        </StaggerList>
       ) : null}
 
       <InventoryItemModal open={addOpen} item={null} onClose={() => setAddOpen(false)} />

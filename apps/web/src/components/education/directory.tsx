@@ -5,6 +5,7 @@ import { Input } from 'antd';
 import { useMemo } from 'react';
 
 import { MemberCard, type MemberCardVariant } from '@/components/education/member-card';
+import { StaggerList } from '@/components/motion/stagger-list';
 import type { Member } from '@/lib/education/members';
 import { formatRoles } from '@/lib/education/members';
 import { useGetMembersQuery } from '@/store/api';
@@ -132,11 +133,11 @@ export function MembersDirectory({ variant = 'education' }: MembersDirectoryProp
             )}
           </div>
         ) : (
-          <div className={GRID_CLASSES}>
+          <StaggerList className={GRID_CLASSES}>
             {filtered.map((member) => (
               <MemberCard key={member.id} member={member} variant={variant} />
             ))}
-          </div>
+          </StaggerList>
         )
       ) : null}
     </div>

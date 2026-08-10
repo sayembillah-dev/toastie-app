@@ -13,6 +13,7 @@ import { useMemo, useState } from 'react';
 import { ConvertGuestModal } from '@/components/club-admin/convert-guest-modal';
 import { InvitePanel } from '@/components/club-admin/invite-panel';
 import { MemberFormModal } from '@/components/club-admin/member-form-modal';
+import { StaggerItem, StaggerList } from '@/components/motion/stagger-list';
 import type { Member } from '@/lib/education/members';
 import { formatRoles, getInitials } from '@/lib/education/members';
 import { useCan } from '@/lib/permissions/use-can';
@@ -156,10 +157,12 @@ export function MembersTab() {
           </div>
         ) : null}
 
+        {/* `wrap={false}` — the rows already are the list items, so they
+            animate themselves instead of being wrapped in a second `<li>`. */}
         {!isLoading && !isError && filtered.length > 0 ? (
-          <ul className="flex flex-col gap-2">
+          <StaggerList className="flex flex-col gap-2" wrap={false}>
             {filtered.map((member) => (
-              <li
+              <StaggerItem
                 key={member.id}
                 className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-canvas p-3"
               >
@@ -207,9 +210,9 @@ export function MembersTab() {
                     <Button size="small">Actions</Button>
                   </Dropdown>
                 ) : null}
-              </li>
+              </StaggerItem>
             ))}
-          </ul>
+          </StaggerList>
         ) : null}
       </div>
 

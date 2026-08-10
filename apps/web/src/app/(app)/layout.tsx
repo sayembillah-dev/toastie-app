@@ -1,4 +1,5 @@
 import { AppFrame } from '@/components/app-frame';
+import { PageTransition } from '@/components/page-transition';
 import { SessionProvider } from '@/components/session-provider';
 
 /** The authenticated shell — everything inside `(app)/` renders here.
@@ -13,7 +14,9 @@ import { SessionProvider } from '@/components/session-provider';
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
-      <AppFrame>{children}</AppFrame>
+      <AppFrame>
+        <PageTransition>{children}</PageTransition>
+      </AppFrame>
     </SessionProvider>
   );
 }

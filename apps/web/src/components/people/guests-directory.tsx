@@ -9,6 +9,7 @@ import {
 import { Input, Segmented } from 'antd';
 import { useMemo, useState } from 'react';
 
+import { StaggerList } from '@/components/motion/stagger-list';
 import { GuestCard } from '@/components/people/guest-card';
 import { GuestKanban } from '@/components/people/guest-kanban';
 import type { Guest } from '@/lib/people/guests';
@@ -172,11 +173,11 @@ export function GuestsDirectory() {
         ) : view === 'kanban' ? (
           <GuestKanban guests={filtered} />
         ) : (
-          <div className={GRID_CLASSES}>
+          <StaggerList className={GRID_CLASSES}>
             {filtered.map((guest) => (
               <GuestCard key={guest.id} guest={guest} />
             ))}
-          </div>
+          </StaggerList>
         )
       ) : null}
     </div>

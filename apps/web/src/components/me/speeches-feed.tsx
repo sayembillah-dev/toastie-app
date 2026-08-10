@@ -1,4 +1,5 @@
 import { ChatCircleText, Microphone, SpeakerHigh, Timer } from '@phosphor-icons/react/dist/ssr';
+import { StaggerList } from '@/components/motion/stagger-list';
 import type { Evaluation } from '@/lib/education/evaluations';
 import type { HistoryEvent } from '@/lib/education/history';
 import type { Member } from '@/lib/education/members';
@@ -180,19 +181,21 @@ export function SpeechesFeed({
   return (
     <div className="flex flex-col gap-4">
       <h2 className="text-sm font-semibold text-ink">My speeches</h2>
-      {speeches.map((speech) => {
-        const evaluation = evaluationByEvent.get(speech.id);
-        return (
-          <SpeechCard
-            key={speech.id}
-            speech={speech}
-            evaluation={evaluation}
-            timerEntry={timerByEvent.get(speech.id)}
-            ahCounterEntry={ahCounterByEvent.get(speech.id)}
-            evaluator={evaluation ? membersById.get(evaluation.evaluatorId) : undefined}
-          />
-        );
-      })}
+      <StaggerList className="flex flex-col gap-4">
+        {speeches.map((speech) => {
+          const evaluation = evaluationByEvent.get(speech.id);
+          return (
+            <SpeechCard
+              key={speech.id}
+              speech={speech}
+              evaluation={evaluation}
+              timerEntry={timerByEvent.get(speech.id)}
+              ahCounterEntry={ahCounterByEvent.get(speech.id)}
+              evaluator={evaluation ? membersById.get(evaluation.evaluatorId) : undefined}
+            />
+          );
+        })}
+      </StaggerList>
     </div>
   );
 }

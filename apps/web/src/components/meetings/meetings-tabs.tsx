@@ -12,6 +12,7 @@ import { useMemo, useState, useSyncExternalStore } from 'react';
 
 import { MeetingCard } from '@/components/meetings/meeting-card';
 import { NewMeetingModal } from '@/components/meetings/new-meeting-modal';
+import { StaggerList } from '@/components/motion/stagger-list';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { nextMeetingNumber, partitionMeetings } from '@/lib/meetings/meetings';
 import { useCan } from '@/lib/permissions/use-can';
@@ -105,11 +106,11 @@ interface MeetingsGridProps {
 function MeetingsGrid({ meetings, emptyTitle, emptyBody }: MeetingsGridProps) {
   if (meetings.length === 0) return <EmptyState title={emptyTitle} body={emptyBody} />;
   return (
-    <div className={GRID_CLASSES}>
+    <StaggerList className={GRID_CLASSES}>
       {meetings.map((meeting) => (
         <MeetingCard key={meeting.id} meeting={meeting} />
       ))}
-    </div>
+    </StaggerList>
   );
 }
 

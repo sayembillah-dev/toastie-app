@@ -4,6 +4,7 @@ import { Plus } from '@phosphor-icons/react/dist/ssr';
 import { Button } from 'antd';
 import { Fragment } from 'react';
 
+import { StaggerList } from '@/components/motion/stagger-list';
 import { getApiErrorMessage } from '@/store/api-error';
 
 import { ORG_GRID_CLASSES, OrgGridEmpty, OrgGridError, OrgGridSkeleton } from './org-card';
@@ -82,11 +83,11 @@ export function OrgListSection<T>({
       ) : null}
 
       {!isLoading && !isError && items && items.length > 0 ? (
-        <div className={ORG_GRID_CLASSES}>
+        <StaggerList className={ORG_GRID_CLASSES}>
           {items.map((item) => (
             <Fragment key={getKey(item)}>{renderCard(item)}</Fragment>
           ))}
-        </div>
+        </StaggerList>
       ) : null}
     </div>
   );

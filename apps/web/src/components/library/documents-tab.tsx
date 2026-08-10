@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DocumentIcon } from '@/components/library/document-icon';
 import { DocumentPreviewModal } from '@/components/library/document-preview-modal';
 import { DocumentUploadModal } from '@/components/library/document-upload-modal';
+import { StaggerItem, StaggerList } from '@/components/motion/stagger-list';
 import type { LibraryDocument } from '@/lib/library/documents';
 import { documentTypeLabel } from '@/lib/library/documents';
 import { useCan } from '@/lib/permissions/use-can';
@@ -229,11 +230,11 @@ export function DocumentsTab({ className }: DocumentsTabProps) {
       {!isLoading && !isError && items.length > 0 ? (
         <>
           {view === 'grid' ? (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <StaggerList className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {items.map((doc) => (
                 <DocumentCard key={doc.id} doc={doc} onPreview={() => setPreviewDoc(doc)} />
               ))}
-            </div>
+            </StaggerList>
           ) : (
             <div className="overflow-hidden rounded-xl border border-line bg-canvas">
               <div className="hidden grid-cols-[minmax(0,1fr)_100px_100px_140px] gap-3 border-b border-line bg-fill px-4 py-2 text-xs font-medium text-ink-muted uppercase tracking-wide sm:grid">
@@ -242,7 +243,9 @@ export function DocumentsTab({ className }: DocumentsTabProps) {
                 <span>Size</span>
                 <span>Added</span>
               </div>
-              <ul className="flex flex-col">
+              {/* `wrap={false}` — `DocumentRow` owns its own `<li>`, so it
+                  animates itself rather than being wrapped in a second one. */}
+              <StaggerList className="flex flex-col" wrap={false}>
                 {items.map((doc, index) => (
                   <DocumentRow
                     key={doc.id}
@@ -251,7 +254,7 @@ export function DocumentsTab({ className }: DocumentsTabProps) {
                     hasBorder={index > 0}
                   />
                 ))}
-              </ul>
+              </StaggerList>
             </div>
           )}
 
@@ -338,7 +341,7 @@ interface DocumentRowProps {
  * clickable, mirroring how a file manager treats a row. */
 function DocumentRow({ doc, onPreview, hasBorder }: DocumentRowProps) {
   return (
-    <li className={hasBorder ? 'border-t border-line' : ''}>
+    <StaggerItem className={hasBorder ? 'border-t border-line' : ''}>
       <button
         type="button"
         onClick={onPreview}
@@ -369,6 +372,6 @@ function DocumentRow({ doc, onPreview, hasBorder }: DocumentRowProps) {
           {formatAddedAt(doc.createdAt)}
         </span>
       </button>
-    </li>
+    </StaggerItem>
   );
 }

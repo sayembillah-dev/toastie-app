@@ -37,6 +37,111 @@ body {
 }
 
 /*
+ * Route-change transition, applied by `components/page-transition.tsx`.
+ *
+ * Only opacity and transform animate, so the whole thing runs on the
+ * compositor and never triggers layout or paint on a route change. `backwards`
+ * holds the first frame before the animation starts (no flash of the final
+ * state) and — unlike `forwards`/`both` — leaves no transform behind once it
+ * ends, so the wrapper never becomes a containing block for fixed-position
+ * descendants.
+ */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.page-enter {
+  animation: page-enter 160ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter {
+    animation: none;
+  }
+}
+
+/*
+ * Press feedback, applied to every button in the app rather than to 269
+ * individual call sites. antd owns most of them, so a component swap would
+ * have meant giving up `type`, `loading`, `icon` and `size` — this reaches all
+ * of them, antd and hand-rolled alike, and costs nothing at the call site.
+ *
+ * Press is universal; hover-scale is not. Growing a button under the cursor is
+ * a claim that it is a destination, which is true of a primary action and
+ * false of the icon buttons packed into a table row or a toolbar — those only
+ * get the press. See `components/motion/motion-button.tsx` for the standalone
+ * spring-physics version.
+ *
+ * The rest-state curve overshoots slightly (the `1.5` control point) so a
+ * release springs back rather than easing back, which is what makes CSS read
+ * as physical. The press itself uses a plain fast ease-out: a press should
+ * feel immediate and land, not bounce under the finger.
+ *
+ * Only `transform` is touched, never a layout property, so a press on a button
+ * inside a dense table never reflows the rows around it.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  button,
+  .ant-btn,
+  [role="button"] {
+    transition: transform 180ms cubic-bezier(0.34, 1.5, 0.64, 1);
+  }
+
+  /* The exclusions are controls that happen to be `<button>` but do not read
+   * as buttons: a switch is a track the thumb slides in, and the close affordances
+   * sit on the edge of a surface where a scale looks like a glitch.
+   * `.guest-drag-source` is excluded for a different reason — a drag holds
+   * `:active` for its whole duration, and WebKit builds the drag image from the
+   * element as rendered, so a pressed-in card would drag a shrunken ghost. */
+  button:not(
+    :disabled,
+    [aria-disabled="true"],
+    .ant-switch,
+    .ant-modal-close,
+    .ant-drawer-close,
+    .ant-image-preview-close,
+    .ant-notification-notice-close,
+    .guest-drag-source
+  ):active,
+  /* antd puts `role="button"` on some full-width surfaces (Collapse headers,
+   * the Upload drop zone). A 3% scale on a 800px-wide row moves its edges by
+   * ~12px, which reads as the layout lurching rather than as a button press —
+   * the gesture only suits things the size of a control. */
+  [role="button"]:not(
+    [aria-disabled="true"],
+    .ant-collapse-header,
+    .ant-upload,
+    .ant-upload-drag
+  ):active {
+    transform: scale(0.97);
+    transition-duration: 90ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Prominent actions only — solid primaries and the dashed "add" buttons.
+   * `:hover` is narrowed to devices that actually have a pointer, so a tap on
+   * a phone does not leave a button stuck at 1.03 after the finger lifts. */
+  @media (hover: hover) and (pointer: fine) {
+    .ant-btn-primary:not(:disabled, .ant-btn-disabled):hover,
+    .ant-btn-dashed:not(:disabled, .ant-btn-disabled):hover {
+      transform: scale(1.03);
+    }
+
+    .ant-btn-primary:not(:disabled, .ant-btn-disabled):active,
+    .ant-btn-dashed:not(:disabled, .ant-btn-disabled):active {
+      transform: scale(0.97);
+    }
+  }
+}
+
+/*
  * Kanban cards are buttons so they stay keyboard-operable, and WebKit will not
  * start a drag from a form control without this opt-in.
  */
