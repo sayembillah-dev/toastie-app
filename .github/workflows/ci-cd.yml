@@ -72,9 +72,10 @@ jobs:
       - name: Validate Prisma schema
         run: pnpm --filter @toastly/api exec prisma validate
         env:
-          # `prisma validate` parses the datasource block and wants the var to
+          # `prisma validate` parses the datasource block and wants the vars to
           # exist; it never opens a connection.
           DATABASE_URL: postgresql://validate:validate@localhost:5432/validate
+          DIRECT_DATABASE_URL: postgresql://validate:validate@localhost:5432/validate
 
       # ---------------------------------------------------------------- cache
       # Turbopack's filesystem build cache is already enabled by default in Next
@@ -210,6 +211,11 @@ jobs:
       - name: Run database migrations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          # Unpooled Neon connection string (no `-pooler` in the host).
+          # `migrate deploy`'s advisory lock needs a stable session, which
+          # the pooled endpoint's PgBouncer transaction mode can't guarantee
+          # — see the `directUrl` comment in schema.prisma.
+          DIRECT_DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
         run: |
           pnpm install --frozen-lockfile
           pnpm --filter @toastly/api exec prisma migrate deploy

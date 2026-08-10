@@ -75,14 +75,15 @@ sudo systemctl reload caddy
 
 Create an environment named **`production`** (Settings → Environments), then add:
 
-| Secret              | Notes                                                                                                                                                                                                          |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SSH_PRIVATE_KEY`   | Private half of a dedicated deploy keypair — don't reuse a personal key; generate one with `ssh-keygen`, append the `.pub` half to the deploy user's `authorized_keys`, and only the private half goes in here |
-| `SSH_HOST`          | VPS hostname or IP                                                                                                                                                                                             |
-| `SSH_USER`          | Whatever user owns `/srv/toastly` (e.g. `nifty`)                                                                                                                                                               |
-| `DATABASE_URL`      | Managed Postgres. Set `connection_limit` deliberately — see below                                                                                                                                              |
-| `JWT_ACCESS_SECRET` | ≥16 chars. Boot fails if it is still the `.env.example` placeholder                                                                                                                                            |
-| `REDIS_URL`         | Only once Redis is live                                                                                                                                                                                        |
+| Secret                | Notes                                                                                                                                                                                                          |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SSH_PRIVATE_KEY`     | Private half of a dedicated deploy keypair — don't reuse a personal key; generate one with `ssh-keygen`, append the `.pub` half to the deploy user's `authorized_keys`, and only the private half goes in here |
+| `SSH_HOST`            | VPS hostname or IP                                                                                                                                                                                             |
+| `SSH_USER`            | Whatever user owns `/srv/toastly` (e.g. `nifty`)                                                                                                                                                               |
+| `DATABASE_URL`        | Managed Postgres, pooled endpoint. Set `connection_limit` deliberately — see below                                                                                                                             |
+| `DIRECT_DATABASE_URL` | Same database, unpooled endpoint — Neon: the same host with `-pooler` removed. Used only by `prisma migrate deploy` in CI; see below                                                                           |
+| `JWT_ACCESS_SECRET`   | ≥16 chars. Boot fails if it is still the `.env.example` placeholder                                                                                                                                            |
+| `REDIS_URL`           | Only once Redis is live                                                                                                                                                                                        |
 
 | Variable          | Value                       |
 | ----------------- | --------------------------- |
@@ -152,6 +153,16 @@ so capturing it there is what actually gets it into the running app.
 **Postgres connections are `instances × pool size`.** The ecosystem file runs 2
 API workers. If you raise `instances`, raise or cap `connection_limit` in
 `DATABASE_URL` to stay under your provider's pooler limit.
+
+**Migrations need the unpooled connection, not the app's pooled one.**
+`prisma migrate deploy` holds a session-scoped `pg_advisory_lock` while it
+runs, which requires every statement to land on the same backend connection.
+Neon's pooled (`-pooler`) endpoint runs PgBouncer in transaction-pooling
+mode, which doesn't guarantee that — the lock-wait times out after 10s with
+`P1002`, reading as "server unreachable" when it's actually reachable fine.
+`schema.prisma`'s `directUrl` points migrations at `DIRECT_DATABASE_URL`
+(the same Neon host with `-pooler` removed) instead, while the running app
+keeps using the pooled `DATABASE_URL`.
 
 **Migrations run before the new code ships.** That ordering is deliberate — a
 failed migration aborts the deploy while the old release is still serving,

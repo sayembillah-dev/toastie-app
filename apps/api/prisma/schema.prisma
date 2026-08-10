@@ -25,6 +25,13 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  // Neon's pooled endpoint (`-pooler` host) runs PgBouncer in transaction
+  // mode, which doesn't guarantee `migrate deploy`'s session-scoped
+  // pg_advisory_lock lands on the same backend connection across statements
+  // — the lock-wait then times out (P1002) even though the server is
+  // reachable. `directUrl` routes migrations at the unpooled endpoint
+  // instead; the app keeps using the pooled `url` above.
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 // -------------------------------------------------------------- enums --
