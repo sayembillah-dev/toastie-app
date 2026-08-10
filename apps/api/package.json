@@ -3,18 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "prisma": {
-    "seed": "ts-node --transpile-only prisma/seed.ts"
+    "seed": "dotenv -e ../../.env -- ts-node --transpile-only prisma/seed.ts"
   },
   "scripts": {
-    "postinstall": "prisma generate",
+    "postinstall": "dotenv -e ../../.env -- prisma generate",
     "dev": "nest start --watch",
     "build": "nest build",
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio",
-    "prisma:seed": "prisma db seed"
+    "prisma:generate": "dotenv -e ../../.env -- prisma generate",
+    "prisma:migrate": "dotenv -e ../../.env -- prisma migrate dev",
+    "prisma:studio": "dotenv -e ../../.env -- prisma studio",
+    "prisma:seed": "dotenv -e ../../.env -- prisma db seed"
   },
   "dependencies": {
     "@nestjs/common": "11.1.28",
@@ -36,6 +36,7 @@
     "@nestjs/schematics": "11.1.0",
     "@types/express": "5.0.6",
     "@types/node": "22.20.1",
+    "dotenv-cli": "11.0.0",
     "prisma": "6.2.1",
     "source-map-support": "0.5.21",
     "ts-loader": "9.6.2",

@@ -32,7 +32,11 @@ import { UsersModule } from './users';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env.local', '.env'],
+      // A single .env lives at the repo root, shared with apps/web — see
+      // next.config.ts's dotenv load. Nest is always started via
+      // `pnpm --filter @toastly/api ...`, which sets cwd to this package,
+      // so the relative path up to the root is stable across dev/start.
+      envFilePath: ['../../.env.local', '../../.env'],
     }),
     PrismaModule,
     AccessModule,

@@ -39,11 +39,12 @@ server it calls Nest directly at `API_URL`, in the browser it uses the relative
 hands it to a client component as props, so the data is in the HTML on first
 paint and no `useEffect` is needed.
 
-Copy the env examples if you need to change ports:
+Both apps read from a single `.env` at the repo root (`apps/api` via
+`ConfigModule.forRoot`, `apps/web` via a `dotenv` load in `next.config.ts`) — copy
+the example once if you need to change ports or point at a different database:
 
 ```bash
-cp apps/api/.env.example apps/api/.env.local
-cp apps/web/.env.example apps/web/.env.local
+cp .env.example .env
 ```
 
 ## Scripts

@@ -2,7 +2,10 @@ import { CLUB_ROLE_GRANTS, type Grant, ORG_ROLE_GRANTS } from './grants';
 import type { Action, ResourceKey, Scope } from './resources';
 import type { Assignment, Lineage, PermissionSubject, Target } from './subject';
 
-function enrichTarget(target: Target | undefined, lineage: Lineage | undefined): Target | undefined {
+function enrichTarget(
+  target: Target | undefined,
+  lineage: Lineage | undefined,
+): Target | undefined {
   if (!target || !lineage) return target;
   return {
     ...target,
@@ -126,7 +129,9 @@ function decide(
   for (const assignment of matching) {
     // 3. Expand grants.
     const grants = grantsFor(assignment);
-    const baseAllowed = grants.some((g) => matches(g, action, resource, assignment, enrichedTarget));
+    const baseAllowed = grants.some((g) =>
+      matches(g, action, resource, assignment, enrichedTarget),
+    );
 
     // 4. Layer overrides (club assignments only).
     let effectiveAllowed = baseAllowed;
