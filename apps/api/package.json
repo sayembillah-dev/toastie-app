@@ -6,7 +6,8 @@
     "seed": "dotenv -e ../../.env -- ts-node --transpile-only prisma/seed.ts"
   },
   "scripts": {
-    "postinstall": "dotenv -e ../../.env -- prisma generate",
+    "//postinstall": "No dotenv wrapper: `prisma generate` only reads the schema, never connects, so it needs no DATABASE_URL. Keeping it dependency-free is what lets `pnpm deploy --prod` work — dotenv-cli is a devDependency and would be absent from a production bundle.",
+    "postinstall": "prisma generate",
     "dev": "dotenv -e ../../.env -- prisma generate && nest start --watch",
     "build": "nest build",
     "start": "node dist/main.js",
@@ -28,6 +29,7 @@
     "argon2": "0.44.0",
     "class-transformer": "0.5.1",
     "class-validator": "0.15.1",
+    "prisma": "6.2.1",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2"
   },
@@ -37,7 +39,6 @@
     "@types/express": "5.0.6",
     "@types/node": "22.20.1",
     "dotenv-cli": "11.0.0",
-    "prisma": "6.2.1",
     "source-map-support": "0.5.21",
     "ts-loader": "9.6.2",
     "ts-node": "10.9.2",
