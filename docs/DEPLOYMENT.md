@@ -139,6 +139,16 @@ on the VPS `../../` lands in `/srv/toastly/releases/`, not `/srv/toastly/`.
 tolerates the missing files and never overwrites an existing `process.env` key,
 so dev is unaffected.
 
+**`pm2 startOrReload --update-env` only re-applies env vars _declared in the
+ecosystem file_, not the invoking shell's full environment.** `remote-deploy.sh`
+exports `APP_VERSION` before calling `pm2 startOrReload`, but that export alone
+does nothing — PM2 kept serving the _previous_ release's `APP_VERSION` on the
+first real deploy, failing the smoke test's version check even though the new
+release had booted successfully. The fix is that `ecosystem.config.cjs` itself
+reads `process.env.APP_VERSION` and puts it in the `env:` block — the file is
+`require()`d by the PM2 CLI process, which _does_ inherit the shell's export,
+so capturing it there is what actually gets it into the running app.
+
 **Postgres connections are `instances × pool size`.** The ecosystem file runs 2
 API workers. If you raise `instances`, raise or cap `connection_limit` in
 `DATABASE_URL` to stay under your provider's pooler limit.

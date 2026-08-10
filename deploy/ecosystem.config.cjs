@@ -73,10 +73,9 @@ module.exports = {
   apps: [
     {
       name: 'toastly-api',
-      // `current` is a symlink flipped atomically by remote-deploy.sh. PM2 is
-      // always reloaded with this config file so it re-resolves the symlink;
-      // the deploy smoke test asserts /api/health reports the new APP_VERSION,
-      // which is what catches a worker that somehow kept the old path.
+      // `current` is a symlink flipped atomically by remote-deploy.sh, and
+      // this file is re-required on every `pm2 startOrReload`, so `cwd`
+      // resolves fresh each time — new workers do pick up the new release.
       cwd: path.join(APP_ROOT, 'current', 'api'),
       script: 'dist/main.js',
       exec_mode: 'cluster',
@@ -94,6 +93,16 @@ module.exports = {
       env: {
         ...sharedEnv,
         NODE_ENV: 'production',
+        // Read here, not left to `--update-env` to pick up from the invoking
+        // shell: `pm2 startOrReload` only re-applies env vars that are
+        // *declared* in this file's `env` block. remote-deploy.sh exports
+        // APP_VERSION before calling pm2, but that export alone is invisible
+        // to PM2 — this file is `require()`d by the PM2 CLI process (which
+        // does inherit the shell's export), so capturing it here is what
+        // actually gets it into the running app. Confirmed the hard way: the
+        // very first deploy's smoke test kept reading the previous release's
+        // SHA back from /api/health because this line didn't exist yet.
+        APP_VERSION: process.env.APP_VERSION || 'unknown',
       },
     },
     {
@@ -111,8 +120,10 @@ module.exports = {
         ...sharedEnv,
         NODE_ENV: 'production',
         PORT: '3000',
-        // Bind loopback only — Nginx is the sole public entrypoint. Binding
-        // 0.0.0.0 would expose Next directly on the VPS's public interface.
+        APP_VERSION: process.env.APP_VERSION || 'unknown',
+        // Bind loopback only — Caddy (see deploy/Caddyfile) is the sole
+        // public entrypoint. Binding 0.0.0.0 would expose Next directly on
+        // the VPS's public interface.
         HOSTNAME: '127.0.0.1',
       },
     },
