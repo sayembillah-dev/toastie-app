@@ -1,13 +1,13 @@
 'use client';
 
 import { CheckCircle, Copy, Link as LinkIcon } from '@phosphor-icons/react/dist/ssr';
-import { App, Button, Form, Modal, QRCode, Select } from 'antd';
+import { App, Button, Form, Input, Modal, QRCode, Select } from 'antd';
 import { useMemo, useState } from 'react';
 
 import type { Invite } from '@/lib/club-admin/invites';
 import type { OfficerRole } from '@/lib/education/members';
 import { OFFICER_ROLES } from '@/lib/education/members';
-import { requiredSelectRule } from '@/lib/validation/rules';
+import { nameRules, requiredSelectRule } from '@/lib/validation/rules';
 import { useCreateInviteMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -33,6 +33,7 @@ export function InviteModal({ open, onClose }: InviteModalProps) {
 }
 
 interface FormValues {
+  inviteeName: string;
   roles: OfficerRole[];
 }
 
@@ -51,7 +52,10 @@ function ModalBody({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
       return;
     }
     try {
-      const invite = await createInvite({ roles: values.roles }).unwrap();
+      const invite = await createInvite({
+        inviteeName: values.inviteeName.trim(),
+        roles: values.roles,
+      }).unwrap();
       setCreated(invite);
     } catch (err) {
       message.error(getApiErrorMessage(err, "Couldn't create this invite. Please try again."));
@@ -70,6 +74,16 @@ function ModalBody({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
       initialValues={{ roles: ['Member'] }}
       className="flex flex-col gap-4"
     >
+      <Form.Item
+        label="Name"
+        name="inviteeName"
+        rules={nameRules()}
+        extra="Who this link is for — just for your own tracking, doesn't limit who can open it."
+        className="!mb-0"
+      >
+        <Input id="invite-name" placeholder="e.g. Jordan Lee" autoFocus />
+      </Form.Item>
+
       <Form.Item
         label="Role(s)"
         name="roles"
@@ -124,7 +138,8 @@ function InviteLinkResult({ invite, onDone }: { invite: Invite; onDone: () => vo
       <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2.5 text-emerald-800">
         <CheckCircle size={18} weight="fill" />
         <p className="text-sm font-medium">
-          Invite created — {invite.roles.join(', ') || 'Member'}
+          Invite created for {invite.inviteeName || 'a new member'} —{' '}
+          {invite.roles.join(', ') || 'Member'}
         </p>
       </div>
 

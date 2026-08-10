@@ -81,7 +81,10 @@ export function InvitePanel() {
                 className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-canvas p-3"
               >
                 <div className="min-w-0">
-                  <p className="flex flex-wrap items-center gap-1 text-sm font-medium text-ink">
+                  <p className="truncate text-sm font-medium text-ink">
+                    {invite.inviteeName || 'Unnamed invite'}
+                  </p>
+                  <p className="mt-1 flex flex-wrap items-center gap-1">
                     {invite.roles.length > 0 ? (
                       invite.roles.map((role) => (
                         <Tag key={role} className="m-0">

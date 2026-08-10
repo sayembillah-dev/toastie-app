@@ -11,6 +11,7 @@ export interface Invite {
   /** Tenant boundary — the club this invite is for. */
   clubId: string;
   email?: string;
+  inviteeName?: string;
   roles: OfficerRole[];
   status: InviteStatus;
   token: string;
@@ -21,6 +22,6 @@ export interface Invite {
   respondedAt?: string;
 }
 
-export type CreateInviteInput = { roles: OfficerRole[] };
+export type CreateInviteInput = { inviteeName: string; roles: OfficerRole[] };
 
 export const SEED_INVITES: Omit<Invite, 'clubId'>[] = [];

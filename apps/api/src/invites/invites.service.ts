@@ -61,6 +61,7 @@ export class InvitesService {
       });
     }
     const email = dto.email?.trim().toLowerCase() || null;
+    const inviteeName = dto.inviteeName.trim();
     const roles: PrismaClubRole[] = toClubRoles(dto.roles);
     const token = randomBytes(32).toString('base64url');
     const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 86_400_000);
@@ -70,6 +71,7 @@ export class InvitesService {
         data: {
           clubId,
           email,
+          inviteeName,
           roles,
           status: 'pending',
           token,

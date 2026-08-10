@@ -11,6 +11,7 @@ export interface InviteWire {
   id: string;
   clubId: string;
   email?: string;
+  inviteeName?: string;
   roles: OfficerRole[];
   status: 'pending' | 'accepted' | 'revoked' | 'expired';
   token: string;
@@ -35,6 +36,7 @@ export function toInviteWire(row: Invite, invitedByMembershipId: string): Invite
     invitedAt: row.createdAt.toISOString(),
   };
   if (row.email) wire.email = row.email;
+  if (row.inviteeName) wire.inviteeName = row.inviteeName;
   const responded = row.acceptedAt ?? row.revokedAt;
   if (responded) wire.respondedAt = responded.toISOString();
   return wire;

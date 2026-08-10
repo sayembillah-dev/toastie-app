@@ -459,6 +459,10 @@ model Invite {
   email           String?
   firstName       String?
   lastName        String?
+  /// Free-text label the admin types in when generating the link — who they
+  /// expect to use it, for their own tracking. Not tied to the actual
+  /// accepter's identity, which the link doesn't know until claimed.
+  inviteeName     String?
   roles           ClubRole[]
   status          InviteStatus @default(pending)
   /// Plaintext — unlike a password, this token has to be redisplayed to the
