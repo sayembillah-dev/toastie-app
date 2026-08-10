@@ -115,9 +115,16 @@ export type UpdateGuestInput = Partial<
     | 'socials'
     | 'bio'
     | 'notes'
+    | 'invitedBy'
     | 'stage'
   >
 >;
+
+/** Fields the "Add guest" drawer can write. `firstName`/`lastName` are
+ * required — everything else (avatar, socials, bio, notes) can be filled in
+ * afterward via the edit panel. No `stage`: every guest starts at `new`. */
+export type CreateGuestInput = Pick<Guest, 'firstName' | 'lastName'> &
+  Partial<Pick<Guest, 'email' | 'phone' | 'whatsapp' | 'invitedBy'>>;
 
 /** Buckets guests into one list per stage, in board order. Guests carrying a
  * stage we no longer ship fall back to New rather than vanishing. */

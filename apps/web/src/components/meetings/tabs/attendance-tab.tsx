@@ -1,7 +1,8 @@
 'use client';
 
 import { MagnifyingGlass, TrashSimple, UserPlus, X } from '@phosphor-icons/react/dist/ssr';
-import { App, Button, Checkbox, Input, Skeleton } from 'antd';
+import { App, Button, Checkbox, Input, Select, Skeleton } from 'antd';
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
 import { getPrimaryRole } from '@/lib/education/members';
@@ -10,6 +11,7 @@ import {
   useDeleteAttendanceGuestMutation,
   useGetAttendanceGuestsQuery,
   useGetAttendanceMembersQuery,
+  useGetGuestsQuery,
   useGetMembersQuery,
   useMarkAllAttendanceMutation,
   useSetAttendanceMemberMutation,
@@ -72,44 +74,66 @@ function AttendanceRow({ row, onToggle, onRemove }: AttendanceRowProps) {
   );
 }
 
-interface GuestFormProps {
-  onCommit: (name: string) => void;
+interface GuestPickerOption {
+  value: string;
+  label: string;
+}
+
+interface GuestPickerProps {
+  options: GuestPickerOption[];
+  onCommit: (guestId: string) => void;
   onCancel: () => void;
 }
 
-function GuestForm({ onCommit, onCancel }: GuestFormProps) {
-  const [draft, setDraft] = useState('');
+/** Meeting-day guests are always picked from the existing pipeline — `/people`
+ * is where a guest first gets created, so this never types a fresh name. */
+function GuestPicker({ options, onCommit, onCancel }: GuestPickerProps) {
+  const [selected, setSelected] = useState<string | null>(null);
 
   function commit() {
-    const trimmed = draft.trim();
-    if (!trimmed) return;
-    onCommit(trimmed);
-    setDraft('');
+    if (!selected) return;
+    onCommit(selected);
+    setSelected(null);
+  }
+
+  if (options.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-line-strong bg-sidebar p-3 text-center">
+        <p className="text-sm text-ink-soft">No guests in the pipeline yet.</p>
+        <p className="mt-1 text-xs text-ink-muted">
+          Add one from the{' '}
+          <Link href="/people" className="font-medium text-ink underline underline-offset-2">
+            People page
+          </Link>
+          , then come back to check them in.
+        </p>
+      </div>
+    );
   }
 
   return (
     <div className="rounded-xl border border-dashed border-line-strong bg-sidebar p-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <Input
+        <Select
           className="min-w-0 flex-1"
           size="large"
-          value={draft}
-          maxLength={80}
-          placeholder="Guest name"
           autoFocus
-          onChange={(event) => setDraft(event.target.value)}
+          open
+          value={selected ?? undefined}
+          onChange={setSelected}
+          options={options}
+          showSearch
+          optionFilterProp="label"
+          placeholder="Search guests"
           onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              commit();
-            } else if (event.key === 'Escape') {
+            if (event.key === 'Escape') {
               event.preventDefault();
               onCancel();
             }
           }}
         />
         <div className="flex items-center gap-2 sm:shrink-0">
-          <Button type="primary" onClick={commit} disabled={!draft.trim()}>
+          <Button type="primary" onClick={commit} disabled={!selected}>
             Add
           </Button>
           <Button
@@ -146,6 +170,7 @@ export function AttendanceTab({ meetingId }: AttendanceTabProps) {
     isError: guestsError,
     error: guestsErrorDetail,
   } = useGetAttendanceGuestsQuery(meetingId);
+  const { data: pipelineGuests } = useGetGuestsQuery();
 
   const [setMemberAttendance] = useSetAttendanceMemberMutation();
   const [createGuest] = useCreateAttendanceGuestMutation();
@@ -187,6 +212,14 @@ export function AttendanceTab({ meetingId }: AttendanceTabProps) {
       })),
     [guests],
   );
+
+  const guestPickerOptions = useMemo(() => {
+    const alreadyLinked = new Set((guests ?? []).map((guest) => guest.guestId).filter(Boolean));
+    return (pipelineGuests ?? [])
+      .filter((guest) => !alreadyLinked.has(guest.id))
+      .map((guest) => ({ value: guest.id, label: `${guest.firstName} ${guest.lastName}` }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [pipelineGuests, guests]);
 
   const isLoading = membersLoading || attendanceLoading || guestsLoading;
 
@@ -246,9 +279,9 @@ export function AttendanceTab({ meetingId }: AttendanceTabProps) {
     }
   }
 
-  async function handleAddGuest(name: string) {
+  async function handleAddGuest(guestId: string) {
     try {
-      await createGuest({ meetingId, name }).unwrap();
+      await createGuest({ meetingId, guestId }).unwrap();
       setAddingGuest(false);
     } catch (err) {
       message.error(getApiErrorMessage(err, 'Could not add the guest'));
@@ -364,7 +397,11 @@ export function AttendanceTab({ meetingId }: AttendanceTabProps) {
           ))}
 
           {addingGuest ? (
-            <GuestForm onCommit={handleAddGuest} onCancel={() => setAddingGuest(false)} />
+            <GuestPicker
+              options={guestPickerOptions}
+              onCommit={handleAddGuest}
+              onCancel={() => setAddingGuest(false)}
+            />
           ) : (
             <Button
               block

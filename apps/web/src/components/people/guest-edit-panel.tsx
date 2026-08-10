@@ -28,6 +28,7 @@ interface FormValues {
   socials: GuestSocial[];
   bio?: string;
   notes?: string;
+  invitedBy?: string;
 }
 
 /** Turns the stored Guest into the form's shape. Kept alongside `serialize`
@@ -45,6 +46,7 @@ function deserialize(guest: Guest): FormValues {
     socials: guest.socials?.map((social) => ({ ...social })) ?? [],
     bio: guest.bio ?? '',
     notes: guest.notes ?? '',
+    invitedBy: guest.invitedBy ?? '',
   };
 }
 
@@ -195,6 +197,7 @@ export function GuestEditPanel({ guest, open, onClose }: GuestEditPanelProps) {
         socials: cleanedSocials,
         bio: values.bio?.trim() || undefined,
         notes: values.notes?.trim() || undefined,
+        invitedBy: values.invitedBy?.trim() || undefined,
       }).unwrap();
       message.success('Guest details saved');
       onClose();
@@ -348,6 +351,10 @@ export function GuestEditPanel({ guest, open, onClose }: GuestEditPanelProps) {
               </div>
             )}
           </Form.List>
+        </Form.Item>
+
+        <Form.Item label="Invited by" name="invitedBy">
+          <Input placeholder="Who brought them along?" maxLength={120} />
         </Form.Item>
 
         <Form.Item label="Bio" name="bio">

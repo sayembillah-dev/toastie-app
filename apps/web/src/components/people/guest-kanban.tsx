@@ -23,7 +23,7 @@ const DRAG_MIME = 'application/x-toastly-guest';
 const SHORT_DATE_FMT = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
 
 function formatShortDate(iso: string): string {
-  return SHORT_DATE_FMT.format(new Date(iso));
+  return iso ? SHORT_DATE_FMT.format(new Date(iso)) : 'no visits yet';
 }
 
 function fullName(guest: Guest): string {
@@ -35,6 +35,7 @@ function columnLabel(label: string, count: number): string {
 }
 
 function visitSummary(guest: Guest): string {
+  if (guest.visitCount === 0) return 'No visits yet';
   const visits = guest.visitCount === 1 ? '1 visit' : `${guest.visitCount} visits`;
   return `${visits} · ${formatShortDate(guest.lastVisit)}`;
 }

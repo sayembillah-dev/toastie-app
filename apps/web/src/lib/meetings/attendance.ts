@@ -11,12 +11,17 @@ export interface MemberAttendance {
 
 export interface GuestAttendance {
   id: string;
+  /** The `Prospect` (guest-pipeline) record this row is linked to. Only
+   * absent on rows created before this link existed. */
+  guestId?: string;
   name: string;
   present: boolean;
 }
 
+/** Meeting-day guests always resolve to an existing `Guest` — `/people` is
+ * the only place one gets created. */
 export interface CreateGuestAttendanceInput {
-  name: string;
+  guestId: string;
 }
 
 export interface UpdateGuestAttendanceInput {

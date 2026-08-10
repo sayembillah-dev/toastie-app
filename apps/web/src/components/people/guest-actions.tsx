@@ -14,6 +14,7 @@ import { App, Button, Drawer, Popover } from 'antd';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import { ConvertGuestModal } from '@/components/club-admin/convert-guest-modal';
 import { ContactLogsDrawer } from '@/components/people/contact-logs-drawer';
 import { GuestEditPanel } from '@/components/people/guest-edit-panel';
 import { VisitLogsDrawer } from '@/components/people/visit-logs-drawer';
@@ -129,6 +130,7 @@ interface MoveStageTriggerProps {
 function MoveStageTrigger({ guest }: MoveStageTriggerProps) {
   const { message } = App.useApp();
   const [open, setOpen] = useState(false);
+  const [convertOpen, setConvertOpen] = useState(false);
   const isMobile = useIsMobile();
   const [updateGuest, { isLoading }] = useUpdateGuestMutation();
 
@@ -144,12 +146,9 @@ function MoveStageTrigger({ guest }: MoveStageTriggerProps) {
     }
   };
 
-  /* Convert-to-member is a bigger flow (create a member record, retire the
-   * guest) that has to wait on product spec — the affordance is here so the
-   * menu matches the design, but the write itself is stubbed until then. */
   const convert = () => {
     close();
-    message.info('Convert to member — coming soon');
+    setConvertOpen(true);
   };
 
   const menu = (
@@ -188,22 +187,34 @@ function MoveStageTrigger({ guest }: MoveStageTriggerProps) {
         >
           {menu}
         </Drawer>
+        <ConvertGuestModal
+          open={convertOpen}
+          onClose={() => setConvertOpen(false)}
+          guestId={guest.id}
+        />
       </>
     );
   }
 
   return (
-    <Popover
-      open={open}
-      onOpenChange={setOpen}
-      trigger="click"
-      placement="rightTop"
-      arrow={false}
-      styles={{ container: { padding: 0 } }}
-      content={menu}
-    >
-      {triggerButton}
-    </Popover>
+    <>
+      <Popover
+        open={open}
+        onOpenChange={setOpen}
+        trigger="click"
+        placement="rightTop"
+        arrow={false}
+        styles={{ container: { padding: 0 } }}
+        content={menu}
+      >
+        {triggerButton}
+      </Popover>
+      <ConvertGuestModal
+        open={convertOpen}
+        onClose={() => setConvertOpen(false)}
+        guestId={guest.id}
+      />
+    </>
   );
 }
 

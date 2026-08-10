@@ -4,12 +4,14 @@ import {
   Kanban,
   MagnifyingGlass,
   SquaresFour,
+  UserPlus,
   WarningCircle,
 } from '@phosphor-icons/react/dist/ssr';
-import { Input, Segmented } from 'antd';
+import { Button, Input, Segmented } from 'antd';
 import { useMemo, useState } from 'react';
 
 import { StaggerList } from '@/components/motion/stagger-list';
+import { AddGuestDrawer } from '@/components/people/add-guest-drawer';
 import { GuestCard } from '@/components/people/guest-card';
 import { GuestKanban } from '@/components/people/guest-kanban';
 import type { Guest } from '@/lib/people/guests';
@@ -77,6 +79,7 @@ export function GuestsDirectory() {
   const { data: guests, isLoading, isError, error } = useGetGuestsQuery();
   const [query, setQuery] = useState('');
   const [view, setView] = useState<GuestView>('kanban');
+  const [addOpen, setAddOpen] = useState(false);
 
   const trimmed = query.trim().toLowerCase();
   const filtered = useMemo(() => {
@@ -91,6 +94,14 @@ export function GuestsDirectory() {
           Visitors who have dropped in to a meeting — keep in touch and invite them back.
         </p>
         <div className="flex w-full items-center gap-2 sm:w-auto">
+          <Button
+            type="primary"
+            size="middle"
+            icon={<UserPlus size={16} weight="bold" />}
+            onClick={() => setAddOpen(true)}
+          >
+            Add guest
+          </Button>
           <div className="min-w-0 flex-1 sm:w-72 sm:flex-none">
             <Input
               allowClear
@@ -165,7 +176,7 @@ export function GuestsDirectory() {
               <>
                 <p className="text-sm text-ink-soft">No guests logged yet.</p>
                 <p className="mt-1 text-xs text-ink-muted">
-                  Add a guest after a meeting to keep in touch.
+                  Add one after a meeting to start keeping in touch.
                 </p>
               </>
             )}
@@ -180,6 +191,8 @@ export function GuestsDirectory() {
           </StaggerList>
         )
       ) : null}
+
+      <AddGuestDrawer open={addOpen} onClose={() => setAddOpen(false)} />
     </div>
   );
 }

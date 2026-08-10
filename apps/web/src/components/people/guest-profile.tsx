@@ -28,7 +28,7 @@ const VISIT_DATE_FMT = new Intl.DateTimeFormat('en-GB', {
 });
 
 function formatVisitDate(iso: string): string {
-  return VISIT_DATE_FMT.format(new Date(iso));
+  return iso ? VISIT_DATE_FMT.format(new Date(iso)) : 'No visits yet';
 }
 
 /** WhatsApp deeplinks want digits only — the stored number carries a leading
@@ -89,7 +89,12 @@ function ProfileHeader({ guest }: { guest: Guest }) {
   const fullName = `${guest.firstName} ${guest.lastName}`;
   const initials = getGuestInitials(guest);
   const swatch = getGuestSwatch(guest.id);
-  const visitLabel = guest.visitCount === 1 ? '1 visit' : `${guest.visitCount} visits`;
+  const visitLabel =
+    guest.visitCount === 0
+      ? 'No visits yet'
+      : guest.visitCount === 1
+        ? '1 visit'
+        : `${guest.visitCount} visits`;
   /* Falls back to phone so a guest who told us to WhatsApp them on the same
    * number they picked up on doesn't need the field twice. */
   const whatsappNumber = guest.whatsapp ?? guest.phone;
@@ -133,8 +138,12 @@ function ProfileHeader({ guest }: { guest: Guest }) {
               <StageBadge stage={guest.stage} />
               <span aria-hidden>·</span>
               <span>{visitLabel}</span>
-              <span aria-hidden>·</span>
-              <span>Last visit {formatVisitDate(guest.lastVisit)}</span>
+              {guest.visitCount > 0 ? (
+                <>
+                  <span aria-hidden>·</span>
+                  <span>Last visit {formatVisitDate(guest.lastVisit)}</span>
+                </>
+              ) : null}
             </div>
             {guest.invitedBy ? (
               <p className="mt-2 text-sm text-ink-soft">

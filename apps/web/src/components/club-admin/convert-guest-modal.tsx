@@ -13,23 +13,39 @@ const ROLE_OPTIONS = OFFICER_ROLES.map((role) => ({ value: role, label: role }))
 interface ConvertGuestModalProps {
   open: boolean;
   onClose: () => void;
+  /** Pre-selects (and locks) the guest, for launching this from a specific
+   * guest's own actions rather than picking one out of the full list. */
+  guestId?: string;
 }
 
 /** Turns a guest already in the pipeline into a full member — the guest
  * record stays put (moved to the `joined-club` Kanban column, not deleted)
  * so their visit/contact history is never lost. */
-export function ConvertGuestModal({ open, onClose }: ConvertGuestModalProps) {
+export function ConvertGuestModal({ open, onClose, guestId }: ConvertGuestModalProps) {
   return (
     <Modal open={open} onCancel={onClose} title="Add from guests" footer={null} destroyOnHidden>
-      <ModalBody key={open ? 'open' : 'closed'} onDone={onClose} onCancel={onClose} />
+      <ModalBody
+        key={open ? 'open' : 'closed'}
+        onDone={onClose}
+        onCancel={onClose}
+        fixedGuestId={guestId}
+      />
     </Modal>
   );
 }
 
-function ModalBody({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
+function ModalBody({
+  onDone,
+  onCancel,
+  fixedGuestId,
+}: {
+  onDone: () => void;
+  onCancel: () => void;
+  fixedGuestId?: string;
+}) {
   const { message } = App.useApp();
   const { data: guests } = useGetGuestsQuery();
-  const [guestId, setGuestId] = useState<string | null>(null);
+  const [guestId, setGuestId] = useState<string | null>(fixedGuestId ?? null);
   const [roles, setRoles] = useState<OfficerRole[]>([]);
 
   const [convertGuest, { isLoading: isSubmitting }] = useConvertGuestToMemberMutation();
@@ -44,6 +60,10 @@ function ModalBody({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
         })),
     [guests],
   );
+
+  const fixedGuest = fixedGuestId
+    ? (guests ?? []).find((guest) => guest.id === fixedGuestId)
+    : undefined;
 
   const canSave = guestId !== null && !isSubmitting;
 
@@ -63,22 +83,31 @@ function ModalBody({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="convert-guest" className="text-sm font-medium text-ink">
-          Guest
-        </label>
-        <Select
-          id="convert-guest"
-          className="w-full"
-          placeholder={guestOptions.length > 0 ? 'Select a guest' : 'No guests to convert'}
-          value={guestId ?? undefined}
-          onChange={setGuestId}
-          options={guestOptions}
-          showSearch
-          optionFilterProp="label"
-          disabled={guestOptions.length === 0}
-        />
-      </div>
+      {fixedGuestId ? (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-ink">Guest</span>
+          <p className="text-sm text-ink-soft">
+            {fixedGuest ? `${fixedGuest.firstName} ${fixedGuest.lastName}` : 'Loading…'}
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="convert-guest" className="text-sm font-medium text-ink">
+            Guest
+          </label>
+          <Select
+            id="convert-guest"
+            className="w-full"
+            placeholder={guestOptions.length > 0 ? 'Select a guest' : 'No guests to convert'}
+            value={guestId ?? undefined}
+            onChange={setGuestId}
+            options={guestOptions}
+            showSearch
+            optionFilterProp="label"
+            disabled={guestOptions.length === 0}
+          />
+        </div>
+      )}
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="convert-guest-roles" className="text-sm font-medium text-ink">

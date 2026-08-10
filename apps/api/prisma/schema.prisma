@@ -639,22 +639,29 @@ model MeetingAttendance {
   @@index([clubId, meetingId])
 }
 
-/// A non-roster attendee added by hand from the Attendance tab. Free-text
-/// name rather than a `Prospect` link — the tab's "type a name and check
-/// them in" flow doesn't collect enough to justify creating a guest-pipeline
-/// record on the spot.
+/// A meeting-day attendee, always linked back to a `Prospect` (guest-pipeline
+/// record) — `/people` is the only place a guest gets created, so checking
+/// someone in here always resolves to an existing guest. `guestId` is nullable
+/// only so older free-text rows (created before this link existed) keep
+/// loading; every row created going forward has one. `name` stays a snapshot
+/// of the guest's name at check-in time rather than a live join, matching how
+/// `VisitLog.role`/`notes` are also point-in-time snapshots.
 model MeetingGuestAttendance {
   id        String    @id @default(cuid())
   clubId    String
   meetingId String
+  guestId   String?
   name      String
   present   Boolean   @default(true)
   createdAt DateTime  @default(now())
   updatedAt DateTime?
 
-  meeting Meeting @relation("MeetingGuestAttendance", fields: [clubId, meetingId], references: [clubId, id], onDelete: Cascade)
+  meeting Meeting   @relation("MeetingGuestAttendance", fields: [clubId, meetingId], references: [clubId, id], onDelete: Cascade)
+  guest   Prospect? @relation(fields: [clubId, guestId], references: [clubId, id], onDelete: SetNull)
 
+  @@unique([clubId, meetingId, guestId])
   @@index([clubId, meetingId])
+  @@index([clubId, guestId])
 }
 
 /// One row on the Education › Planner grid — a meeting being roughed out
@@ -834,9 +841,10 @@ model Prospect {
   contactLogs ContactLog[]
   visitLogs   VisitLog[]
 
-  roleAssignments MeetingRoleAssignment[]
-  speakerSlots    MeetingSpeaker[]        @relation("MeetingSpeakerGuestAsSpeaker")
-  evaluatorSlots  MeetingSpeaker[]        @relation("MeetingSpeakerGuestAsEvaluator")
+  roleAssignments   MeetingRoleAssignment[]
+  speakerSlots      MeetingSpeaker[]         @relation("MeetingSpeakerGuestAsSpeaker")
+  evaluatorSlots    MeetingSpeaker[]         @relation("MeetingSpeakerGuestAsEvaluator")
+  meetingAttendance MeetingGuestAttendance[]
 
   @@unique([clubId, id])
   @@index([clubId, stage])

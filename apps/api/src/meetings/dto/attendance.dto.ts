@@ -12,11 +12,13 @@ export class MarkAllAttendanceDto {
   present!: boolean;
 }
 
+/** Attendance guests always resolve to an existing `Prospect` — `/people` is
+ * the only place a guest gets created, so checking someone in at a meeting
+ * links to one rather than typing a fresh name. */
 export class CreateGuestAttendanceDto {
   @IsString()
   @MinLength(1)
-  @MaxLength(GUEST_NAME_MAX)
-  name!: string;
+  guestId!: string;
 }
 
 export class UpdateGuestAttendanceDto {

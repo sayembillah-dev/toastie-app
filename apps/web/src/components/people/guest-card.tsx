@@ -15,7 +15,7 @@ const VISIT_DATE_FMT = new Intl.DateTimeFormat('en-GB', {
 });
 
 function formatVisitDate(iso: string): string {
-  return VISIT_DATE_FMT.format(new Date(iso));
+  return iso ? VISIT_DATE_FMT.format(new Date(iso)) : 'No visits yet';
 }
 
 export function GuestCard({ guest }: GuestCardProps) {

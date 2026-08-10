@@ -12,7 +12,7 @@ import {
 import { CurrentContext, type RequestContext, Requires } from '@/access';
 import { type MemberWire } from '@/memberships';
 
-import { ConvertGuestDto, UpdateGuestDto } from './dto/guests.dto';
+import { ConvertGuestDto, CreateGuestDto, UpdateGuestDto } from './dto/guests.dto';
 import {
   CreateContactLogDto,
   CreateVisitLogDto,
@@ -31,6 +31,13 @@ export class GuestsController {
   list(@CurrentContext() ctx: RequestContext): Promise<GuestWire[]> {
     const clubId = requireClubContext(ctx);
     return this.people.listGuests(ctx.subject, clubId);
+  }
+
+  @Requires('guest', 'create')
+  @Post()
+  create(@CurrentContext() ctx: RequestContext, @Body() dto: CreateGuestDto): Promise<GuestWire> {
+    const clubId = requireClubContext(ctx);
+    return this.people.createGuest(ctx.subject, clubId, dto);
   }
 
   @Requires('guest', 'read')

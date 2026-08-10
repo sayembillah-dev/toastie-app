@@ -129,6 +129,7 @@ export function toMeetingAttendanceWire(row: MeetingAttendanceRow): MeetingAtten
  * interface. */
 export interface MeetingGuestAttendanceWire {
   id: string;
+  guestId?: string;
   name: string;
   present: boolean;
 }
@@ -136,5 +137,7 @@ export interface MeetingGuestAttendanceWire {
 export function toMeetingGuestAttendanceWire(
   row: MeetingGuestAttendanceRow,
 ): MeetingGuestAttendanceWire {
-  return { id: row.id, name: row.name, present: row.present };
+  const wire: MeetingGuestAttendanceWire = { id: row.id, name: row.name, present: row.present };
+  if (row.guestId) wire.guestId = row.guestId;
+  return wire;
 }

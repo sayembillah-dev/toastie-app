@@ -95,8 +95,69 @@ export class UpdateGuestDto {
   notes?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  invitedBy?: string;
+
+  @IsOptional()
   @IsIn(GUEST_STAGES as readonly string[])
   stage?: GuestStage;
+}
+
+/** Body for `POST /guests`. No `stage` — every guest starts at `new` — and no
+ * visit stats, which are derived from `VisitLog` rows (see `visit-stats.ts`)
+ * rather than typed in by hand. */
+export class CreateGuestDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(60)
+  firstName!: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(60)
+  lastName!: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  whatsapp?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200_000)
+  avatarUrl?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(12)
+  @ValidateNested({ each: true })
+  @Type(() => GuestSocialDto)
+  socials?: GuestSocialDto[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  bio?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  notes?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  invitedBy?: string;
 }
 
 /** Body for `POST /guests/:guestId/convert-to-member`. */

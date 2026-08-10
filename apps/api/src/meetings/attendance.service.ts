@@ -1,7 +1,15 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { can, type PermissionSubject } from '@toastly/access';
 
 import { ActivityService } from '@/activity';
+import { syncGuestVisitStats } from '@/people/visit-stats';
 import { PrismaService } from '@/prisma';
 
 import type {
@@ -177,15 +185,63 @@ export class AttendanceService {
     const meeting = await this.requireMeeting(meetingId);
     this.assert(subject, meeting.clubId, 'create');
 
+    const prospect = await this.prisma.prospect.findUnique({
+      where: { clubId_id: { clubId: meeting.clubId, id: dto.guestId } },
+      select: { id: true, firstName: true, lastName: true },
+    });
+    if (!prospect) throw new BadRequestException(`No guest with id "${dto.guestId}" in this club`);
+
+    try {
+      return await this.doCreateGuest(meeting, prospect, actorMembershipId);
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException({
+          code: 'GUEST_ALREADY_CHECKED_IN',
+          message: `${prospect.firstName} ${prospect.lastName} is already checked in to this meeting`,
+        });
+      }
+      throw err;
+    }
+  }
+
+  private async doCreateGuest(
+    meeting: { id: string; clubId: string; meetingNumber: number },
+    prospect: { id: string; firstName: string; lastName: string },
+    actorMembershipId: string | null,
+  ): Promise<MeetingGuestAttendanceWire> {
     const row = await this.prisma.$transaction(async (tx) => {
       const guest = await tx.meetingGuestAttendance.create({
         data: {
           clubId: meeting.clubId,
           meetingId: meeting.id,
-          name: dto.name.trim(),
+          guestId: prospect.id,
+          name: `${prospect.firstName} ${prospect.lastName}`.trim(),
           present: true,
         },
       });
+      // First time this guest is linked to this meeting — log the visit and
+      // roll it into their derived stats/stage the same way a manual visit
+      // log from the guest profile does.
+      const existingVisit = await tx.visitLog.findFirst({
+        where: {
+          clubId: meeting.clubId,
+          prospectId: prospect.id,
+          meetingId: meeting.id,
+          origin: 'meeting',
+        },
+        select: { id: true },
+      });
+      if (!existingVisit) {
+        await tx.visitLog.create({
+          data: {
+            clubId: meeting.clubId,
+            prospectId: prospect.id,
+            meetingId: meeting.id,
+            origin: 'meeting',
+          },
+        });
+        await syncGuestVisitStats(tx, prospect.id);
+      }
       await this.activity.record(
         {
           clubId: meeting.clubId,
@@ -265,6 +321,23 @@ export class AttendanceService {
 
     await this.prisma.$transaction(async (tx) => {
       await tx.meetingGuestAttendance.delete({ where: { id: guestId } });
+      // Unwind the auto-logged visit this check-in created, so removing a
+      // mis-added guest doesn't leave a phantom meeting on their record.
+      if (existing.guestId) {
+        const autoLog = await tx.visitLog.findFirst({
+          where: {
+            clubId: meeting.clubId,
+            prospectId: existing.guestId,
+            meetingId: meeting.id,
+            origin: 'meeting',
+          },
+          select: { id: true },
+        });
+        if (autoLog) {
+          await tx.visitLog.delete({ where: { id: autoLog.id } });
+          await syncGuestVisitStats(tx, existing.guestId);
+        }
+      }
       await this.activity.record(
         {
           clubId: meeting.clubId,

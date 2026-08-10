@@ -95,7 +95,7 @@ import type {
   CreateContactLogInput,
   UpdateContactLogInput,
 } from '@/lib/people/contact-logs';
-import type { Guest, UpdateGuestInput } from '@/lib/people/guests';
+import type { CreateGuestInput, Guest, UpdateGuestInput } from '@/lib/people/guests';
 import type { CreateVisitLogInput, UpdateVisitLogInput, VisitLog } from '@/lib/people/visit-logs';
 import type { Profile, UpdateProfileInput } from '@/lib/profile/profile';
 import type { PushSubscriptionInput } from '@/lib/push/push-notifications';
@@ -536,6 +536,16 @@ export const toastlyApi = createApi({
     getGuest: build.query<Guest, string>({
       query: (guestId) => ({ url: `/guests/${guestId}`, method: 'GET' }),
       providesTags: (_guest, _error, guestId) => [{ type: 'Guest', id: guestId }],
+    }),
+
+    /* The only creation path for a guest — every other guest-linking flow
+     * (meeting attendance, role/speaker pickers) selects an existing one. */
+    createGuest: build.mutation<Guest, CreateGuestInput>({
+      query: (body) => ({ url: '/guests', method: 'POST', body }),
+      invalidatesTags: [
+        { type: 'Guest', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
     }),
 
     /* Backs both the kanban stage drop and the edit panel — same PATCH, the
@@ -2278,6 +2288,7 @@ export const {
   useDeleteMeetingMutation,
   useGetGuestsQuery,
   useGetGuestQuery,
+  useCreateGuestMutation,
   useUpdateGuestMutation,
   useDeleteGuestMutation,
   useConvertGuestToMemberMutation,

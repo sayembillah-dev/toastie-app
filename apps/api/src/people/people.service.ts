@@ -9,7 +9,7 @@ import { can, type PermissionSubject } from '@toastly/access';
 import { type MemberWire, toClubRoles, toMemberWire } from '@/memberships';
 import { PrismaService } from '@/prisma';
 
-import type { ConvertGuestDto, UpdateGuestDto } from './dto/guests.dto';
+import type { ConvertGuestDto, CreateGuestDto, UpdateGuestDto } from './dto/guests.dto';
 import type {
   CreateContactLogDto,
   CreateVisitLogDto,
@@ -24,6 +24,7 @@ import {
   toVisitLogWire,
   type VisitLogWire,
 } from './serializers';
+import { syncGuestVisitStats } from './visit-stats';
 
 /** Handles `/guests` and its nested contact/visit log surfaces. The DB
  * model is `Prospect` — the local-db rename kept the wire calling it
@@ -56,6 +57,40 @@ export class PeopleService {
     return toGuestWire(row);
   }
 
+  /** The only place a guest is created — meeting attendance and meeting-role
+   * pickers only ever link to an existing `Prospect`, never mint one. */
+  async createGuest(
+    subject: PermissionSubject,
+    clubId: string,
+    dto: CreateGuestDto,
+  ): Promise<GuestWire> {
+    if (!can(subject, 'create', 'guest', { clubId })) {
+      throw new ForbiddenException({
+        code: 'PERMISSION_DENIED',
+        resource: 'guest',
+        action: 'create',
+        reason: 'You do not manage this club',
+      });
+    }
+    const row = await this.prisma.prospect.create({
+      data: {
+        clubId,
+        firstName: dto.firstName.trim(),
+        lastName: dto.lastName.trim(),
+        email: dto.email?.trim() || null,
+        phone: dto.phone?.trim() || null,
+        whatsapp: dto.whatsapp?.trim() || null,
+        avatarUrl: dto.avatarUrl || null,
+        socials: (dto.socials ?? []) as unknown as Prisma.InputJsonValue,
+        bio: dto.bio?.trim() || null,
+        notes: dto.notes?.trim() || null,
+        invitedBy: dto.invitedBy?.trim() || null,
+        stage: 'new',
+      },
+    });
+    return toGuestWire(row);
+  }
+
   async updateGuest(
     subject: PermissionSubject,
     guestId: string,
@@ -74,6 +109,7 @@ export class PeopleService {
     if (dto.socials !== undefined) data.socials = dto.socials as unknown as Prisma.InputJsonValue;
     if (dto.bio !== undefined) data.bio = dto.bio.trim() || null;
     if (dto.notes !== undefined) data.notes = dto.notes.trim() || null;
+    if (dto.invitedBy !== undefined) data.invitedBy = dto.invitedBy.trim() || null;
     if (dto.stage !== undefined) data.stage = dto.stage;
 
     const row = await this.prisma.prospect.update({ where: { id: guestId }, data });
@@ -215,15 +251,19 @@ export class PeopleService {
     const guest = await this.loadGuest(guestId);
     this.assertLog(subject, guest, 'create');
     await this.assertMeetingInClub(guest.clubId, dto.meetingId);
-    const row = await this.prisma.visitLog.create({
-      data: {
-        clubId: guest.clubId,
-        prospectId: guest.id,
-        meetingId: dto.meetingId,
-        role: dto.role?.trim() || null,
-        notes: dto.notes?.trim() || null,
-        origin: 'manual',
-      },
+    const row = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.visitLog.create({
+        data: {
+          clubId: guest.clubId,
+          prospectId: guest.id,
+          meetingId: dto.meetingId,
+          role: dto.role?.trim() || null,
+          notes: dto.notes?.trim() || null,
+          origin: 'manual',
+        },
+      });
+      await syncGuestVisitStats(tx, guest.id);
+      return created;
     });
     return toVisitLogWire(row);
   }
@@ -249,7 +289,13 @@ export class PeopleService {
     if (dto.notes !== undefined) data.notes = dto.notes.trim() || null;
     // Origin is a source-of-record marker, not editable — a hand-edited
     // auto log stays auto. Skip on purpose.
-    const row = await this.prisma.visitLog.update({ where: { id: logId }, data });
+    const row = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.visitLog.update({ where: { id: logId }, data });
+      // Only the meeting link affects the derived stats — role/notes edits
+      // don't move the visit-date needle.
+      if (dto.meetingId !== undefined) await syncGuestVisitStats(tx, guest.id);
+      return updated;
+    });
     return toVisitLogWire(row);
   }
 
@@ -260,7 +306,10 @@ export class PeopleService {
     if (!existing || existing.prospectId !== guest.id) {
       throw new NotFoundException(`No visit log with id "${logId}"`);
     }
-    await this.prisma.visitLog.delete({ where: { id: logId } });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.visitLog.delete({ where: { id: logId } });
+      await syncGuestVisitStats(tx, guest.id);
+    });
     return null;
   }
 
