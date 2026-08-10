@@ -1,10 +1,10 @@
 'use client';
 
-import { App, Button, Input, Modal, Select } from 'antd';
-import { useState } from 'react';
+import { App, Button, Form, Input, Modal, Select } from 'antd';
 
 import type { Member, OfficerRole } from '@/lib/education/members';
 import { OFFICER_ROLES } from '@/lib/education/members';
+import { NAME_MAX, requiredSelectRule, shortNameRules } from '@/lib/validation/rules';
 import { useCreateMemberMutation, useUpdateMemberMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -17,6 +17,12 @@ interface MemberFormModalProps {
    * have their own dedicated action on the roster row. */
   member: Member | null;
   onClose: () => void;
+}
+
+interface FormValues {
+  firstName: string;
+  lastName: string;
+  roles: OfficerRole[];
 }
 
 export function MemberFormModal({ open, member, onClose }: MemberFormModalProps) {
@@ -41,89 +47,95 @@ interface ModalBodyProps {
 
 function ModalBody({ member, onDone, onCancel }: ModalBodyProps) {
   const { message } = App.useApp();
-  const [firstName, setFirstName] = useState(member?.firstName ?? '');
-  const [lastName, setLastName] = useState(member?.lastName ?? '');
-  const [roles, setRoles] = useState<OfficerRole[]>(member?.roles ?? ['Member']);
+  const [form] = Form.useForm<FormValues>();
 
   const [createMember, { isLoading: isCreating }] = useCreateMemberMutation();
   const [updateMember, { isLoading: isUpdating }] = useUpdateMemberMutation();
 
   const busy = isCreating || isUpdating;
-  const canSave = firstName.trim() !== '' && lastName.trim() !== '' && roles.length > 0 && !busy;
 
-  const handleSave = async () => {
-    if (!canSave) return;
+  async function handleSave() {
+    let values: FormValues;
+    try {
+      values = await form.validateFields();
+    } catch {
+      return;
+    }
     try {
       if (member) {
         await updateMember({
           memberId: member.id,
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          roles,
+          firstName: values.firstName.trim(),
+          lastName: values.lastName.trim(),
+          roles: values.roles,
         }).unwrap();
         message.success('Member updated');
       } else {
         await createMember({
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          roles,
+          firstName: values.firstName.trim(),
+          lastName: values.lastName.trim(),
+          roles: values.roles,
         }).unwrap();
         message.success('Member added');
       }
       onDone();
     } catch (err) {
-      message.error(getApiErrorMessage(err, 'Could not save this member'));
+      message.error(getApiErrorMessage(err, "Couldn't save this member. Please try again."));
     }
-  };
+  }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="member-first-name" className="text-sm font-medium text-ink">
-          First name
-        </label>
-        <Input
-          id="member-first-name"
-          placeholder="Aisha"
-          value={firstName}
-          onChange={(event) => setFirstName(event.target.value)}
-        />
-      </div>
+    <Form<FormValues>
+      form={form}
+      layout="vertical"
+      disabled={busy}
+      initialValues={{
+        firstName: member?.firstName ?? '',
+        lastName: member?.lastName ?? '',
+        roles: member?.roles ?? ['Member'],
+      }}
+      className="flex flex-col gap-4"
+    >
+      <Form.Item
+        label="First name"
+        name="firstName"
+        rules={shortNameRules('First name')}
+        className="!mb-0"
+      >
+        <Input id="member-first-name" placeholder="Aisha" maxLength={NAME_MAX} />
+      </Form.Item>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="member-last-name" className="text-sm font-medium text-ink">
-          Last name
-        </label>
-        <Input
-          id="member-last-name"
-          placeholder="Patel"
-          value={lastName}
-          onChange={(event) => setLastName(event.target.value)}
-        />
-      </div>
+      <Form.Item
+        label="Last name"
+        name="lastName"
+        rules={shortNameRules('Last name')}
+        className="!mb-0"
+      >
+        <Input id="member-last-name" placeholder="Patel" maxLength={NAME_MAX} />
+      </Form.Item>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="member-roles" className="text-sm font-medium text-ink">
-          Roles
-        </label>
+      <Form.Item
+        label="Roles"
+        name="roles"
+        rules={[requiredSelectRule('Role')]}
+        extra="A member can hold more than one officer role."
+        className="!mb-0"
+      >
         <Select
           id="member-roles"
           mode="multiple"
           className="w-full"
           placeholder="Select one or more roles"
-          value={roles}
-          onChange={(value: OfficerRole[]) => setRoles(value)}
           options={ROLE_OPTIONS}
         />
-        <p className="text-[11px] text-ink-muted">A member can hold more than one officer role.</p>
-      </div>
+      </Form.Item>
 
       <div className="flex items-center justify-end gap-2">
         <Button onClick={onCancel}>Cancel</Button>
-        <Button type="primary" disabled={!canSave} loading={busy} onClick={handleSave}>
+        <Button type="primary" loading={busy} onClick={handleSave}>
           {member ? 'Save' : 'Add'}
         </Button>
       </div>
-    </div>
+    </Form>
   );
 }

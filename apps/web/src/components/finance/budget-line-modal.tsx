@@ -1,7 +1,7 @@
 'use client';
 
-import { App, Button, Input, InputNumber, Modal, Popconfirm, Select } from 'antd';
-import { useMemo, useState } from 'react';
+import { App, Button, Form, Input, InputNumber, Modal, Popconfirm, Select } from 'antd';
+import { useMemo } from 'react';
 
 import type { BudgetLine } from '@/lib/finance/budget';
 import { BUDGET_LINE_NOTE_MAX } from '@/lib/finance/budget';
@@ -12,6 +12,7 @@ import {
   INCOME_CATEGORIES,
   type TransactionCategory,
 } from '@/lib/finance/transactions';
+import { amountRules } from '@/lib/validation/rules';
 import {
   useCreateBudgetLineMutation,
   useDeleteBudgetLineMutation,
@@ -30,6 +31,12 @@ interface BudgetLineModalProps {
    * when creating, so the same category can't be budgeted twice. */
   excludeCategories: Set<TransactionCategory>;
   onClose: () => void;
+}
+
+interface FormValues {
+  category: TransactionCategory;
+  planned: number;
+  note: string;
 }
 
 export function BudgetLineModal({
@@ -79,6 +86,7 @@ function ModalBody({
   onCancel,
 }: ModalBodyProps) {
   const { message } = App.useApp();
+  const [form] = Form.useForm<FormValues>();
 
   const availableCategories = useMemo(() => {
     const pool = kind === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
@@ -87,55 +95,55 @@ function ModalBody({
     );
   }, [kind, excludeCategories, line]);
 
-  const [category, setCategory] = useState<TransactionCategory>(
-    line?.category ?? availableCategories[0],
-  );
-  const [planned, setPlanned] = useState<number>(line ? fromMinor(line.plannedMinor) : 0);
-  const [note, setNote] = useState(line?.note ?? '');
+  const planned = Form.useWatch('planned', form) ?? 0;
 
   const [createLine, { isLoading: isCreating }] = useCreateBudgetLineMutation();
   const [updateLine, { isLoading: isUpdating }] = useUpdateBudgetLineMutation();
   const [deleteLine, { isLoading: isDeleting }] = useDeleteBudgetLineMutation();
 
   const busy = isCreating || isUpdating;
-  const canSave = planned >= 0 && !busy;
 
-  const handleSave = async () => {
-    if (!canSave) return;
+  async function handleSave() {
+    let values: FormValues;
+    try {
+      values = await form.validateFields();
+    } catch {
+      return;
+    }
     try {
       if (line) {
         await updateLine({
           lineId: line.id,
-          plannedMinor: toMinor(planned),
-          note: note.trim() === '' ? null : note.trim(),
+          plannedMinor: toMinor(values.planned),
+          note: values.note.trim() === '' ? null : values.note.trim(),
         }).unwrap();
         message.success('Budget line updated');
       } else {
         await createLine({
           fiscalYear,
           kind,
-          category,
-          plannedMinor: toMinor(planned),
-          note: note.trim() === '' ? undefined : note.trim(),
+          category: values.category,
+          plannedMinor: toMinor(values.planned),
+          note: values.note.trim() === '' ? undefined : values.note.trim(),
         }).unwrap();
         message.success('Budget line added');
       }
       onDone();
     } catch (err) {
-      message.error(getApiErrorMessage(err, 'Could not save the budget line'));
+      message.error(getApiErrorMessage(err, "Couldn't save the budget line. Please try again."));
     }
-  };
+  }
 
-  const handleDelete = async () => {
+  async function handleDelete() {
     if (!line) return;
     try {
       await deleteLine(line.id).unwrap();
       message.success('Budget line deleted');
       onDone();
     } catch (err) {
-      message.error(getApiErrorMessage(err, 'Could not delete the budget line'));
+      message.error(getApiErrorMessage(err, "Couldn't delete the budget line. Please try again."));
     }
-  };
+  }
 
   if (!line && availableCategories.length === 0) {
     return (
@@ -152,27 +160,34 @@ function ModalBody({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="budget-category" className="text-sm font-medium text-ink">
-          Category
-        </label>
+    <Form<FormValues>
+      form={form}
+      layout="vertical"
+      disabled={busy}
+      initialValues={{
+        category: line?.category ?? availableCategories[0],
+        planned: line ? fromMinor(line.plannedMinor) : 0,
+        note: line?.note ?? '',
+      }}
+      className="flex flex-col gap-4"
+    >
+      <Form.Item label="Category" name="category" className="!mb-0">
         {line ? (
           <p className="text-sm text-ink">{CATEGORY_LABELS[line.category]}</p>
         ) : (
           <Select
             id="budget-category"
-            value={category}
-            onChange={setCategory}
             options={availableCategories.map((value) => ({ value, label: CATEGORY_LABELS[value] }))}
           />
         )}
-      </div>
+      </Form.Item>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="budget-planned" className="text-sm font-medium text-ink">
-          Planned amount for FY {fiscalYear}
-        </label>
+      <Form.Item
+        label={`Planned amount for FY ${fiscalYear}`}
+        name="planned"
+        rules={amountRules({ label: 'Planned amount', allowZero: true })}
+        className="!mb-0"
+      >
         <InputNumber
           id="budget-planned"
           className="w-full"
@@ -180,24 +195,27 @@ function ModalBody({
           step={1}
           precision={2}
           prefix="৳"
-          value={planned}
-          onChange={(value) => setPlanned(value ?? 0)}
         />
-      </div>
+      </Form.Item>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="budget-note" className="text-sm font-medium text-ink">
-          Note (optional)
-        </label>
+      <Form.Item
+        label="Note (optional)"
+        name="note"
+        rules={[
+          {
+            max: BUDGET_LINE_NOTE_MAX,
+            message: `Keep it under ${BUDGET_LINE_NOTE_MAX} characters`,
+          },
+        ]}
+        className="!mb-0"
+      >
         <Input.TextArea
           id="budget-note"
           placeholder="Assumptions behind this figure"
-          value={note}
           maxLength={BUDGET_LINE_NOTE_MAX}
           autoSize={{ minRows: 2, maxRows: 4 }}
-          onChange={(event) => setNote(event.target.value)}
         />
-      </div>
+      </Form.Item>
 
       {planned > 0 ? (
         <p className="text-xs text-ink-muted">
@@ -224,11 +242,11 @@ function ModalBody({
         )}
         <div className="flex gap-2">
           <Button onClick={onCancel}>Cancel</Button>
-          <Button type="primary" disabled={!canSave} loading={busy} onClick={handleSave}>
+          <Button type="primary" loading={busy} onClick={handleSave}>
             {line ? 'Save' : 'Add'}
           </Button>
         </div>
       </div>
-    </div>
+    </Form>
   );
 }

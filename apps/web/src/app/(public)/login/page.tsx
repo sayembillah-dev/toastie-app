@@ -8,6 +8,7 @@ import { useState } from 'react';
 
 import { safeNextPath } from '@/lib/auth/next-path';
 import { writeAccessToken, writeRefreshToken, writeStoredContext } from '@/lib/auth/token-storage';
+import { phoneRules } from '@/lib/validation/rules';
 import { useAuthLoginMutation } from '@/store/api';
 import { useAppDispatch } from '@/store/hooks';
 import { defaultRouteForContext, isContextKeyValid, sessionLoaded } from '@/store/session-slice';
@@ -95,17 +96,7 @@ export default function LoginPage() {
           autoComplete="on"
           disabled={isLoading}
         >
-          <Form.Item
-            label="Mobile number"
-            name="phone"
-            rules={[
-              { required: true, message: 'Mobile number is required' },
-              {
-                pattern: /^\+?[0-9\s-]{8,20}$/,
-                message: 'Enter a valid mobile number',
-              },
-            ]}
-          >
+          <Form.Item label="Mobile number" name="phone" rules={phoneRules()}>
             <Input
               type="tel"
               autoComplete="tel"
@@ -118,7 +109,7 @@ export default function LoginPage() {
           <Form.Item
             label="Password"
             name="password"
-            rules={[{ required: true, message: 'Password is required' }]}
+            rules={[{ required: true, message: 'Enter your password' }]}
           >
             <Input.Password autoComplete="current-password" size="large" />
           </Form.Item>

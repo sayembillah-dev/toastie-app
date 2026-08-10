@@ -8,11 +8,23 @@ import {
   Plus,
   Trash,
 } from '@phosphor-icons/react/dist/ssr';
-import { App, Button, Checkbox, Drawer, Input, Popconfirm, Segmented, Select, Tag } from 'antd';
+import {
+  App,
+  Button,
+  Checkbox,
+  Drawer,
+  Form,
+  Input,
+  Popconfirm,
+  Segmented,
+  Select,
+  Tag,
+} from 'antd';
 import { useMemo, useState } from 'react';
 
 import { OFFICER_ROLES, type OfficerRole } from '@/lib/education/members';
 import { generatePassword } from '@/lib/org/password';
+import { emailRules, phoneRules, shortNameRules } from '@/lib/validation/rules';
 import {
   MEMBER_TYPES,
   type MemberType,
@@ -172,6 +184,14 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 /* --------------------------------------------------------- profile -- */
 
+interface ProfileValues {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  tiMemberNumber: string;
+}
+
 function ProfileSection({
   user,
   onSaved,
@@ -180,106 +200,102 @@ function ProfileSection({
   onSaved: (user: PlatformUser) => void;
 }) {
   const { message } = App.useApp();
-  const [firstName, setFirstName] = useState(user.firstName);
-  const [lastName, setLastName] = useState(user.lastName);
-  const [email, setEmail] = useState(user.email ?? '');
-  const [phone, setPhone] = useState(user.phone);
-  const [tiMemberNumber, setTiMemberNumber] = useState(user.tiMemberNumber ?? '');
+  const [form] = Form.useForm<ProfileValues>();
   const [updateProfile, { isLoading }] = useUpdatePlatformUserProfileMutation();
 
-  const nameValid = firstName.trim().length > 0 && lastName.trim().length > 0;
-  const phoneValid = /^\+?[0-9\s-]{8,20}$/.test(phone.trim());
-  const dirty =
-    firstName !== user.firstName ||
-    lastName !== user.lastName ||
-    email !== (user.email ?? '') ||
-    phone !== user.phone ||
-    tiMemberNumber !== (user.tiMemberNumber ?? '');
-
   async function handleSave() {
-    if (!nameValid || !phoneValid) return;
+    let values: ProfileValues;
+    try {
+      values = await form.validateFields();
+    } catch {
+      return;
+    }
     try {
       const updated = await updateProfile({
         userId: user.id,
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        email: email.trim() || undefined,
-        phone: phone.trim(),
-        tiMemberNumber: tiMemberNumber.trim() || undefined,
+        firstName: values.firstName.trim(),
+        lastName: values.lastName.trim(),
+        email: values.email.trim() || undefined,
+        phone: values.phone.trim(),
+        tiMemberNumber: values.tiMemberNumber.trim() || undefined,
       }).unwrap();
       onSaved(updated);
       message.success('Profile saved');
     } catch (err) {
-      message.error(getApiErrorMessage(err, 'Could not save these changes'));
+      const code = extractErrorCode(err);
+      if (code === 'PHONE_TAKEN') {
+        form.setFields([{ name: 'phone', errors: ['That mobile number is already in use.'] }]);
+        return;
+      }
+      if (code === 'EMAIL_TAKEN') {
+        form.setFields([{ name: 'email', errors: ['That email is already in use.'] }]);
+        return;
+      }
+      message.error(getApiErrorMessage(err, "Couldn't save these changes. Please try again."));
     }
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <Form<ProfileValues>
+      form={form}
+      layout="vertical"
+      disabled={isLoading}
+      initialValues={{
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email ?? '',
+        phone: user.phone,
+        tiMemberNumber: user.tiMemberNumber ?? '',
+      }}
+      className="flex flex-col gap-3"
+    >
       <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="ud-first-name" className="text-sm font-medium text-ink">
-            First name
-          </label>
-          <Input
-            id="ud-first-name"
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="ud-last-name" className="text-sm font-medium text-ink">
-            Last name
-          </label>
-          <Input id="ud-last-name" value={lastName} onChange={(e) => setLastName(e.target.value)} />
-        </div>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="ud-email" className="text-sm font-medium text-ink">
-          Email
-        </label>
-        <Input
-          id="ud-email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="ud-phone" className="text-sm font-medium text-ink">
-          Phone
-        </label>
-        <Input
-          id="ud-phone"
-          type="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          status={phone.length > 0 && !phoneValid ? 'error' : undefined}
-        />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="ud-ti-number" className="text-sm font-medium text-ink">
-          TI member number
-        </label>
-        <Input
-          id="ud-ti-number"
-          value={tiMemberNumber}
-          onChange={(e) => setTiMemberNumber(e.target.value)}
-        />
-      </div>
-      <div className="flex justify-end">
-        <Button
-          type="primary"
-          size="small"
-          disabled={!dirty || !nameValid || !phoneValid}
-          loading={isLoading}
-          onClick={handleSave}
+        <Form.Item
+          label="First name"
+          name="firstName"
+          rules={shortNameRules('First name')}
+          className="!mb-0"
         >
+          <Input id="ud-first-name" />
+        </Form.Item>
+        <Form.Item
+          label="Last name"
+          name="lastName"
+          rules={shortNameRules('Last name')}
+          className="!mb-0"
+        >
+          <Input id="ud-last-name" />
+        </Form.Item>
+      </div>
+      <Form.Item label="Email" name="email" rules={emailRules()} className="!mb-0">
+        <Input id="ud-email" type="email" />
+      </Form.Item>
+      <Form.Item label="Phone" name="phone" rules={phoneRules()} className="!mb-0">
+        <Input id="ud-phone" type="tel" inputMode="tel" />
+      </Form.Item>
+      <Form.Item
+        label="TI member number"
+        name="tiMemberNumber"
+        rules={[{ max: 40, message: 'Keep it under 40 characters' }]}
+        className="!mb-0"
+      >
+        <Input id="ud-ti-number" />
+      </Form.Item>
+      <div className="flex justify-end">
+        <Button type="primary" size="small" loading={isLoading} onClick={handleSave}>
           Save profile
         </Button>
       </div>
-    </div>
+    </Form>
   );
+}
+
+function extractErrorCode(err: unknown): string | null {
+  if (!err || typeof err !== 'object') return null;
+  const data = (err as { data?: unknown }).data;
+  if (!data || typeof data !== 'object') return null;
+  const code = (data as { code?: unknown }).code;
+  return typeof code === 'string' ? code : null;
 }
 
 /* --------------------------------------------------------- account -- */

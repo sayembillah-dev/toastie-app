@@ -1,7 +1,6 @@
 'use client';
 
-import { App, Button, Input, Modal, Popconfirm, Select } from 'antd';
-import { useState } from 'react';
+import { App, Button, Form, Input, Modal, Popconfirm, Select } from 'antd';
 import type { OrgClub, OrgClubStatus } from '@/lib/org/types';
 import {
   CLUB_NUMBER_MAX,
@@ -9,6 +8,7 @@ import {
   ORG_CLUB_STATUSES,
   ORG_NAME_MAX,
 } from '@/lib/org/types';
+import { textFieldRules } from '@/lib/validation/rules';
 import {
   useCreateOrgClubMutation,
   useDeleteOrgClubMutation,
@@ -32,6 +32,12 @@ interface OrgClubModalProps {
    * clubs in the directory but not remove them. */
   canDelete: boolean;
   onClose: () => void;
+}
+
+interface FormValues {
+  name: string;
+  clubNumber: string;
+  status: OrgClubStatus;
 }
 
 export function OrgClubModal({ open, areaId, club, canDelete, onClose }: OrgClubModalProps) {
@@ -65,94 +71,90 @@ interface ModalBodyProps {
 
 function ModalBody({ areaId, club, canDelete, onDone, onCancel }: ModalBodyProps) {
   const { message } = App.useApp();
-  const [name, setName] = useState(club?.name ?? '');
-  const [clubNumber, setClubNumber] = useState(club?.clubNumber ?? '');
-  const [status, setStatus] = useState<OrgClubStatus>(club?.status ?? 'active');
+  const [form] = Form.useForm<FormValues>();
 
   const [createClub, { isLoading: isCreating }] = useCreateOrgClubMutation();
   const [updateClub, { isLoading: isUpdating }] = useUpdateOrgClubMutation();
   const [deleteClub, { isLoading: isDeleting }] = useDeleteOrgClubMutation();
 
   const busy = isCreating || isUpdating;
-  const canSave = name.trim() !== '' && !busy;
 
-  const handleSave = async () => {
-    if (!canSave) return;
+  async function handleSave() {
+    let values: FormValues;
+    try {
+      values = await form.validateFields();
+    } catch {
+      return;
+    }
+    const trimmedNumber = values.clubNumber.trim();
     try {
       if (club) {
         await updateClub({
           clubId: club.id,
-          name: name.trim(),
-          clubNumber: clubNumber.trim() === '' ? null : clubNumber.trim(),
-          status,
+          name: values.name.trim(),
+          clubNumber: trimmedNumber === '' ? null : trimmedNumber,
+          status: values.status,
         }).unwrap();
         message.success('Club updated');
       } else {
         await createClub({
           areaId,
-          name: name.trim(),
-          clubNumber: clubNumber.trim() === '' ? undefined : clubNumber.trim(),
-          status,
+          name: values.name.trim(),
+          clubNumber: trimmedNumber === '' ? undefined : trimmedNumber,
+          status: values.status,
         }).unwrap();
         message.success('Club added');
       }
       onDone();
     } catch (err) {
-      message.error(getApiErrorMessage(err, 'Could not save the club'));
+      message.error(getApiErrorMessage(err, "Couldn't save the club. Please try again."));
     }
-  };
+  }
 
-  const handleDelete = async () => {
+  async function handleDelete() {
     if (!club) return;
     try {
       await deleteClub(club.id).unwrap();
       message.success('Club deleted');
       onDone();
     } catch (err) {
-      message.error(getApiErrorMessage(err, 'Could not delete the club'));
+      message.error(getApiErrorMessage(err, "Couldn't delete the club. Please try again."));
     }
-  };
+  }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="club-name" className="text-sm font-medium text-ink">
-          Name
-        </label>
-        <Input
-          id="club-name"
-          placeholder="Sunrise Toastmasters"
-          value={name}
-          maxLength={ORG_NAME_MAX}
-          onChange={(event) => setName(event.target.value)}
-        />
-      </div>
+    <Form<FormValues>
+      form={form}
+      layout="vertical"
+      disabled={busy}
+      initialValues={{
+        name: club?.name ?? '',
+        clubNumber: club?.clubNumber ?? '',
+        status: club?.status ?? 'active',
+      }}
+      className="flex flex-col gap-4"
+    >
+      <Form.Item
+        label="Name"
+        name="name"
+        rules={textFieldRules({ label: 'Name', max: ORG_NAME_MAX })}
+        className="!mb-0"
+      >
+        <Input id="club-name" placeholder="Sunrise Toastmasters" maxLength={ORG_NAME_MAX} />
+      </Form.Item>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="club-number" className="text-sm font-medium text-ink">
-          Club number (optional)
-        </label>
-        <Input
-          id="club-number"
-          placeholder="1002345"
-          value={clubNumber}
-          maxLength={CLUB_NUMBER_MAX}
-          onChange={(event) => setClubNumber(event.target.value)}
-        />
-      </div>
+      <Form.Item
+        label="Club number (optional)"
+        name="clubNumber"
+        rules={[{ max: CLUB_NUMBER_MAX, message: `Keep it under ${CLUB_NUMBER_MAX} characters` }]}
+        className="!mb-0"
+      >
+        <Input id="club-number" placeholder="1002345" maxLength={CLUB_NUMBER_MAX} />
+      </Form.Item>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="club-status" className="text-sm font-medium text-ink">
-          Status
-        </label>
-        <Select
-          id="club-status"
-          className="w-full"
-          value={status}
-          onChange={setStatus}
-          options={STATUS_OPTIONS}
-        />
-      </div>
+      <Form.Item label="Status" name="status" className="!mb-0">
+        <Select id="club-status" className="w-full" options={STATUS_OPTIONS} />
+      </Form.Item>
 
       <div className="flex items-center justify-between gap-2">
         {club && canDelete ? (
@@ -173,11 +175,11 @@ function ModalBody({ areaId, club, canDelete, onDone, onCancel }: ModalBodyProps
         )}
         <div className="flex gap-2">
           <Button onClick={onCancel}>Cancel</Button>
-          <Button type="primary" disabled={!canSave} loading={busy} onClick={handleSave}>
+          <Button type="primary" loading={busy} onClick={handleSave}>
             {club ? 'Save' : 'Add'}
           </Button>
         </div>
       </div>
-    </div>
+    </Form>
   );
 }

@@ -1,9 +1,9 @@
 'use client';
 
-import { App, Button, Input, Modal, Popconfirm } from 'antd';
-import { useState } from 'react';
+import { App, Button, Form, Input, Modal, Popconfirm } from 'antd';
 import type { Division } from '@/lib/org/types';
 import { ORG_NAME_MAX } from '@/lib/org/types';
+import { textFieldRules } from '@/lib/validation/rules';
 import {
   useCreateDivisionMutation,
   useDeleteDivisionMutation,
@@ -22,6 +22,10 @@ interface DivisionModalProps {
    * divisions but not remove them. */
   canDelete: boolean;
   onClose: () => void;
+}
+
+interface FormValues {
+  name: string;
 }
 
 export function DivisionModal({
@@ -61,56 +65,62 @@ interface ModalBodyProps {
 
 function ModalBody({ districtId, division, canDelete, onDone, onCancel }: ModalBodyProps) {
   const { message } = App.useApp();
-  const [name, setName] = useState(division?.name ?? '');
+  const [form] = Form.useForm<FormValues>();
 
   const [createDivision, { isLoading: isCreating }] = useCreateDivisionMutation();
   const [updateDivision, { isLoading: isUpdating }] = useUpdateDivisionMutation();
   const [deleteDivision, { isLoading: isDeleting }] = useDeleteDivisionMutation();
 
   const busy = isCreating || isUpdating;
-  const canSave = name.trim() !== '' && !busy;
 
-  const handleSave = async () => {
-    if (!canSave) return;
+  async function handleSave() {
+    let values: FormValues;
+    try {
+      values = await form.validateFields();
+    } catch {
+      return;
+    }
     try {
       if (division) {
-        await updateDivision({ divisionId: division.id, name: name.trim() }).unwrap();
+        await updateDivision({ divisionId: division.id, name: values.name.trim() }).unwrap();
         message.success('Division updated');
       } else {
-        await createDivision({ districtId, name: name.trim() }).unwrap();
+        await createDivision({ districtId, name: values.name.trim() }).unwrap();
         message.success('Division added');
       }
       onDone();
     } catch (err) {
-      message.error(getApiErrorMessage(err, 'Could not save the division'));
+      message.error(getApiErrorMessage(err, "Couldn't save the division. Please try again."));
     }
-  };
+  }
 
-  const handleDelete = async () => {
+  async function handleDelete() {
     if (!division) return;
     try {
       await deleteDivision(division.id).unwrap();
       message.success('Division deleted');
       onDone();
     } catch (err) {
-      message.error(getApiErrorMessage(err, 'Could not delete the division'));
+      message.error(getApiErrorMessage(err, "Couldn't delete the division. Please try again."));
     }
-  };
+  }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="division-name" className="text-sm font-medium text-ink">
-          Name
-        </label>
-        <Input
-          id="division-name"
-          placeholder="Division A"
-          value={name}
-          maxLength={ORG_NAME_MAX}
-          onChange={(event) => setName(event.target.value)}
-        />
-      </div>
+    <Form<FormValues>
+      form={form}
+      layout="vertical"
+      disabled={busy}
+      initialValues={{ name: division?.name ?? '' }}
+      className="flex flex-col gap-4"
+    >
+      <Form.Item
+        label="Name"
+        name="name"
+        rules={textFieldRules({ label: 'Name', max: ORG_NAME_MAX })}
+        className="!mb-0"
+      >
+        <Input id="division-name" placeholder="Division A" maxLength={ORG_NAME_MAX} />
+      </Form.Item>
 
       <div className="flex items-center justify-between gap-2">
         {division && canDelete ? (
@@ -131,11 +141,11 @@ function ModalBody({ districtId, division, canDelete, onDone, onCancel }: ModalB
         )}
         <div className="flex gap-2">
           <Button onClick={onCancel}>Cancel</Button>
-          <Button type="primary" disabled={!canSave} loading={busy} onClick={handleSave}>
+          <Button type="primary" loading={busy} onClick={handleSave}>
             {division ? 'Save' : 'Add'}
           </Button>
         </div>
       </div>
-    </div>
+    </Form>
   );
 }

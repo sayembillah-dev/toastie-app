@@ -8,11 +8,12 @@ import {
   PenNib,
   WarningCircle,
 } from '@phosphor-icons/react/dist/ssr';
-import { App, Input, InputNumber, Modal } from 'antd';
-import { useState } from 'react';
+import { App, Form, Input, InputNumber, Modal } from 'antd';
+import { useEffect, useState } from 'react';
 
 import type { Meeting } from '@/lib/meetings/meetings';
 import { DEFAULT_START_TIME } from '@/lib/meetings/meetings';
+import { notPastDateRule, textFieldRules } from '@/lib/validation/rules';
 import { useCreateMeetingMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -26,21 +27,12 @@ interface NewMeetingModalProps {
   onCreated: (meeting: Meeting) => void;
 }
 
-interface FormState {
-  /** `null` means "untouched" — the field shows `nextNumber` until the user
-   * overrides it. */
-  meetingNumber: number | null;
+interface FormValues {
+  meetingNumber: number;
   date: string;
   time: string;
   theme: string;
 }
-
-const INITIAL_STATE: FormState = {
-  meetingNumber: null,
-  date: '',
-  time: DEFAULT_START_TIME,
-  theme: '',
-};
 
 /** Field wrapper — label, optional hint, and the control itself, matching the
  * rhythm the Start Pathway dialog established. */
@@ -79,43 +71,49 @@ function Field({
  * decision to publish — happens on the meeting's own page, which is where this
  * hands off on success. */
 export function NewMeetingModal({ open, nextNumber, onClose, onCreated }: NewMeetingModalProps) {
-  const [form, setForm] = useState<FormState>(INITIAL_STATE);
+  const [form] = Form.useForm<FormValues>();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [createMeeting, { isLoading: isSubmitting }] = useCreateMeetingMutation();
   const { message } = App.useApp();
 
-  const meetingNumber = form.meetingNumber ?? nextNumber;
-  const canSubmit = form.date !== '' && form.time !== '' && form.theme.trim() !== '';
-
   /* Cleared from `afterClose` so the reset runs once the dialog has gone rather
    * than flashing an empty form on the way out. */
   function resetForm() {
-    setForm(INITIAL_STATE);
+    form.resetFields();
     setSubmitError(null);
   }
 
-  function patch(next: Partial<FormState>) {
-    setForm((prev) => ({ ...prev, ...next }));
-  }
+  /* `nextNumber` is derived from the roster and can update between opens (e.g.
+   * after a create). `initialValues` is only read once, so mirror the current
+   * `nextNumber` into the field whenever the dialog opens. */
+  useEffect(() => {
+    if (open) form.setFieldsValue({ meetingNumber: nextNumber });
+  }, [open, nextNumber, form]);
 
   async function submit() {
-    if (!canSubmit || isSubmitting) return;
     setSubmitError(null);
+    let values: FormValues;
+    try {
+      values = await form.validateFields();
+    } catch {
+      /* Ant Design renders the per-field errors — nothing else to do here. */
+      return;
+    }
 
     try {
       /* Local time, no zone suffix — the same shape the seeded meetings use, so
        * "19:00" stays 19:00 wherever the agenda is opened. */
       const created = await createMeeting({
-        meetingNumber,
-        dateTime: `${form.date}T${form.time}:00`,
-        theme: form.theme.trim(),
+        meetingNumber: values.meetingNumber,
+        dateTime: `${values.date}T${values.time}:00`,
+        theme: values.theme.trim(),
       }).unwrap();
 
       message.success(`Meeting #${created.meetingNumber} created`);
       onCreated(created);
       onClose();
     } catch (error) {
-      setSubmitError(getApiErrorMessage(error, 'Could not create the meeting'));
+      setSubmitError(getApiErrorMessage(error, 'Could not create the meeting. Please try again.'));
     }
   }
 
@@ -136,88 +134,123 @@ export function NewMeetingModal({ open, nextNumber, onClose, onCreated }: NewMee
       confirmLoading={isSubmitting}
       okText="Create meeting"
       cancelText="Cancel"
-      okButtonProps={{ disabled: !canSubmit, size: 'middle' }}
+      okButtonProps={{ size: 'middle' }}
       cancelButtonProps={{ size: 'middle', disabled: isSubmitting }}
     >
-      <div className="flex flex-col gap-5">
-        <header className="flex items-start gap-3 border-b border-line px-6 pb-4 pt-1">
-          <span
-            aria-hidden
-            className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-ink text-white"
-          >
-            <CalendarPlus size={20} weight="bold" />
-          </span>
-          <div className="min-w-0">
-            <h2 className="text-base font-semibold text-ink">New meeting</h2>
-            <p className="mt-0.5 text-xs text-ink-soft">
-              Book the slot and name the theme. The meeting starts as a draft — roles, speakers and
-              the agenda are filled in on its own page, and you publish it from there.
-            </p>
-          </div>
-        </header>
-
-        <div className="flex flex-col gap-4 px-6 pb-2">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-[7rem_1fr]">
-            <Field htmlFor="meeting-number" label="Number" Icon={Hash}>
-              <InputNumber
-                id="meeting-number"
-                size="large"
-                className="w-full"
-                min={1}
-                precision={0}
-                value={meetingNumber}
-                onChange={(value) => patch({ meetingNumber: value ?? null })}
-              />
-            </Field>
-
-            <Field htmlFor="meeting-theme" label="Theme" Icon={PenNib} hint="Required">
-              <Input
-                id="meeting-theme"
-                size="large"
-                placeholder="e.g. Cross-Cultural Conversations"
-                value={form.theme}
-                onChange={(event) => patch({ theme: event.target.value })}
-                maxLength={80}
-              />
-            </Field>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field htmlFor="meeting-date" label="Date" Icon={CalendarBlank} hint="Required">
-              {/* Native date/time controls rather than antd's pickers: they give
-               * phones the OS wheel and keep antd's dayjs build out of the
-               * bundle, while `Input` keeps the field visually in family. */}
-              <Input
-                id="meeting-date"
-                size="large"
-                type="date"
-                value={form.date}
-                onChange={(event) => patch({ date: event.target.value })}
-              />
-            </Field>
-
-            <Field htmlFor="meeting-time" label="Start time" Icon={Clock}>
-              <Input
-                id="meeting-time"
-                size="large"
-                type="time"
-                value={form.time}
-                onChange={(event) => patch({ time: event.target.value })}
-              />
-            </Field>
-          </div>
-
-          {submitError ? (
-            <div
-              role="alert"
-              className="flex items-start gap-2 rounded-xl border border-line-strong bg-fill px-3 py-2.5 text-xs text-ink-soft"
+      <Form<FormValues>
+        form={form}
+        layout="vertical"
+        disabled={isSubmitting}
+        initialValues={{
+          meetingNumber: nextNumber,
+          date: '',
+          time: DEFAULT_START_TIME,
+          theme: '',
+        }}
+      >
+        <div className="flex flex-col gap-5">
+          <header className="flex items-start gap-3 border-b border-line px-6 pb-4 pt-1">
+            <span
+              aria-hidden
+              className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-ink text-white"
             >
-              <WarningCircle size={14} weight="bold" className="mt-0.5 shrink-0" />
-              <span>{submitError}</span>
+              <CalendarPlus size={20} weight="bold" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold text-ink">New meeting</h2>
+              <p className="mt-0.5 text-xs text-ink-soft">
+                Book the slot and name the theme. The meeting starts as a draft — roles, speakers
+                and the agenda are filled in on its own page, and you publish it from there.
+              </p>
             </div>
-          ) : null}
+          </header>
+
+          <div className="flex flex-col gap-2 px-6 pb-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-[7rem_1fr]">
+              <Field htmlFor="meeting-number" label="Number" Icon={Hash}>
+                <Form.Item
+                  name="meetingNumber"
+                  className="!mb-0"
+                  rules={[
+                    {
+                      validator(_, value) {
+                        if (value === null || value === undefined || value === '') {
+                          return Promise.reject(new Error('Meeting number is required'));
+                        }
+                        if (!Number.isInteger(value) || value < 1) {
+                          return Promise.reject(new Error('Enter a whole number, 1 or higher'));
+                        }
+                        return Promise.resolve();
+                      },
+                    },
+                  ]}
+                >
+                  <InputNumber
+                    id="meeting-number"
+                    size="large"
+                    className="w-full"
+                    min={1}
+                    precision={0}
+                  />
+                </Form.Item>
+              </Field>
+
+              <Field htmlFor="meeting-theme" label="Theme" Icon={PenNib} hint="Required">
+                <Form.Item
+                  name="theme"
+                  className="!mb-0"
+                  rules={textFieldRules({ label: 'Theme', max: 80 })}
+                >
+                  <Input
+                    id="meeting-theme"
+                    size="large"
+                    placeholder="e.g. Cross-Cultural Conversations"
+                    maxLength={80}
+                  />
+                </Form.Item>
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field htmlFor="meeting-date" label="Date" Icon={CalendarBlank} hint="Required">
+                {/* Native date/time controls rather than antd's pickers: they give
+                 * phones the OS wheel and keep antd's dayjs build out of the
+                 * bundle, while `Input` keeps the field visually in family. */}
+                <Form.Item
+                  name="date"
+                  className="!mb-0"
+                  rules={[
+                    { required: true, message: 'Pick a meeting date' },
+                    notPastDateRule('Meeting date'),
+                  ]}
+                >
+                  <Input id="meeting-date" size="large" type="date" />
+                </Form.Item>
+              </Field>
+
+              <Field htmlFor="meeting-time" label="Start time" Icon={Clock}>
+                <Form.Item
+                  name="time"
+                  className="!mb-0"
+                  rules={[{ required: true, message: 'Pick a start time' }]}
+                >
+                  <Input id="meeting-time" size="large" type="time" />
+                </Form.Item>
+              </Field>
+            </div>
+
+            {submitError ? (
+              <div
+                role="alert"
+                className="mt-2 flex items-start gap-2 rounded-xl border border-line-strong bg-fill px-3 py-2.5 text-xs text-ink-soft"
+              >
+                <WarningCircle size={14} weight="bold" className="mt-0.5 shrink-0" />
+                <span>{submitError}</span>
+              </div>
+            ) : null}
+          </div>
         </div>
-      </div>
+      </Form>
     </Modal>
   );
 }

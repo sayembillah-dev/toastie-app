@@ -2,7 +2,7 @@
 
 import { Paperclip, Plus, Trash } from '@phosphor-icons/react/dist/ssr';
 import type { UploadFile } from 'antd';
-import { Button, Input, Select, Skeleton, Typography, Upload } from 'antd';
+import { Button, Input, Popconfirm, Select, Skeleton, Typography, Upload } from 'antd';
 import { useState } from 'react';
 
 import type { CreatePlannerIdeaInput, IdeaStatus, PlannerIdea } from '@/lib/library/planner';
@@ -213,13 +213,21 @@ function IdeasList({ ideas, loading, canMutate, onRemove, onStatusChange }: Idea
           <div className="flex items-start justify-between gap-2">
             <h3 className="text-sm font-medium text-ink">{idea.title}</h3>
             {canMutate ? (
-              <Button
-                type="text"
-                size="small"
-                aria-label={`Delete idea ${idea.title}`}
-                icon={<Trash size={14} className="text-ink-muted" />}
-                onClick={() => onRemove(idea.id)}
-              />
+              <Popconfirm
+                title="Delete this idea?"
+                description="This cannot be undone."
+                okText="Delete"
+                okButtonProps={{ danger: true }}
+                cancelText="Cancel"
+                onConfirm={() => onRemove(idea.id)}
+              >
+                <Button
+                  type="text"
+                  size="small"
+                  aria-label={`Delete idea ${idea.title}`}
+                  icon={<Trash size={14} className="text-ink-muted" />}
+                />
+              </Popconfirm>
             ) : null}
           </div>
           {idea.body ? (

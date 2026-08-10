@@ -1,9 +1,10 @@
 'use client';
 
-import { App, Input, Modal, Select } from 'antd';
-import { useState, useSyncExternalStore } from 'react';
+import { App, Form, Input, Modal, Select } from 'antd';
+import { useEffect, useSyncExternalStore } from 'react';
 import { SPEECH_SLOT_REQUEST_NOTE_MAX } from '@/lib/education/speech-slot-requests';
 import type { Meeting } from '@/lib/meetings/meetings';
+import { requiredSelectRule } from '@/lib/validation/rules';
 import { useCreateSpeechSlotRequestMutation, useGetMeetingsQuery } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -43,6 +44,12 @@ interface RequestSpeechSlotModalProps {
   defaultProjectName?: string;
 }
 
+interface FormValues {
+  meetingId?: string;
+  projectName: string;
+  note: string;
+}
+
 export function RequestSpeechSlotModal({
   memberId,
   open,
@@ -50,26 +57,20 @@ export function RequestSpeechSlotModal({
   defaultProjectName,
 }: RequestSpeechSlotModalProps) {
   const { message } = App.useApp();
+  const [form] = Form.useForm<FormValues>();
   const { data: meetings } = useGetMeetingsQuery();
   const [createRequest, { isLoading }] = useCreateSpeechSlotRequestMutation();
   const now = useClientNow();
 
-  const [meetingId, setMeetingId] = useState<string | undefined>(undefined);
-  const [projectName, setProjectName] = useState('');
-  const [note, setNote] = useState('');
-
-  /* Re-seed the form's defaults whenever the modal transitions closed → open,
-   * without an Effect — adjusting state during render on a prop change is the
-   * pattern React itself recommends over `useEffect` here. */
-  const [wasOpen, setWasOpen] = useState(open);
-  if (open !== wasOpen) {
-    setWasOpen(open);
+  useEffect(() => {
     if (open) {
-      setMeetingId(undefined);
-      setProjectName(defaultProjectName ?? '');
-      setNote('');
+      form.setFieldsValue({
+        meetingId: undefined,
+        projectName: defaultProjectName ?? '',
+        note: '',
+      });
     }
-  }
+  }, [open, form, defaultProjectName]);
 
   const upcomingMeetings: Meeting[] =
     now === null
@@ -78,26 +79,24 @@ export function RequestSpeechSlotModal({
           .filter((meeting) => new Date(meeting.dateTime).getTime() >= now)
           .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
 
-  function resetAndClose() {
-    onClose();
-  }
-
   async function handleSubmit() {
-    if (!meetingId) {
-      message.error('Pick a meeting to request a slot on');
+    let values: FormValues;
+    try {
+      values = await form.validateFields();
+    } catch {
       return;
     }
     try {
       await createRequest({
         memberId,
-        meetingId,
-        projectName: projectName.trim() || undefined,
-        note: note.trim() || undefined,
+        meetingId: values.meetingId as string,
+        projectName: values.projectName.trim() || undefined,
+        note: values.note.trim() || undefined,
       }).unwrap();
       message.success('Request sent to the VPE');
-      resetAndClose();
+      onClose();
     } catch (err) {
-      message.error(getApiErrorMessage(err, 'Could not send this request'));
+      message.error(getApiErrorMessage(err, "Couldn't send this request. Please try again."));
     }
   }
 
@@ -105,57 +104,65 @@ export function RequestSpeechSlotModal({
     <Modal
       title="Request a speech slot"
       open={open}
-      onCancel={resetAndClose}
+      onCancel={onClose}
       onOk={handleSubmit}
       okText="Send to VPE"
       confirmLoading={isLoading}
       destroyOnHidden
     >
-      <div className="flex flex-col gap-4 pt-2">
-        <div>
-          <label htmlFor="ssr-meeting" className="mb-1.5 block text-xs font-medium text-ink-soft">
-            Meeting
-          </label>
+      <Form<FormValues>
+        form={form}
+        layout="vertical"
+        disabled={isLoading}
+        initialValues={{ meetingId: undefined, projectName: defaultProjectName ?? '', note: '' }}
+        className="flex flex-col gap-4 pt-2"
+      >
+        <Form.Item
+          label="Meeting"
+          name="meetingId"
+          rules={[requiredSelectRule('Meeting')]}
+          className="!mb-0"
+        >
           <Select
             id="ssr-meeting"
             className="w-full"
             placeholder="Choose an upcoming meeting"
-            value={meetingId}
-            onChange={setMeetingId}
             options={upcomingMeetings.map((meeting) => ({
               value: meeting.id,
               label: formatMeetingOption(meeting.dateTime, meeting.theme),
             }))}
             notFoundContent="No upcoming meetings on the roster yet"
           />
-        </div>
+        </Form.Item>
 
-        <div>
-          <label htmlFor="ssr-project" className="mb-1.5 block text-xs font-medium text-ink-soft">
-            Project (optional)
-          </label>
-          <Input
-            id="ssr-project"
-            value={projectName}
-            onChange={(event) => setProjectName(event.target.value)}
-            placeholder="e.g. Reflect on Your Path"
-          />
-        </div>
+        <Form.Item
+          label="Project (optional)"
+          name="projectName"
+          rules={[{ max: 120, message: 'Keep it under 120 characters' }]}
+          className="!mb-0"
+        >
+          <Input id="ssr-project" placeholder="e.g. Reflect on Your Path" />
+        </Form.Item>
 
-        <div>
-          <label htmlFor="ssr-note" className="mb-1.5 block text-xs font-medium text-ink-soft">
-            Note to the VPE (optional)
-          </label>
+        <Form.Item
+          label="Note to the VPE (optional)"
+          name="note"
+          rules={[
+            {
+              max: SPEECH_SLOT_REQUEST_NOTE_MAX,
+              message: `Keep it under ${SPEECH_SLOT_REQUEST_NOTE_MAX} characters`,
+            },
+          ]}
+          className="!mb-0"
+        >
           <Input.TextArea
             id="ssr-note"
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
             maxLength={SPEECH_SLOT_REQUEST_NOTE_MAX}
             rows={3}
             placeholder="Anything they should know when building the agenda"
           />
-        </div>
-      </div>
+        </Form.Item>
+      </Form>
     </Modal>
   );
 }

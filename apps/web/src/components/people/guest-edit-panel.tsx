@@ -7,6 +7,7 @@ import { useEffect, useMemo } from 'react';
 
 import type { Guest, GuestSocial, SocialPlatform } from '@/lib/people/guests';
 import { getGuestInitials, getGuestSwatch, SOCIAL_PLATFORMS } from '@/lib/people/guests';
+import { emailRules, phoneRules, shortNameRules } from '@/lib/validation/rules';
 import { useUpdateGuestMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -263,32 +264,20 @@ export function GuestEditPanel({ guest, open, onClose }: GuestEditPanelProps) {
         </Form.Item>
 
         <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-          <Form.Item
-            label="First name"
-            name="firstName"
-            rules={[{ required: true, message: 'First name is required' }]}
-          >
+          <Form.Item label="First name" name="firstName" rules={shortNameRules('First name')}>
             <Input placeholder="First name" />
           </Form.Item>
-          <Form.Item
-            label="Last name"
-            name="lastName"
-            rules={[{ required: true, message: 'Last name is required' }]}
-          >
+          <Form.Item label="Last name" name="lastName" rules={shortNameRules('Last name')}>
             <Input placeholder="Last name" />
           </Form.Item>
         </div>
 
-        <Form.Item
-          label="Email"
-          name="email"
-          rules={[{ type: 'email', message: 'That does not look like an email address' }]}
-        >
+        <Form.Item label="Email" name="email" rules={emailRules()}>
           <Input placeholder="name@example.com" type="email" />
         </Form.Item>
 
-        <Form.Item label="Phone" name="phone">
-          <Input placeholder="+44 7700 900000" type="tel" />
+        <Form.Item label="Phone" name="phone" rules={phoneRules({ required: false })}>
+          <Input placeholder="+44 7700 900000" type="tel" inputMode="tel" />
         </Form.Item>
 
         <Form.Item name="whatsappSameAsPhone" valuePropName="checked" className="!mb-2">
@@ -296,8 +285,12 @@ export function GuestEditPanel({ guest, open, onClose }: GuestEditPanelProps) {
         </Form.Item>
 
         {!sameAsPhone ? (
-          <Form.Item label="WhatsApp number" name="whatsapp">
-            <Input placeholder="+44 7700 900000" type="tel" />
+          <Form.Item
+            label="WhatsApp number"
+            name="whatsapp"
+            rules={phoneRules({ required: false })}
+          >
+            <Input placeholder="+44 7700 900000" type="tel" inputMode="tel" />
           </Form.Item>
         ) : null}
 

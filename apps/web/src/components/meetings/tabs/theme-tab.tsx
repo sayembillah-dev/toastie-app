@@ -91,6 +91,10 @@ export function ThemeTab({ meeting }: ThemeTabProps) {
   const dirty = useMemo(() => isDirty(meeting, draft.theme, word), [meeting, draft.theme, word]);
 
   async function handleSave() {
+    if (draft.theme.trim() === '') {
+      message.error('Give the meeting a theme before saving.');
+      return;
+    }
     try {
       await updateMeeting({
         meetingId: meeting.id,
@@ -104,7 +108,7 @@ export function ThemeTab({ meeting }: ThemeTabProps) {
       }).unwrap();
       message.success('Theme and word of the day saved');
     } catch (error) {
-      message.error(getApiErrorMessage(error, 'Could not save the theme'));
+      message.error(getApiErrorMessage(error, "Couldn't save the theme. Please try again."));
     }
   }
 

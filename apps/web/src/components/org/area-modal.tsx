@@ -1,9 +1,9 @@
 'use client';
 
-import { App, Button, Input, Modal, Popconfirm } from 'antd';
-import { useState } from 'react';
+import { App, Button, Form, Input, Modal, Popconfirm } from 'antd';
 import type { Area } from '@/lib/org/types';
 import { ORG_NAME_MAX } from '@/lib/org/types';
+import { textFieldRules } from '@/lib/validation/rules';
 import { useCreateAreaMutation, useDeleteAreaMutation, useUpdateAreaMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -18,6 +18,10 @@ interface AreaModalProps {
    * areas but not remove them. */
   canDelete: boolean;
   onClose: () => void;
+}
+
+interface FormValues {
+  name: string;
 }
 
 export function AreaModal({ open, divisionId, area, canDelete, onClose }: AreaModalProps) {
@@ -51,56 +55,62 @@ interface ModalBodyProps {
 
 function ModalBody({ divisionId, area, canDelete, onDone, onCancel }: ModalBodyProps) {
   const { message } = App.useApp();
-  const [name, setName] = useState(area?.name ?? '');
+  const [form] = Form.useForm<FormValues>();
 
   const [createArea, { isLoading: isCreating }] = useCreateAreaMutation();
   const [updateArea, { isLoading: isUpdating }] = useUpdateAreaMutation();
   const [deleteArea, { isLoading: isDeleting }] = useDeleteAreaMutation();
 
   const busy = isCreating || isUpdating;
-  const canSave = name.trim() !== '' && !busy;
 
-  const handleSave = async () => {
-    if (!canSave) return;
+  async function handleSave() {
+    let values: FormValues;
+    try {
+      values = await form.validateFields();
+    } catch {
+      return;
+    }
     try {
       if (area) {
-        await updateArea({ areaId: area.id, name: name.trim() }).unwrap();
+        await updateArea({ areaId: area.id, name: values.name.trim() }).unwrap();
         message.success('Area updated');
       } else {
-        await createArea({ divisionId, name: name.trim() }).unwrap();
+        await createArea({ divisionId, name: values.name.trim() }).unwrap();
         message.success('Area added');
       }
       onDone();
     } catch (err) {
-      message.error(getApiErrorMessage(err, 'Could not save the area'));
+      message.error(getApiErrorMessage(err, "Couldn't save the area. Please try again."));
     }
-  };
+  }
 
-  const handleDelete = async () => {
+  async function handleDelete() {
     if (!area) return;
     try {
       await deleteArea(area.id).unwrap();
       message.success('Area deleted');
       onDone();
     } catch (err) {
-      message.error(getApiErrorMessage(err, 'Could not delete the area'));
+      message.error(getApiErrorMessage(err, "Couldn't delete the area. Please try again."));
     }
-  };
+  }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="area-name" className="text-sm font-medium text-ink">
-          Name
-        </label>
-        <Input
-          id="area-name"
-          placeholder="Area A1"
-          value={name}
-          maxLength={ORG_NAME_MAX}
-          onChange={(event) => setName(event.target.value)}
-        />
-      </div>
+    <Form<FormValues>
+      form={form}
+      layout="vertical"
+      disabled={busy}
+      initialValues={{ name: area?.name ?? '' }}
+      className="flex flex-col gap-4"
+    >
+      <Form.Item
+        label="Name"
+        name="name"
+        rules={textFieldRules({ label: 'Name', max: ORG_NAME_MAX })}
+        className="!mb-0"
+      >
+        <Input id="area-name" placeholder="Area A1" maxLength={ORG_NAME_MAX} />
+      </Form.Item>
 
       <div className="flex items-center justify-between gap-2">
         {area && canDelete ? (
@@ -121,11 +131,11 @@ function ModalBody({ divisionId, area, canDelete, onDone, onCancel }: ModalBodyP
         )}
         <div className="flex gap-2">
           <Button onClick={onCancel}>Cancel</Button>
-          <Button type="primary" disabled={!canSave} loading={busy} onClick={handleSave}>
+          <Button type="primary" loading={busy} onClick={handleSave}>
             {area ? 'Save' : 'Add'}
           </Button>
         </div>
       </div>
-    </div>
+    </Form>
   );
 }

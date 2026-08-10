@@ -21,6 +21,7 @@ import {
   type ProfileSocial,
   type ProfileSocialPlatform,
 } from '@/lib/profile/profile';
+import { emailRules, phoneRules, shortNameRules } from '@/lib/validation/rules';
 import { useGetMyProfileQuery, useUpdateMyProfileMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 import { useAppDispatch } from '@/store/hooks';
@@ -305,36 +306,20 @@ function ProfileForm({ profile }: { profile: Profile }) {
 
         <div className="mt-4 rounded-xl border border-line bg-canvas p-5">
           <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-            <Form.Item
-              label="First name"
-              name="firstName"
-              rules={[{ required: true, message: 'First name is required' }]}
-            >
+            <Form.Item label="First name" name="firstName" rules={shortNameRules('First name')}>
               <Input placeholder="First name" />
             </Form.Item>
-            <Form.Item
-              label="Last name"
-              name="lastName"
-              rules={[{ required: true, message: 'Last name is required' }]}
-            >
+            <Form.Item label="Last name" name="lastName" rules={shortNameRules('Last name')}>
               <Input placeholder="Last name" />
             </Form.Item>
           </div>
 
-          <Form.Item
-            label="Email"
-            name="email"
-            rules={[{ type: 'email', message: 'That does not look like an email address' }]}
-          >
+          <Form.Item label="Email" name="email" rules={emailRules()}>
             <Input placeholder="name@example.com" type="email" />
           </Form.Item>
 
-          <Form.Item
-            label="Phone"
-            name="phone"
-            rules={[{ required: true, message: 'Phone number is required' }]}
-          >
-            <Input placeholder="+44 7700 900000" type="tel" />
+          <Form.Item label="Phone" name="phone" rules={phoneRules()}>
+            <Input placeholder="+44 7700 900000" type="tel" inputMode="tel" />
           </Form.Item>
 
           {credentialChanged ? (

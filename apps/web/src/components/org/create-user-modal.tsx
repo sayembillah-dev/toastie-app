@@ -7,12 +7,19 @@ import {
   EnvelopeSimple,
   Link as LinkIcon,
 } from '@phosphor-icons/react/dist/ssr';
-import { App, Button, Checkbox, Input, Modal, QRCode, Select } from 'antd';
+import { App, Button, Checkbox, Form, Input, Modal, QRCode, Select } from 'antd';
 import { useMemo, useState } from 'react';
 
 import type { OfficerRole } from '@/lib/education/members';
 import { OFFICER_ROLES } from '@/lib/education/members';
 import { generatePassword } from '@/lib/org/password';
+import {
+  emailRules,
+  passwordRules,
+  phoneRules,
+  requiredSelectRule,
+  shortNameRules,
+} from '@/lib/validation/rules';
 import {
   type CreatePlatformUserResult,
   MEMBER_TYPES,
@@ -34,6 +41,23 @@ const MEMBER_TYPE_OPTIONS = MEMBER_TYPES.map((type) => ({
   value: type,
   label: MEMBER_TYPE_LABELS[type],
 }));
+
+interface FormValues {
+  fullName: string;
+  email?: string;
+  phone: string;
+  tiMemberNumber?: string;
+  password: string;
+  assignOrgRole: boolean;
+  districtId?: string;
+  divisionId?: string;
+  areaId?: string;
+  clubId?: string;
+  roles: OfficerRole[];
+  memberType?: MemberType;
+  isClubAdmin: boolean;
+}
+
 /** Splits a single "Full name" field into the `firstName`/`lastName` pair
  * the backend still stores separately. First word is the first name, the
  * rest (if any) is the last name — matches how every other name field in
@@ -67,21 +91,7 @@ export function CreateUserModal({ open, onClose }: CreateUserModalProps) {
 
 function ModalBody({ onClose }: { onClose: () => void }) {
   const { message } = App.useApp();
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState(() => generatePassword());
-  const [email, setEmail] = useState('');
-  const [tiMemberNumber, setTiMemberNumber] = useState('');
-
-  const [assignOrgRole, setAssignOrgRole] = useState(false);
-  const [districtId, setDistrictId] = useState<string | undefined>(undefined);
-  const [divisionId, setDivisionId] = useState<string | undefined>(undefined);
-  const [areaId, setAreaId] = useState<string | undefined>(undefined);
-  const [clubId, setClubId] = useState<string | undefined>(undefined);
-  const [roles, setRoles] = useState<OfficerRole[]>([]);
-  const [memberType, setMemberType] = useState<MemberType | undefined>(undefined);
-  const [isClubAdmin, setIsClubAdmin] = useState(false);
-
+  const [form] = Form.useForm<FormValues>();
   const [created, setCreated] = useState<CreatePlatformUserResult | null>(null);
 
   const { data: districts, isLoading: districtsLoading } = useListDistrictsQuery();
@@ -104,6 +114,12 @@ function ModalBody({ onClose }: { onClose: () => void }) {
     const division = area ? divisionsById.get(area.divisionId) : undefined;
     return { divisionId: area?.divisionId, districtId: division?.districtId };
   }
+
+  const assignOrgRole = Form.useWatch('assignOrgRole', form) ?? false;
+  const districtId = Form.useWatch('districtId', form);
+  const divisionId = Form.useWatch('divisionId', form);
+  const areaId = Form.useWatch('areaId', form);
+  const clubId = Form.useWatch('clubId', form);
 
   const districtOptions = useMemo(
     () => (districts ?? []).map((d) => ({ value: d.id, label: d.name })),
@@ -132,169 +148,194 @@ function ModalBody({ onClose }: { onClose: () => void }) {
   );
 
   function handleDistrictChange(value: string | undefined) {
-    setDistrictId(value);
-    setDivisionId(undefined);
-    setAreaId(undefined);
-    setClubId(undefined);
+    form.setFieldsValue({
+      districtId: value,
+      divisionId: undefined,
+      areaId: undefined,
+      clubId: undefined,
+    });
   }
 
   function handleDivisionChange(value: string | undefined) {
-    setDivisionId(value);
-    setDistrictId(value ? divisionsById.get(value)?.districtId : undefined);
-    setAreaId(undefined);
-    setClubId(undefined);
+    form.setFieldsValue({
+      divisionId: value,
+      districtId: value ? divisionsById.get(value)?.districtId : undefined,
+      areaId: undefined,
+      clubId: undefined,
+    });
   }
 
   function handleAreaChange(value: string | undefined) {
-    setAreaId(value);
     if (value) {
       const ancestry = ancestryForArea(value);
-      setDivisionId(ancestry.divisionId);
-      setDistrictId(ancestry.districtId);
+      form.setFieldsValue({
+        areaId: value,
+        divisionId: ancestry.divisionId,
+        districtId: ancestry.districtId,
+        clubId: undefined,
+      });
     } else {
-      setDivisionId(undefined);
-      setDistrictId(undefined);
+      form.setFieldsValue({
+        areaId: undefined,
+        divisionId: undefined,
+        districtId: undefined,
+        clubId: undefined,
+      });
     }
-    setClubId(undefined);
   }
 
   function handleClubChange(value: string | undefined) {
-    setClubId(value);
     if (value) {
       const club = clubsById.get(value);
-      setAreaId(club?.areaId);
       const ancestry = club ? ancestryForArea(club.areaId) : undefined;
-      setDivisionId(ancestry?.divisionId);
-      setDistrictId(ancestry?.districtId);
+      form.setFieldsValue({
+        clubId: value,
+        areaId: club?.areaId,
+        divisionId: ancestry?.divisionId,
+        districtId: ancestry?.districtId,
+      });
     } else {
-      setAreaId(undefined);
-      setDivisionId(undefined);
-      setDistrictId(undefined);
+      form.setFieldsValue({
+        clubId: undefined,
+        areaId: undefined,
+        divisionId: undefined,
+        districtId: undefined,
+      });
     }
   }
 
-  const { firstName, lastName } = splitFullName(fullName);
-  const phoneValid = /^\+?[0-9\s-]{8,20}$/.test(phone.trim());
-  const passwordValid = password.trim().length >= 8;
-  const nameValid = firstName.length > 0 && lastName.length > 0;
-  const canSave =
-    nameValid &&
-    phoneValid &&
-    passwordValid &&
-    (!assignOrgRole || clubId !== undefined) &&
-    !isSubmitting;
-
   async function handleSave() {
-    if (!canSave) return;
+    let values: FormValues;
+    try {
+      values = await form.validateFields();
+    } catch {
+      return;
+    }
+    const { firstName, lastName } = splitFullName(values.fullName);
+    if (!lastName) {
+      form.setFields([
+        { name: 'fullName', errors: ['Include a first and last name (e.g. Jane Doe)'] },
+      ]);
+      return;
+    }
     try {
       const result = await createUser({
-        phone: phone.trim(),
-        password: password.trim(),
+        phone: values.phone.trim(),
+        password: values.password.trim(),
         firstName,
         lastName,
-        email: email.trim() || undefined,
-        tiMemberNumber: tiMemberNumber.trim() || undefined,
-        clubId: assignOrgRole ? clubId : undefined,
-        roles: assignOrgRole && clubId ? roles : undefined,
-        isClubAdmin: assignOrgRole && clubId ? isClubAdmin : undefined,
-        memberType: assignOrgRole && clubId ? memberType : undefined,
+        email: values.email?.trim() || undefined,
+        tiMemberNumber: values.tiMemberNumber?.trim() || undefined,
+        clubId: values.assignOrgRole ? values.clubId : undefined,
+        roles: values.assignOrgRole && values.clubId ? values.roles : undefined,
+        isClubAdmin: values.assignOrgRole && values.clubId ? values.isClubAdmin : undefined,
+        memberType: values.assignOrgRole && values.clubId ? values.memberType : undefined,
       }).unwrap();
       setCreated(result);
     } catch (err) {
-      message.error(getApiErrorMessage(err, 'Could not create this account'));
+      /* Map the server-side conflict codes onto the fields the user can fix,
+       * so a duplicate mobile or email shows a friendly hint below the input
+       * instead of a generic top-level toast. */
+      const code = extractErrorCode(err);
+      if (code === 'PHONE_TAKEN') {
+        form.setFields([
+          {
+            name: 'phone',
+            errors: ['An account with that mobile number already exists.'],
+          },
+        ]);
+        return;
+      }
+      if (code === 'EMAIL_TAKEN') {
+        form.setFields([
+          {
+            name: 'email',
+            errors: ['That email is already linked to another account.'],
+          },
+        ]);
+        return;
+      }
+      message.error(getApiErrorMessage(err, "Couldn't create this account. Please try again."));
     }
   }
 
   if (created) {
-    return <CredentialsCard result={created} password={password} onDone={onClose} />;
+    return (
+      <CredentialsCard
+        result={created}
+        password={form.getFieldValue('password')}
+        onDone={onClose}
+      />
+    );
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="cu-full-name" className="text-sm font-medium text-ink">
-          Full name
-        </label>
-        <Input
-          id="cu-full-name"
-          placeholder="Jane Doe"
-          value={fullName}
-          onChange={(event) => setFullName(event.target.value)}
-        />
-      </div>
+    <Form<FormValues>
+      form={form}
+      layout="vertical"
+      disabled={isSubmitting}
+      initialValues={{
+        fullName: '',
+        email: '',
+        phone: '',
+        tiMemberNumber: '',
+        password: generatePassword(),
+        assignOrgRole: false,
+        roles: [],
+        isClubAdmin: false,
+      }}
+      className="flex flex-col gap-4"
+    >
+      <Form.Item
+        label="Full name"
+        name="fullName"
+        rules={shortNameRules('Full name')}
+        className="!mb-0"
+      >
+        <Input id="cu-full-name" placeholder="Jane Doe" />
+      </Form.Item>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="cu-email" className="text-sm font-medium text-ink">
-            Email (optional)
-          </label>
+        <Form.Item label="Email (optional)" name="email" rules={emailRules()} className="!mb-0">
           <Input
             id="cu-email"
             type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
             suffix={<EnvelopeSimple size={15} className="text-ink-muted" />}
           />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="cu-phone" className="text-sm font-medium text-ink">
-            Phone
-          </label>
-          <Input
-            id="cu-phone"
-            type="tel"
-            inputMode="tel"
-            placeholder="+1 555 000 0000"
-            value={phone}
-            onChange={(event) => setPhone(event.target.value)}
-            status={phone.length > 0 && !phoneValid ? 'error' : undefined}
-          />
-        </div>
+        </Form.Item>
+        <Form.Item label="Phone" name="phone" rules={phoneRules()} className="!mb-0">
+          <Input id="cu-phone" type="tel" inputMode="tel" placeholder="+1 555 000 0000" />
+        </Form.Item>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="cu-ti-number" className="text-sm font-medium text-ink">
-          TI member number
-        </label>
-        <Input
-          id="cu-ti-number"
-          value={tiMemberNumber}
-          onChange={(event) => setTiMemberNumber(event.target.value)}
+      <Form.Item
+        label="TI member number"
+        name="tiMemberNumber"
+        rules={[{ max: 40, message: 'Keep it under 40 characters' }]}
+        className="!mb-0"
+      >
+        <Input id="cu-ti-number" />
+      </Form.Item>
+
+      <Form.Item
+        label="Password"
+        name="password"
+        rules={passwordRules()}
+        extra="At least 8 characters. Shown once after creation — copy it before closing this dialog."
+        className="!mb-0"
+      >
+        <PasswordWithRegenerate
+          onRegenerate={() => form.setFieldsValue({ password: generatePassword() })}
         />
-      </div>
+      </Form.Item>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="cu-password" className="text-sm font-medium text-ink">
-          Password
-        </label>
-        <div className="flex items-center gap-2">
-          <Input.Password
-            id="cu-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            status={password.length > 0 && !passwordValid ? 'error' : undefined}
-          />
-          <Button
-            icon={<ArrowsClockwise size={14} />}
-            onClick={() => setPassword(generatePassword())}
-            title="Generate a new password"
-          />
-        </div>
-        <p className="text-xs text-ink-muted">
-          At least 8 characters. Shown once after creation — copy it before closing this dialog.
-        </p>
-      </div>
-
-      <Checkbox checked={assignOrgRole} onChange={(e) => setAssignOrgRole(e.target.checked)}>
-        Place them in the org tree and assign a role now
-      </Checkbox>
+      <Form.Item name="assignOrgRole" valuePropName="checked" className="!mb-0">
+        <Checkbox>Place them in the org tree and assign a role now</Checkbox>
+      </Form.Item>
 
       {assignOrgRole ? (
         <div className="flex flex-col gap-3 rounded-lg border border-line p-3">
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="cu-district" className="text-sm font-medium text-ink">
-              District
-            </label>
+          <Form.Item label="District" name="districtId" className="!mb-0">
             <Select
               id="cu-district"
               className="w-full"
@@ -303,15 +344,11 @@ function ModalBody({ onClose }: { onClose: () => void }) {
               showSearch
               optionFilterProp="label"
               loading={districtsLoading}
-              value={districtId}
               onChange={handleDistrictChange}
               options={districtOptions}
             />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="cu-division" className="text-sm font-medium text-ink">
-              Division
-            </label>
+          </Form.Item>
+          <Form.Item label="Division" name="divisionId" className="!mb-0">
             <Select
               id="cu-division"
               className="w-full"
@@ -320,15 +357,11 @@ function ModalBody({ onClose }: { onClose: () => void }) {
               showSearch
               optionFilterProp="label"
               loading={divisionsLoading}
-              value={divisionId}
               onChange={handleDivisionChange}
               options={divisionOptions}
             />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="cu-area" className="text-sm font-medium text-ink">
-              Area
-            </label>
+          </Form.Item>
+          <Form.Item label="Area" name="areaId" className="!mb-0">
             <Select
               id="cu-area"
               className="w-full"
@@ -337,15 +370,16 @@ function ModalBody({ onClose }: { onClose: () => void }) {
               showSearch
               optionFilterProp="label"
               loading={areasLoading}
-              value={areaId}
               onChange={handleAreaChange}
               options={areaOptions}
             />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="cu-club" className="text-sm font-medium text-ink">
-              Club
-            </label>
+          </Form.Item>
+          <Form.Item
+            label="Club"
+            name="clubId"
+            rules={[requiredSelectRule('Club')]}
+            className="!mb-0"
+          >
             <Select
               id="cu-club"
               className="w-full"
@@ -354,56 +388,78 @@ function ModalBody({ onClose }: { onClose: () => void }) {
               showSearch
               optionFilterProp="label"
               loading={clubsLoading}
-              value={clubId}
               onChange={handleClubChange}
               options={clubOptions}
             />
-          </div>
+          </Form.Item>
 
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="cu-roles" className="text-sm font-medium text-ink">
-              Roles
-            </label>
+          <Form.Item label="Roles" name="roles" className="!mb-0">
             <Select
               id="cu-roles"
               mode="multiple"
               className="w-full"
               placeholder="Defaults to plain Member"
-              value={roles}
-              onChange={(value: OfficerRole[]) => setRoles(value)}
               options={ROLE_OPTIONS}
             />
-          </div>
+          </Form.Item>
 
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="cu-member-type" className="text-sm font-medium text-ink">
-              Member type
-            </label>
+          <Form.Item label="Member type" name="memberType" className="!mb-0">
             <Select
               id="cu-member-type"
               className="w-full"
               placeholder="Select a member type"
               allowClear
-              value={memberType}
-              onChange={(value: MemberType | undefined) => setMemberType(value)}
               options={MEMBER_TYPE_OPTIONS}
             />
-          </div>
+          </Form.Item>
 
-          <Checkbox checked={isClubAdmin} onChange={(e) => setIsClubAdmin(e.target.checked)}>
-            Club Admin — full access to this club
-          </Checkbox>
+          <Form.Item name="isClubAdmin" valuePropName="checked" className="!mb-0">
+            <Checkbox>Club Admin — full access to this club</Checkbox>
+          </Form.Item>
         </div>
       ) : null}
 
       <div className="flex items-center justify-end gap-2">
         <Button onClick={onClose}>Cancel</Button>
-        <Button type="primary" disabled={!canSave} loading={isSubmitting} onClick={handleSave}>
+        <Button type="primary" loading={isSubmitting} onClick={handleSave}>
           Create user
         </Button>
       </div>
+    </Form>
+  );
+}
+
+function PasswordWithRegenerate({
+  value,
+  onChange,
+  onRegenerate,
+}: {
+  value?: string;
+  onChange?: (value: string) => void;
+  onRegenerate: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <Input.Password
+        id="cu-password"
+        value={value ?? ''}
+        onChange={(event) => onChange?.(event.target.value)}
+      />
+      <Button
+        icon={<ArrowsClockwise size={14} />}
+        onClick={onRegenerate}
+        title="Generate a new password"
+      />
     </div>
   );
+}
+
+function extractErrorCode(err: unknown): string | null {
+  if (!err || typeof err !== 'object') return null;
+  const data = (err as { data?: unknown }).data;
+  if (!data || typeof data !== 'object') return null;
+  const code = (data as { code?: unknown }).code;
+  return typeof code === 'string' ? code : null;
 }
 
 function CredentialsCard({

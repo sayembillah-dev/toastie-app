@@ -1,7 +1,10 @@
 /** Pulls a human-readable line out of whatever RTK Query hands back — our local
  * `{ status, data: { message } }` today, a `fetchBaseQuery` rejection or a
  * serialized thrown error later. Keeps the try/catch noise out of components. */
-export function getApiErrorMessage(error: unknown, fallback = 'Something went wrong'): string {
+export function getApiErrorMessage(
+  error: unknown,
+  fallback = 'Something went wrong. Please try again.',
+): string {
   if (typeof error !== 'object' || error === null) return fallback;
 
   if ('data' in error) {

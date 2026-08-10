@@ -8,6 +8,7 @@ import { useState } from 'react';
 
 import { safeNextPath } from '@/lib/auth/next-path';
 import { writeAccessToken, writeRefreshToken, writeStoredContext } from '@/lib/auth/token-storage';
+import { emailRules, passwordRules, phoneRules, shortNameRules } from '@/lib/validation/rules';
 import { useAuthRegisterMutation } from '@/store/api';
 import { useAppDispatch } from '@/store/hooks';
 import { isContextKeyValid, sessionLoaded } from '@/store/session-slice';
@@ -92,7 +93,7 @@ export default function RegisterPage() {
               label="First name"
               name="firstName"
               className="flex-1 !mb-4"
-              rules={[{ required: true, message: 'Required' }]}
+              rules={shortNameRules('First name')}
             >
               <Input autoComplete="given-name" size="large" />
             </Form.Item>
@@ -100,23 +101,13 @@ export default function RegisterPage() {
               label="Last name"
               name="lastName"
               className="flex-1 !mb-4"
-              rules={[{ required: true, message: 'Required' }]}
+              rules={shortNameRules('Last name')}
             >
               <Input autoComplete="family-name" size="large" />
             </Form.Item>
           </div>
 
-          <Form.Item
-            label="Mobile number"
-            name="phone"
-            rules={[
-              { required: true, message: 'Mobile number is required' },
-              {
-                pattern: /^\+?[0-9\s-]{8,20}$/,
-                message: 'Enter a valid mobile number',
-              },
-            ]}
-          >
+          <Form.Item label="Mobile number" name="phone" rules={phoneRules()}>
             <Input
               type="tel"
               autoComplete="tel"
@@ -126,22 +117,11 @@ export default function RegisterPage() {
             />
           </Form.Item>
 
-          <Form.Item
-            label="Email (optional)"
-            name="email"
-            rules={[{ type: 'email', message: 'Enter a valid email' }]}
-          >
+          <Form.Item label="Email (optional)" name="email" rules={emailRules()}>
             <Input type="email" autoComplete="email" size="large" />
           </Form.Item>
 
-          <Form.Item
-            label="Password"
-            name="password"
-            rules={[
-              { required: true, message: 'Password is required' },
-              { min: 8, message: 'At least 8 characters' },
-            ]}
-          >
+          <Form.Item label="Password" name="password" rules={passwordRules()}>
             <Input.Password autoComplete="new-password" size="large" />
           </Form.Item>
 

@@ -1,12 +1,13 @@
 'use client';
 
 import { CheckCircle, Copy, Link as LinkIcon } from '@phosphor-icons/react/dist/ssr';
-import { App, Button, Modal, QRCode, Select } from 'antd';
+import { App, Button, Form, Modal, QRCode, Select } from 'antd';
 import { useMemo, useState } from 'react';
 
 import type { Invite } from '@/lib/club-admin/invites';
 import type { OfficerRole } from '@/lib/education/members';
 import { OFFICER_ROLES } from '@/lib/education/members';
+import { requiredSelectRule } from '@/lib/validation/rules';
 import { useCreateInviteMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -31,56 +32,67 @@ export function InviteModal({ open, onClose }: InviteModalProps) {
   );
 }
 
+interface FormValues {
+  roles: OfficerRole[];
+}
+
 function ModalBody({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
-  const [roles, setRoles] = useState<OfficerRole[]>(['Member']);
+  const [form] = Form.useForm<FormValues>();
   const [created, setCreated] = useState<Invite | null>(null);
 
   const [createInvite, { isLoading: isSubmitting }] = useCreateInviteMutation();
   const { message } = App.useApp();
 
-  const canSave = roles.length > 0 && !isSubmitting;
-
-  const handleSave = async () => {
-    if (!canSave) return;
+  async function handleSave() {
+    let values: FormValues;
     try {
-      const invite = await createInvite({ roles }).unwrap();
+      values = await form.validateFields();
+    } catch {
+      return;
+    }
+    try {
+      const invite = await createInvite({ roles: values.roles }).unwrap();
       setCreated(invite);
     } catch (err) {
-      message.error(getApiErrorMessage(err, 'Could not create this invite'));
+      message.error(getApiErrorMessage(err, "Couldn't create this invite. Please try again."));
     }
-  };
+  }
 
   if (created) {
     return <InviteLinkResult invite={created} onDone={onDone} />;
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="invite-roles" className="text-sm font-medium text-ink">
-          Role(s)
-        </label>
+    <Form<FormValues>
+      form={form}
+      layout="vertical"
+      disabled={isSubmitting}
+      initialValues={{ roles: ['Member'] }}
+      className="flex flex-col gap-4"
+    >
+      <Form.Item
+        label="Role(s)"
+        name="roles"
+        rules={[requiredSelectRule('Role')]}
+        extra="Anyone who opens the link and joins gets these role(s) automatically."
+        className="!mb-0"
+      >
         <Select
           id="invite-roles"
           mode="multiple"
           className="w-full"
           placeholder="Pick at least one role"
-          value={roles}
-          onChange={(value: OfficerRole[]) => setRoles(value)}
           options={ROLE_OPTIONS}
         />
-        <p className="text-xs text-ink-muted">
-          Anyone who opens the link and joins gets these role(s) automatically.
-        </p>
-      </div>
+      </Form.Item>
 
       <div className="flex items-center justify-end gap-2">
         <Button onClick={onCancel}>Cancel</Button>
-        <Button type="primary" disabled={!canSave} loading={isSubmitting} onClick={handleSave}>
+        <Button type="primary" loading={isSubmitting} onClick={handleSave}>
           Generate link
         </Button>
       </div>
-    </div>
+    </Form>
   );
 }
 

@@ -4,6 +4,7 @@ import {
   App,
   Button,
   DatePicker,
+  Form,
   Input,
   InputNumber,
   Modal,
@@ -11,8 +12,8 @@ import {
   Segmented,
   Select,
 } from 'antd';
-import dayjs from 'dayjs';
-import { useMemo, useState } from 'react';
+import dayjs, { type Dayjs } from 'dayjs';
+import { useMemo } from 'react';
 
 import { formatMoney, fromMinor, toMinor } from '@/lib/finance/money';
 import type { Transaction, TransactionCategory, TxDirection } from '@/lib/finance/transactions';
@@ -27,6 +28,7 @@ import {
   TRANSACTION_DESCRIPTION_MAX,
   TRANSACTION_REFERENCE_MAX,
 } from '@/lib/finance/transactions';
+import { amountRules, textFieldRules } from '@/lib/validation/rules';
 import {
   useCreateTransactionMutation,
   useDeleteTransactionMutation,
@@ -39,6 +41,17 @@ interface TransactionModalProps {
   /** When present, the modal is in edit mode; when null, it creates a new row. */
   transaction: Transaction | null;
   onClose: () => void;
+}
+
+interface FormValues {
+  direction: TxDirection;
+  category: TransactionCategory;
+  amount: number;
+  date: Dayjs;
+  description: string;
+  method: PaymentMethod;
+  counterparty: string;
+  reference: string;
 }
 
 /** Add / edit / delete dialog for a single ledger entry — same shape as the
@@ -70,22 +83,14 @@ interface ModalBodyProps {
 
 function ModalBody({ transaction, onDone, onCancel }: ModalBodyProps) {
   const { message } = App.useApp();
-  const [direction, setDirection] = useState<TxDirection>(transaction?.direction ?? 'out');
-  const [category, setCategory] = useState<TransactionCategory>(
-    transaction?.category ?? EXPENSE_CATEGORIES[0],
-  );
-  const [amount, setAmount] = useState<number>(
-    transaction ? fromMinor(transaction.amountMinor) : 0,
-  );
-  const [date, setDate] = useState(() => dayjs(transaction?.date ?? undefined));
-  const [description, setDescription] = useState(transaction?.description ?? '');
-  const [method, setMethod] = useState<PaymentMethod>(transaction?.method ?? 'cash');
-  const [counterparty, setCounterparty] = useState(transaction?.counterparty ?? '');
-  const [reference, setReference] = useState(transaction?.reference ?? '');
+  const [form] = Form.useForm<FormValues>();
 
   const [createTx, { isLoading: isCreating }] = useCreateTransactionMutation();
   const [updateTx, { isLoading: isUpdating }] = useUpdateTransactionMutation();
   const [deleteTx, { isLoading: isDeleting }] = useDeleteTransactionMutation();
+
+  const direction = Form.useWatch('direction', form) ?? transaction?.direction ?? 'out';
+  const amount = Form.useWatch('amount', form) ?? 0;
 
   const categoryOptions = useMemo(
     () =>
@@ -97,28 +102,32 @@ function ModalBody({ transaction, onDone, onCancel }: ModalBodyProps) {
   );
 
   function handleDirectionChange(next: TxDirection) {
-    setDirection(next);
+    const current = form.getFieldValue('category') as TransactionCategory | undefined;
     const options = next === 'in' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
-    if (!(options as readonly string[]).includes(category)) {
-      setCategory(options[0]);
+    if (!current || !(options as readonly string[]).includes(current)) {
+      form.setFieldsValue({ category: options[0] });
     }
+    form.setFieldsValue({ direction: next });
   }
 
-  const trimmedDescription = description.trim();
   const busy = isCreating || isUpdating;
-  const canSave = amount > 0 && trimmedDescription.length > 0 && !busy;
 
-  const handleSave = async () => {
-    if (!canSave) return;
+  async function handleSave() {
+    let values: FormValues;
+    try {
+      values = await form.validateFields();
+    } catch {
+      return;
+    }
     const body = {
-      date: date.format('YYYY-MM-DD'),
-      direction,
-      category,
-      amountMinor: toMinor(amount),
-      description: trimmedDescription,
-      method,
-      counterparty: counterparty.trim() === '' ? undefined : counterparty.trim(),
-      reference: reference.trim() === '' ? undefined : reference.trim(),
+      date: values.date.format('YYYY-MM-DD'),
+      direction: values.direction,
+      category: values.category,
+      amountMinor: toMinor(values.amount),
+      description: values.description.trim(),
+      method: values.method,
+      counterparty: values.counterparty.trim() === '' ? undefined : values.counterparty.trim(),
+      reference: values.reference.trim() === '' ? undefined : values.reference.trim(),
     };
     try {
       if (transaction) {
@@ -130,38 +139,56 @@ function ModalBody({ transaction, onDone, onCancel }: ModalBodyProps) {
       }
       onDone();
     } catch (err) {
-      message.error(getApiErrorMessage(err, 'Could not save the transaction'));
+      message.error(getApiErrorMessage(err, "Couldn't save the transaction. Please try again."));
     }
-  };
+  }
 
-  const handleDelete = async () => {
+  async function handleDelete() {
     if (!transaction) return;
     try {
       await deleteTx(transaction.id).unwrap();
       message.success('Transaction deleted');
       onDone();
     } catch (err) {
-      message.error(getApiErrorMessage(err, 'Could not delete the transaction'));
+      message.error(getApiErrorMessage(err, "Couldn't delete the transaction. Please try again."));
     }
-  };
+  }
 
   return (
-    <div className="flex flex-col gap-4">
-      <Segmented
-        block
-        value={direction}
-        onChange={(value) => handleDirectionChange(value as TxDirection)}
-        options={[
-          { label: 'Money in', value: 'in' },
-          { label: 'Money out', value: 'out' },
-        ]}
-      />
+    <Form<FormValues>
+      form={form}
+      layout="vertical"
+      disabled={busy}
+      initialValues={{
+        direction: transaction?.direction ?? 'out',
+        category: transaction?.category ?? EXPENSE_CATEGORIES[0],
+        amount: transaction ? fromMinor(transaction.amountMinor) : 0,
+        date: dayjs(transaction?.date ?? undefined),
+        description: transaction?.description ?? '',
+        method: transaction?.method ?? 'cash',
+        counterparty: transaction?.counterparty ?? '',
+        reference: transaction?.reference ?? '',
+      }}
+      className="flex flex-col gap-4"
+    >
+      <Form.Item name="direction" className="!mb-0">
+        <Segmented
+          block
+          onChange={(value) => handleDirectionChange(value as TxDirection)}
+          options={[
+            { label: 'Money in', value: 'in' },
+            { label: 'Money out', value: 'out' },
+          ]}
+        />
+      </Form.Item>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="tx-amount" className="text-sm font-medium text-ink">
-            Amount
-          </label>
+        <Form.Item
+          label="Amount"
+          name="amount"
+          rules={amountRules({ label: 'Amount' })}
+          className="!mb-0"
+        >
           <InputNumber
             id="tx-amount"
             className="w-full"
@@ -169,88 +196,79 @@ function ModalBody({ transaction, onDone, onCancel }: ModalBodyProps) {
             step={1}
             precision={2}
             prefix="৳"
-            value={amount}
-            onChange={(value) => setAmount(value ?? 0)}
           />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="tx-date" className="text-sm font-medium text-ink">
-            Date
-          </label>
-          <DatePicker
-            id="tx-date"
-            className="w-full"
-            value={date}
-            onChange={(value) => value && setDate(value)}
-            format="D MMM YYYY"
-          />
-        </div>
+        </Form.Item>
+        <Form.Item
+          label="Date"
+          name="date"
+          rules={[{ required: true, message: 'Pick a date' }]}
+          className="!mb-0"
+        >
+          <DatePicker id="tx-date" className="w-full" format="D MMM YYYY" />
+        </Form.Item>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="tx-category" className="text-sm font-medium text-ink">
-          Category
-        </label>
-        <Select
-          id="tx-category"
-          value={category}
-          onChange={setCategory}
-          options={categoryOptions}
-        />
-      </div>
+      <Form.Item label="Category" name="category" className="!mb-0">
+        <Select id="tx-category" options={categoryOptions} />
+      </Form.Item>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="tx-description" className="text-sm font-medium text-ink">
-          Description
-        </label>
+      <Form.Item
+        label="Description"
+        name="description"
+        rules={textFieldRules({ label: 'Description', max: TRANSACTION_DESCRIPTION_MAX })}
+        className="!mb-0"
+      >
         <Input
           id="tx-description"
           placeholder="What was this for?"
-          value={description}
           maxLength={TRANSACTION_DESCRIPTION_MAX}
           showCount
-          onChange={(event) => setDescription(event.target.value)}
         />
-      </div>
+      </Form.Item>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="tx-method" className="text-sm font-medium text-ink">
-            Method
-          </label>
+        <Form.Item label="Method" name="method" className="!mb-0">
           <Select
             id="tx-method"
-            value={method}
-            onChange={setMethod}
             options={PAYMENT_METHODS.map((value) => ({ value, label: METHOD_LABELS[value] }))}
           />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="tx-counterparty" className="text-sm font-medium text-ink">
-            Payee / payer
-          </label>
+        </Form.Item>
+        <Form.Item
+          label="Payee / payer"
+          name="counterparty"
+          rules={[
+            {
+              max: TRANSACTION_COUNTERPARTY_MAX,
+              message: `Keep it under ${TRANSACTION_COUNTERPARTY_MAX} characters`,
+            },
+          ]}
+          className="!mb-0"
+        >
           <Input
             id="tx-counterparty"
             placeholder="Optional"
-            value={counterparty}
             maxLength={TRANSACTION_COUNTERPARTY_MAX}
-            onChange={(event) => setCounterparty(event.target.value)}
           />
-        </div>
+        </Form.Item>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="tx-reference" className="text-sm font-medium text-ink">
-          Reference (optional)
-        </label>
+      <Form.Item
+        label="Reference (optional)"
+        name="reference"
+        rules={[
+          {
+            max: TRANSACTION_REFERENCE_MAX,
+            message: `Keep it under ${TRANSACTION_REFERENCE_MAX} characters`,
+          },
+        ]}
+        className="!mb-0"
+      >
         <Input
           id="tx-reference"
           placeholder="Receipt number, cheque number, transfer id…"
-          value={reference}
           maxLength={TRANSACTION_REFERENCE_MAX}
-          onChange={(event) => setReference(event.target.value)}
         />
-      </div>
+      </Form.Item>
 
       {amount > 0 ? (
         <p className="text-xs text-ink-muted">
@@ -277,16 +295,11 @@ function ModalBody({ transaction, onDone, onCancel }: ModalBodyProps) {
         )}
         <div className="flex gap-2">
           <Button onClick={onCancel}>Cancel</Button>
-          <Button
-            type="primary"
-            disabled={!canSave}
-            loading={isCreating || isUpdating}
-            onClick={handleSave}
-          >
+          <Button type="primary" loading={isCreating || isUpdating} onClick={handleSave}>
             {transaction ? 'Save' : 'Add'}
           </Button>
         </div>
       </div>
-    </div>
+    </Form>
   );
 }
