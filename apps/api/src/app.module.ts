@@ -12,6 +12,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth';
 import { ClubsModule } from './clubs';
+import { validateEnv } from './config';
 import { EducationModule } from './education';
 import { FinanceModule } from './finance';
 import { HealthController } from './health/health.controller';
@@ -25,6 +26,7 @@ import { OrgModule } from './org';
 import { OrgAssignmentsModule } from './org-assignments';
 import { PeopleModule } from './people';
 import { PrismaModule } from './prisma';
+import { QueueModule } from './queue';
 import { TasksModule } from './tasks';
 import { UsersModule } from './users';
 
@@ -36,9 +38,22 @@ import { UsersModule } from './users';
       // next.config.ts's dotenv load. Nest is always started via
       // `pnpm --filter @toastly/api ...`, which sets cwd to this package,
       // so the relative path up to the root is stable across dev/start.
+      //
+      // In production these paths intentionally resolve to nothing: PM2 runs
+      // the app from a release directory whose physical path is
+      // /srv/toastly/releases/<sha>/api, so `../../` lands in `releases/`.
+      // The ecosystem file injects the real values into `process.env` instead,
+      // and @nestjs/config both tolerates missing env files and never
+      // overwrites a key already present in the environment.
       envFilePath: ['../../.env.local', '../../.env'],
+      // Fail the boot rather than let an unset secret become `undefined`.
+      validate: validateEnv,
     }),
     PrismaModule,
+    // Global: decides whether background work goes to Redis/BullMQ or stays a
+    // no-op, based on APP_ENV. Registered before feature modules so any of them
+    // can inject QueueService.
+    QueueModule.forRoot(),
     AccessModule,
     ActivityModule,
     AuthModule,

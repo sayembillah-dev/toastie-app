@@ -1,0 +1,299 @@
+name: CI/CD
+
+# One workflow, two jobs. `ci` runs on every push and PR; `deploy` only ever
+# runs for a push to main and reuses the exact artifact `ci` produced, so the
+# thing that was tested is the thing that ships.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # Supersede in-flight runs for the same branch, but never for main: a
+  # cancelled main run could kill a deploy midway between the symlink flip and
+  # the PM2 reload.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: Build & verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      # Baked into the build: Next serialises rewrites into routes-manifest.json
+      # at build time, so this cannot be changed by a restart. Loopback, because
+      # Nginx and both apps live on the same host.
+      API_URL: http://127.0.0.1:4000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm must be installed before setup-node, otherwise `cache: pnpm` has no
+      # store path to resolve. Version comes from the root package.json's
+      # `packageManager` field.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Pinned via .nvmrc to Node 24 — matching the VPS runtime is not
+          # cosmetic: argon2 ships prebuilds keyed to NODE_MODULE_VERSION, which
+          # is per-major-version. A bundle built on a different major than the
+          # host crashes at require-time the moment it loads argon2. Match
+          # whatever `node --version` reports on the deploy target, not
+          # whatever LTS happens to be current — check with `node --version`
+          # on the VPS before changing this.
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # @toastly/access is a workspace dep of BOTH apps and resolves through its
+      # built `dist`, which is gitignored. Nothing in `pnpm install` builds it,
+      # so without this step every downstream tsc fails with TS2307.
+      - name: Build shared packages
+        run: pnpm build:packages
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Validate Prisma schema
+        run: pnpm --filter @toastly/api exec prisma validate
+        env:
+          # `prisma validate` parses the datasource block and wants the var to
+          # exist; it never opens a connection.
+          DATABASE_URL: postgresql://validate:validate@localhost:5432/validate
+
+      # ---------------------------------------------------------------- cache
+      # Turbopack's filesystem build cache is already enabled by default in Next
+      # 16.3 (experimental.turbopackFileSystemCacheForBuild). Nothing here turns
+      # it on — this only makes the directory survive between runners.
+      #
+      # restore/save rather than the combined action, with the run_id in the
+      # save key: actions/cache never overwrites an existing exact key, so a
+      # content-hash key would freeze at the first build and go stale forever.
+      # A unique key per run always writes, and restore-keys warm-starts from
+      # the most recent prior run.
+      - name: Restore Next.js build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: apps/web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+            nextjs-${{ runner.os }}-
+
+      - name: Build
+        run: pnpm build
+
+      - name: Save Next.js build cache
+        # Save even if a later packaging step fails — the cache is still valid
+        # work. Skipped on PRs from forks, which cannot write the cache anyway.
+        if: always() && github.event_name != 'pull_request'
+        uses: actions/cache/save@v4
+        with:
+          path: apps/web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}
+
+      # ------------------------------------------------------------ packaging
+      - name: Assemble release bundle
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          rm -rf release && mkdir -p release
+
+          # --- API -----------------------------------------------------------
+          # `--legacy` is required: from pnpm 10 the default deploy path demands
+          # inject-workspace-packages=true, which we deliberately do not set
+          # because injecting turns workspace deps into copies and breaks the
+          # tsc --watch dev loop. --prod drops devDeps; `prisma` is a real
+          # dependency so the CLI still ships for on-box migrations if needed.
+          pnpm deploy --legacy --filter @toastly/api --prod release/api
+
+          # --- Web -----------------------------------------------------------
+          # Standalone traces from the monorepo root, so server.js lands at
+          # apps/web/server.js inside the bundle.
+          #
+          # `cp -a`, NOT `cp -r`. The standalone tree is a pnpm layout held
+          # together by ~29 symlinks (apps/web/node_modules/next ->
+          # ../../../node_modules/.pnpm/next@.../node_modules/next). `cp -r`
+          # dereferences symlinks, which both triples the size and — fatally —
+          # turns `next` into a real directory, so Node can no longer walk up
+          # into .pnpm/next@.../node_modules to resolve @swc/helpers. The server
+          # then dies at startup with "Cannot find module '@swc/helpers/...'".
+          # `cp -a` implies -d (--no-dereference --preserve=links).
+          cp -a apps/web/.next/standalone release/web
+          # Next deliberately omits these from standalone; without the copy the
+          # server 404s every asset. There is no public/ dir in this app —
+          # apps/web/assets is imported and bundled, not served.
+          mkdir -p release/web/apps/web/.next
+          cp -a apps/web/.next/static release/web/apps/web/.next/static
+
+          cp deploy/ecosystem.config.cjs release/ecosystem.config.cjs
+          echo "${{ github.sha }}" > release/VERSION
+
+          # Sanity-check the shape before it ever reaches the VPS.
+          test -f release/api/dist/main.js
+          test -f release/api/prisma/schema.prisma
+          test -f release/web/apps/web/server.js
+          test -d release/web/apps/web/.next/static
+
+          # tar (not upload-artifact directly) because the pnpm-deployed
+          # node_modules is full of symlinks that the artifact uploader would
+          # dereference or drop.
+          tar -czpf release.tar.gz -C release .
+          ls -lh release.tar.gz
+
+      - name: Upload release artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ github.sha }}
+          path: release.tar.gz
+          retention-days: 7
+          if-no-files-found: error
+
+  deploy:
+    name: Deploy to VPS
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Scopes the secrets and gives you a deployment history (and a place to add
+    # required reviewers later).
+    environment: production
+
+    # Separate from the workflow-level group, and explicitly never cancelled: a
+    # deploy interrupted between the symlink flip and the PM2 reload leaves the
+    # box in a half-updated state.
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-${{ github.sha }}
+
+      # Migrations run from the runner because Postgres is managed and
+      # network-reachable. This keeps schema changes off the critical path of
+      # the release swap: if a migration fails, nothing has been swapped yet and
+      # the site is untouched.
+      #
+      # Migrations land BEFORE the new code, so every migration must be
+      # backwards-compatible with the release currently serving traffic —
+      # expand now, contract in a later deploy. See docs/DEPLOYMENT.md.
+      #
+      # If your provider IP-allowlists, delete this step and run the equivalent
+      # over SSH instead — `prisma` ships inside release/api for exactly that.
+      - name: Run database migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @toastly/api exec prisma migrate deploy
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Pin the host key instead of disabling checking, so a MITM on the
+          # deploy path fails loudly rather than silently succeeding.
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          cat >> ~/.ssh/config <<EOF
+          Host deploy-target
+            HostName $SSH_HOST
+            User ${{ secrets.SSH_USER }}
+            IdentityFile ~/.ssh/deploy_key
+            StrictHostKeyChecking yes
+          EOF
+
+      - name: Write shared .env on the VPS
+        env:
+          APP_ENV: production
+          API_URL: http://127.0.0.1:4000
+          PORT: 4000
+          CORS_ORIGINS: ${{ vars.CORS_ORIGINS }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
+          JWT_ACCESS_TTL: ${{ vars.JWT_ACCESS_TTL || '15m' }}
+          JWT_REFRESH_TTL: ${{ vars.JWT_REFRESH_TTL || '30d' }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+        run: |
+          set -euo pipefail
+          # Secrets go over stdin, never as argv: process arguments are visible
+          # to any user on the box via /proc and `ps`.
+          {
+            echo "APP_ENV=$APP_ENV"
+            echo "API_URL=$API_URL"
+            echo "PORT=$PORT"
+            echo "CORS_ORIGINS=$CORS_ORIGINS"
+            echo "DATABASE_URL=$DATABASE_URL"
+            echo "JWT_ACCESS_SECRET=$JWT_ACCESS_SECRET"
+            echo "JWT_ACCESS_TTL=$JWT_ACCESS_TTL"
+            echo "JWT_REFRESH_TTL=$JWT_REFRESH_TTL"
+            # `if`, not `[ -n ... ] && echo`: under `set -e` a false test as the
+            # last command in the group makes the whole group exit non-zero, so
+            # the step would fail for everyone who has not set up Redis yet.
+            if [ -n "${REDIS_URL:-}" ]; then echo "REDIS_URL=$REDIS_URL"; fi
+          } | ssh deploy-target '
+            set -euo pipefail
+            umask 077
+            mkdir -p /srv/toastly/shared /srv/toastly/releases /srv/toastly/tmp
+            cat > /srv/toastly/shared/.env
+            chmod 600 /srv/toastly/shared/.env
+          '
+
+      - name: Upload release
+        run: |
+          set -euo pipefail
+          scp release.tar.gz deploy-target:/srv/toastly/tmp/${{ github.sha }}.tar.gz
+          scp deploy/remote-deploy.sh deploy-target:/srv/toastly/tmp/remote-deploy.sh
+
+      # The script owns atomic swap, PM2 reload, smoke test and rollback. It is
+      # written so that a non-zero exit always means "the previous release is
+      # still serving" (or, on a first deploy, that the box needs a look).
+      - name: Deploy, verify, roll back on failure
+        run: |
+          set -euo pipefail
+          ssh deploy-target "
+            set -euo pipefail
+            chmod +x /srv/toastly/tmp/remote-deploy.sh
+            /srv/toastly/tmp/remote-deploy.sh ${{ github.sha }}
+          "
+
+      - name: Report
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "### Deployed \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Deploy failed — previous release should still be serving" >> "$GITHUB_STEP_SUMMARY"
+            echo "Check \`pm2 logs\` on the VPS." >> "$GITHUB_STEP_SUMMARY"
+          fi

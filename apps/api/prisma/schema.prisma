@@ -14,6 +14,12 @@
 
 generator client {
   provider = "prisma-client-js"
+  // The query engine is a native binary picked per platform. CI builds the
+  // deploy bundle on ubuntu-latest and ships it to an Ubuntu VPS, so the
+  // Debian/OpenSSL 3 engine must be generated alongside the local one —
+  // "native" alone would bake in the build machine's engine and fail to load
+  // if the runner image and the VPS ever diverge.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {

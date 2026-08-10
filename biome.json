@@ -13,7 +13,10 @@
       "!**/dist",
       "!**/next-env.d.ts",
       "!**/pnpm-lock.yaml",
-      "!**/*.tsbuildinfo"
+      "!**/*.tsbuildinfo",
+      "!docs",
+      "!**/*.svg",
+      "!**/*.html"
     ]
   },
   "formatter": {
@@ -81,7 +84,8 @@
             "useImportType": "off"
           },
           "complexity": {
-            "noBannedTypes": "off"
+            "noBannedTypes": "off",
+            "noStaticOnlyClass": "off"
           }
         }
       }
