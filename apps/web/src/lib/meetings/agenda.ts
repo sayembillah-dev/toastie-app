@@ -1,6 +1,6 @@
 import { findProject, getProjectDuration } from '@/lib/education/pathways';
 
-import type { MeetingDraft } from './draft';
+import type { MeetingDraft, RoleHolder } from './draft';
 import type { Meeting } from './meetings';
 import { getToastmasterAbbrev, getToastmasterLabel } from './roles';
 
@@ -51,6 +51,27 @@ function speechMinutes(duration: number | undefined, project: string | undefined
   return duration ?? getProjectDuration(project).min;
 }
 
+/** A speech slot's speaker/evaluator resolve through the roster when a
+ * member holds it; a guest carries its own pre-resolved name instead (see
+ * `toDraftSpeakers`), since `nameOf` only knows how to look member ids up.
+ * Exported so the printed agenda sheet (`agenda-preview.tsx`) can apply the
+ * same rule outside `buildAgenda`. */
+export function speakerPerson(
+  nameOf: NameResolver,
+  memberId: string | undefined,
+  guestName: string | undefined,
+): string {
+  return memberId ? nameOf(memberId) : (guestName ?? '');
+}
+
+/** Same idea as `speakerPerson`, for a meeting role: a member resolves
+ * through the roster, a guest reads its pre-resolved `name` (see
+ * `toRoleHolderMap`). Exported for the same reason as `speakerPerson`. */
+export function holderName(nameOf: NameResolver, holder: RoleHolder | undefined): string {
+  if (!holder) return '';
+  return holder.memberId ? nameOf(holder.memberId) : (holder.name ?? '');
+}
+
 /** Pathway · level · project, matching the italic note under each speech title. */
 function speechMeta(pathway?: string, project?: string, level?: number): string {
   return [pathway, level ? String(level) : undefined, project ? `Project: ${project}` : undefined]
@@ -65,13 +86,13 @@ function buildPreparedSpeechBlock(draft: MeetingDraft, nameOf: NameResolver): Ag
     lines.push({
       key: `${speaker.id}-objectives`,
       label: 'Evaluator explains Objectives',
-      person: nameOf(speaker.evaluatorId),
+      person: speakerPerson(nameOf, speaker.evaluatorId, speaker.evaluatorName),
       minutes: 2,
     });
     lines.push({
       key: `${speaker.id}-speech`,
       label: `${index + 1}. ${speaker.title.trim() || 'Speech title to be confirmed'}`,
-      person: nameOf(speaker.memberId),
+      person: speakerPerson(nameOf, speaker.memberId, speaker.speakerName),
       minutes: speechMinutes(speaker.duration, speaker.project),
     });
 
@@ -102,21 +123,25 @@ export function buildAgenda(
   const { roles } = draft;
   const tm = getToastmasterAbbrev(meeting.dateTime);
 
-  const president = nameOf(roles.president);
-  const generalEvaluator = nameOf(roles['general-evaluator']);
-  const ahCounter = nameOf(roles['ah-counter']);
-  const timer = nameOf(roles.timer);
-  const grammarian = nameOf(roles.grammarian);
+  const president = holderName(nameOf, roles.president);
+  const generalEvaluator = holderName(nameOf, roles['general-evaluator']);
+  const ahCounter = holderName(nameOf, roles['ah-counter']);
+  const timer = holderName(nameOf, roles.timer);
+  const grammarian = holderName(nameOf, roles.grammarian);
 
   /* Every speech evaluator named once, in the order the speakers were added. */
   const speechEvaluators = [
-    ...new Set(draft.speakers.map((speaker) => nameOf(speaker.evaluatorId)).filter(Boolean)),
+    ...new Set(
+      draft.speakers
+        .map((speaker) => speakerPerson(nameOf, speaker.evaluatorId, speaker.evaluatorName))
+        .filter(Boolean),
+    ),
   ].join(', ');
 
   const blocks: AgendaBlock[] = [
     {
       title: 'Sergeant at Arms opens the floor',
-      person: nameOf(roles['sergeant-at-arms']),
+      person: holderName(nameOf, roles['sergeant-at-arms']),
       minutes: 10,
       lines: [
         { key: 'ground-rules', label: 'Ground rules' },
@@ -134,7 +159,7 @@ export function buildAgenda(
     },
     {
       title: `Introduction of the ${getToastmasterLabel(meeting.dateTime)}`,
-      person: nameOf(roles.toastmaster),
+      person: holderName(nameOf, roles.toastmaster),
       minutes: 1,
       lines: [],
     },
@@ -156,7 +181,7 @@ export function buildAgenda(
     buildPreparedSpeechBlock(draft, nameOf),
     {
       title: `${tm} introduces the Table Topic Master`,
-      person: nameOf(roles['table-topic-master']),
+      person: holderName(nameOf, roles['table-topic-master']),
       minutes: 2,
       lines: [{ key: 'table-topic-session', label: 'Table Topic Session', minutes: 15 }],
     },
@@ -174,7 +199,7 @@ export function buildAgenda(
         {
           key: 'table-topic-evaluations',
           label: 'Table Topic Speech Evaluations',
-          person: nameOf(roles['table-topic-evaluator']),
+          person: holderName(nameOf, roles['table-topic-evaluator']),
           minutes: 10,
         },
         { key: 'ah-counter-report', label: "Ah Counter's Report", person: ahCounter, minutes: 2 },

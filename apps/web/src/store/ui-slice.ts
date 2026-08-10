@@ -1,6 +1,6 @@
 import type { PayloadAction } from '@reduxjs/toolkit';
-import type { ActiveContextKey } from '@toastly/access';
 import { createSlice } from '@reduxjs/toolkit';
+import type { ActiveContextKey } from '@toastly/access';
 
 /** The scope the shell is currently rendering for. Derived from
  * `session.contextKey` via `unitKeyForContext` — no separate state.
@@ -12,7 +12,9 @@ export type UnitKey = 'club' | 'area' | 'division' | 'district' | 'super-admin';
 /** Maps the session's `contextKey` to the shell's nav-shape hint. Returns
  * `null` when the context is missing or unrecognised — callers render an
  * empty rail rather than guessing at a fallback. */
-export function unitKeyForContext(key: ActiveContextKey | string | null | undefined): UnitKey | null {
+export function unitKeyForContext(
+  key: ActiveContextKey | string | null | undefined,
+): UnitKey | null {
   if (!key) return null;
   if (key === 'global') return 'super-admin';
   if (key.startsWith('club:')) return 'club';

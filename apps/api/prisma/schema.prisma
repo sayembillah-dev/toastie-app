@@ -361,18 +361,20 @@ model Membership {
   club Club  @relation(fields: [clubId], references: [id], onDelete: Cascade)
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  invitesCreated      Invite[]            @relation("InvitePreCreatedMembership")
-  decidedJoinRequests JoinRequest[]
-  historyEvents       HistoryEvent[]
-  evaluationsReceived Evaluation[]        @relation("EvaluationSpeaker")
-  evaluationsGiven    Evaluation[]        @relation("EvaluationEvaluator")
-  timerEntries        TimerEntry[]
-  ahCounterEntries    AhCounterEntry[]
-  speechSlotRequests  SpeechSlotRequest[]
-  duesRecords         DuesRecord[]
-  tasks               Task[]
+  invitesCreated         Invite[]                @relation("InvitePreCreatedMembership")
+  decidedJoinRequests    JoinRequest[]
+  historyEvents          HistoryEvent[]
+  evaluationsReceived    Evaluation[]            @relation("EvaluationSpeaker")
+  evaluationsGiven       Evaluation[]            @relation("EvaluationEvaluator")
+  timerEntries           TimerEntry[]
+  ahCounterEntries       AhCounterEntry[]
+  speechSlotRequests     SpeechSlotRequest[]
+  duesRecords            DuesRecord[]
+  tasks                  Task[]
   meetingRoleAssignments MeetingRoleAssignment[]
   meetingAttendance      MeetingAttendance[]
+  speakerSlots           MeetingSpeaker[]        @relation("MeetingSpeakerAsSpeaker")
+  evaluatorSlots         MeetingSpeaker[]        @relation("MeetingSpeakerAsEvaluator")
 
   @@unique([clubId, userId])
   /// Enables composite tenant FKs on operational tables: any child row
@@ -413,24 +415,24 @@ model OrgAssignment {
 // -------------------------------------------------------- onboarding --
 
 model Invite {
-  id     String @id @default(cuid())
-  clubId String
+  id              String       @id @default(cuid())
+  clubId          String
   /// Left null by the link-based invite flow (an admin picks role(s), not a
   /// specific person). Only ever set by legacy rows created before that
   /// flow existed.
-  email     String?
-  firstName String?
-  lastName  String?
-  roles     ClubRole[]
-  status    InviteStatus @default(pending)
+  email           String?
+  firstName       String?
+  lastName        String?
+  roles           ClubRole[]
+  status          InviteStatus @default(pending)
   /// Plaintext — unlike a password, this token has to be redisplayed to the
   /// admin later (the pending-invites list re-shares the same link), which
   /// a one-way hash can't support. Same tradeoff as `CredentialShare.token`.
-  token           String    @unique
-  membershipId    String?   @unique
+  token           String       @unique
+  membershipId    String?      @unique
   invitedByUserId String
   expiresAt       DateTime
-  createdAt       DateTime  @default(now())
+  createdAt       DateTime     @default(now())
   acceptedAt      DateTime?
   revokedAt       DateTime?
 
@@ -470,32 +472,33 @@ model JoinRequest {
 // -------------------------------------------------------- meetings --
 
 model Meeting {
-  id            String        @id @default(cuid())
-  clubId        String
-  meetingNumber Int
-  dateTime      DateTime
-  theme         String
-  status        MeetingStatus @default(draft)
+  id               String        @id @default(cuid())
+  clubId           String
+  meetingNumber    Int
+  dateTime         DateTime
+  theme            String
+  status           MeetingStatus @default(draft)
   /// The grammarian's word of the day, set on the meeting's Theme tab.
   /// Four nullable columns rather than one Json blob: the shape is fixed,
   /// and the agenda renders each part on its own line. All four are null
   /// until someone fills the tab in.
   word             String?
   wordPartOfSpeech String?
-  wordMeaning      String?  @db.Text
-  wordExample      String?  @db.Text
+  wordMeaning      String?       @db.Text
+  wordExample      String?       @db.Text
   /// Opaque share credential — the link IS the capability. Rotates on
   /// demand so a leaked URL can be revoked without breaking the meeting
   /// itself. Unique globally so `/public/meetings/:id?t=<token>` can look
   /// up (id, token) without a tenant filter.
-  shareToken    String        @unique
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  shareToken       String        @unique
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   club                Club                     @relation(fields: [clubId], references: [id], onDelete: Cascade)
   visitLogs           VisitLog[]
   checklistItems      ChecklistItem[]          @relation("MeetingChecklist")
   roleAssignments     MeetingRoleAssignment[]  @relation("MeetingRoles")
+  speakers            MeetingSpeaker[]         @relation("MeetingSpeakers")
   tableTopicQuestions TableTopicQuestion[]     @relation("MeetingTableTopics")
   attendanceRecords   MeetingAttendance[]      @relation("MeetingAttendance")
   guestAttendance     MeetingGuestAttendance[] @relation("MeetingGuestAttendance")
@@ -510,20 +513,59 @@ model Meeting {
 /// Ah Counter, etc. `roleKey` matches `RoleDef.key` in the web's
 /// `lib/meetings/roles.ts`; kept as a plain string rather than an enum since
 /// that list is presentation-owned and can grow without a migration.
-/// `membershipId` is nullable so a role can be created "open" and filled in
-/// later — the row itself is only created once someone touches the picker.
+/// `membershipId`/`guestId` are both nullable so a role can be created "open"
+/// and filled in later — the row itself is only created once someone touches
+/// the picker. At most one of the two is ever set; enforced in
+/// `MeetingRolesService`, not the schema.
 model MeetingRoleAssignment {
   id           String   @id @default(cuid())
   clubId       String
   meetingId    String
   roleKey      String
   membershipId String?
+  guestId      String?
   updatedAt    DateTime @default(now()) @updatedAt
 
   meeting    Meeting     @relation("MeetingRoles", fields: [clubId, meetingId], references: [clubId, id], onDelete: Cascade)
   membership Membership? @relation(fields: [clubId, membershipId], references: [clubId, id], onDelete: SetNull)
+  guest      Prospect?   @relation(fields: [clubId, guestId], references: [clubId, id], onDelete: SetNull)
 
   @@unique([clubId, meetingId, roleKey])
+  @@index([clubId, meetingId])
+  @@index([clubId, guestId])
+}
+
+/// One row per prepared speech slot on a meeting (`order` 1–3, matching the
+/// planner's Speaker 1–3 columns). Unlike `MeetingRoleAssignment` this used to
+/// live only in browser memory (the Prepared Speakers tab's Redux draft) —
+/// promoted to a real table so it survives a refresh and can mirror with the
+/// planner row the same way roles do. Speaker and evaluator each resolve to
+/// a member OR a guest, never both — enforced in `PreparedSpeakersService`.
+model MeetingSpeaker {
+  id                    String   @id @default(cuid())
+  clubId                String
+  meetingId             String
+  order                 Int
+  status                String   @default("requested")
+  membershipId          String?
+  guestId               String?
+  evaluatorMembershipId String?
+  evaluatorGuestId      String?
+  title                 String   @default("")
+  duration              Int?
+  pathway               String?
+  project               String?
+  notes                 String?  @db.Text
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  meeting             Meeting     @relation("MeetingSpeakers", fields: [clubId, meetingId], references: [clubId, id], onDelete: Cascade)
+  membership          Membership? @relation("MeetingSpeakerAsSpeaker", fields: [clubId, membershipId], references: [clubId, id], onDelete: SetNull)
+  guest               Prospect?   @relation("MeetingSpeakerGuestAsSpeaker", fields: [clubId, guestId], references: [clubId, id], onDelete: SetNull)
+  evaluatorMembership Membership? @relation("MeetingSpeakerAsEvaluator", fields: [clubId, evaluatorMembershipId], references: [clubId, id], onDelete: SetNull)
+  evaluatorGuest      Prospect?   @relation("MeetingSpeakerGuestAsEvaluator", fields: [clubId, evaluatorGuestId], references: [clubId, id], onDelete: SetNull)
+
+  @@unique([clubId, meetingId, order])
   @@index([clubId, meetingId])
 }
 
@@ -756,6 +798,10 @@ model Prospect {
   contactLogs ContactLog[]
   visitLogs   VisitLog[]
 
+  roleAssignments MeetingRoleAssignment[]
+  speakerSlots    MeetingSpeaker[]        @relation("MeetingSpeakerGuestAsSpeaker")
+  evaluatorSlots  MeetingSpeaker[]        @relation("MeetingSpeakerGuestAsEvaluator")
+
   @@unique([clubId, id])
   @@index([clubId, stage])
 }
@@ -847,12 +893,12 @@ model LibraryDocument {
 /// depend on the reader's offset. The month query is a plain string range
 /// (`gte`/`lte`) against the yyyy-mm-dd form, which sorts lexicographically.
 model PlannerIdea {
-  id     String @id @default(cuid())
-  clubId String
+  id          String            @id @default(cuid())
+  clubId      String
   /// yyyy-mm-dd — the day cell this idea belongs to.
-  day    String
-  title  String
-  body   String @db.Text
+  day         String
+  title       String
+  body        String            @db.Text
   /// `[{ uid, name }]`. Filenames only: the planner form holds attachments
   /// client-side (`beforeUpload` returns `false`, so antd never posts the
   /// bytes anywhere), and only the names were ever part of an idea. When a

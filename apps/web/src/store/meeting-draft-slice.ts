@@ -1,9 +1,8 @@
 import type { PayloadAction } from '@reduxjs/toolkit';
-import { createSlice, nanoid } from '@reduxjs/toolkit';
+import { createSlice } from '@reduxjs/toolkit';
 
-import type { DraftSpeaker, MeetingDraft, WordOfTheDay } from '@/lib/meetings/draft';
+import type { DraftSpeaker, MeetingDraft, RoleHolder, WordOfTheDay } from '@/lib/meetings/draft';
 import { EMPTY_DRAFT } from '@/lib/meetings/draft';
-import type { MeetingSeed } from '@/lib/meetings/from-planner';
 
 /**
  * Working state for the meeting detail screen. Every tab writes here instead of
@@ -33,10 +32,6 @@ function ensureDraft(state: MeetingDraftState, meetingId: string): MeetingDraft 
   return draft;
 }
 
-function findSpeaker(draft: MeetingDraft, speakerId: string): DraftSpeaker | undefined {
-  return draft.speakers.find((speaker) => speaker.id === speakerId);
-}
-
 interface MeetingScoped {
   meetingId: string;
 }
@@ -45,34 +40,6 @@ export const meetingDraftSlice = createSlice({
   name: 'meetingDraft',
   initialState,
   reducers: {
-    /** Fills a brand-new meeting's draft from the planner row it was created
-     * from. An outright replace rather than a merge: the only caller is the
-     * create flow, and the meeting cannot have been edited yet. */
-    draftSeeded: {
-      reducer(state, action: PayloadAction<MeetingScoped & { draft: MeetingDraft }>) {
-        state.byMeetingId[action.payload.meetingId] = action.payload.draft;
-      },
-      /* Speaker ids are minted here so the reducer stays pure and replayable —
-       * the same split `speakerAdded` uses. */
-      prepare(meetingId: string, seed: MeetingSeed) {
-        const draft: MeetingDraft = {
-          ...structuredClone(EMPTY_DRAFT),
-          roles: { ...seed.roles },
-          speakers: seed.speakers.map((speaker) => ({
-            id: nanoid(),
-            status: 'requested' as const,
-            title: '',
-            memberId: speaker.memberId,
-            evaluatorId: speaker.evaluatorId,
-            /* Carried over rather than typed here, so the cards start clean and
-             * collapsed — the titles are what still need chasing. */
-            dirty: false,
-            expanded: false,
-          })),
-        };
-        return { payload: { meetingId, draft } };
-      },
-    },
     /** Seeds theme + word from the saved meeting the first time its Theme
      * tab renders. Without this the tab opens blank over a record that has
      * values, which reads as "my save was lost". Runs once per meeting —
@@ -105,51 +72,16 @@ export const meetingDraftSlice = createSlice({
      * wins. */
     rolesHydrated(
       state,
-      action: PayloadAction<MeetingScoped & { roles: Record<string, string | undefined> }>,
+      action: PayloadAction<MeetingScoped & { roles: Record<string, RoleHolder | undefined> }>,
     ) {
       ensureDraft(state, action.payload.meetingId).roles = { ...action.payload.roles };
     },
-    speakerAdded: {
-      reducer(state, action: PayloadAction<MeetingScoped & { id: string }>) {
-        ensureDraft(state, action.payload.meetingId).speakers.push({
-          id: action.payload.id,
-          status: 'requested',
-          title: '',
-          dirty: true,
-          expanded: true,
-        });
-      },
-      /* The id is minted here rather than in the reducer so the reducer stays
-       * pure and replayable. */
-      prepare(meetingId: string) {
-        return { payload: { meetingId, id: nanoid() } };
-      },
-    },
-    speakerChanged(
-      state,
-      action: PayloadAction<MeetingScoped & { speakerId: string; patch: Partial<DraftSpeaker> }>,
-    ) {
-      const draft = ensureDraft(state, action.payload.meetingId);
-      const speaker = findSpeaker(draft, action.payload.speakerId);
-      if (speaker) Object.assign(speaker, action.payload.patch, { dirty: true });
-    },
-    speakerRemoved(state, action: PayloadAction<MeetingScoped & { speakerId: string }>) {
-      const draft = ensureDraft(state, action.payload.meetingId);
-      draft.speakers = draft.speakers.filter((speaker) => speaker.id !== action.payload.speakerId);
-    },
-    speakerSaved(state, action: PayloadAction<MeetingScoped & { speakerId: string }>) {
-      const speaker = findSpeaker(
-        ensureDraft(state, action.payload.meetingId),
-        action.payload.speakerId,
-      );
-      if (speaker) speaker.dirty = false;
-    },
-    speakerToggled(state, action: PayloadAction<MeetingScoped & { speakerId: string }>) {
-      const speaker = findSpeaker(
-        ensureDraft(state, action.payload.meetingId),
-        action.payload.speakerId,
-      );
-      if (speaker) speaker.expanded = !speaker.expanded;
+    /** Mirrors the persisted `MeetingSpeaker` rows into the draft whenever the
+     * Prepared Speakers query resolves — same read-through pattern as
+     * `rolesHydrated`. The tab itself writes straight through the API; this
+     * is only what Overview and the Agenda sheet read. */
+    speakersHydrated(state, action: PayloadAction<MeetingScoped & { speakers: DraftSpeaker[] }>) {
+      ensureDraft(state, action.payload.meetingId).speakers = action.payload.speakers;
     },
   },
   selectors: {
@@ -160,17 +92,7 @@ export const meetingDraftSlice = createSlice({
   },
 });
 
-export const {
-  draftSeeded,
-  draftHydrated,
-  themeChanged,
-  wordChanged,
-  rolesHydrated,
-  speakerAdded,
-  speakerChanged,
-  speakerRemoved,
-  speakerSaved,
-  speakerToggled,
-} = meetingDraftSlice.actions;
+export const { draftHydrated, themeChanged, wordChanged, rolesHydrated, speakersHydrated } =
+  meetingDraftSlice.actions;
 
 export const { selectMeetingDraft } = meetingDraftSlice.selectors;

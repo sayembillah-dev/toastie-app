@@ -9,27 +9,37 @@ import {
   QrCode,
   TrashSimple,
 } from '@phosphor-icons/react/dist/ssr';
-import { App, Button, Input, InputNumber, Modal, QRCode, Select, Tooltip } from 'antd';
+import { App, Button, Input, InputNumber, Modal, Popconfirm, QRCode, Select, Tooltip } from 'antd';
 import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import type { Pathway } from '@/lib/education/members';
+import { AssigneeSelect } from '@/components/education/assignee-select';
+import type { Member, Pathway } from '@/lib/education/members';
 import { PATHWAYS } from '@/lib/education/members';
 import type { ProjectDefinition } from '@/lib/education/pathways';
 import { findProject, getProjectDuration, getProjectsForPathway } from '@/lib/education/pathways';
 import { readSubmissions, subscribeToSubmissions } from '@/lib/evaluation/storage';
-import type { DraftSpeaker, SpeakerStatus } from '@/lib/meetings/draft';
 import type { Meeting } from '@/lib/meetings/meetings';
-import { useGetMembersQuery } from '@/store/api';
-import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import {
-  selectMeetingDraft,
-  speakerAdded,
-  speakerChanged,
-  speakerRemoved,
-  speakerSaved,
-  speakerToggled,
-} from '@/store/meeting-draft-slice';
+  evaluatorAssignee,
+  MAX_SPEAKERS_PER_MEETING,
+  type PreparedSpeakerWire,
+  SPEAKER_STATUSES,
+  type SpeakerStatus,
+  speakerAssignee,
+} from '@/lib/meetings/prepared-speakers';
+import { assigneeToRef } from '@/lib/meetings/role-assignments';
+import type { Guest } from '@/lib/people/guests';
+import { useBlurCommit } from '@/lib/use-blur-commit';
+import {
+  useCreatePreparedSpeakerMutation,
+  useDeletePreparedSpeakerMutation,
+  useGetGuestsQuery,
+  useGetMembersQuery,
+  useGetPreparedSpeakersQuery,
+  useUpdatePreparedSpeakerMutation,
+} from '@/store/api';
+import { getApiErrorMessage } from '@/store/api-error';
 
-const MAX_SPEAKERS = 3;
+const MAX_SPEAKERS = MAX_SPEAKERS_PER_MEETING;
 
 /** Official Pathways two-letter abbreviations, used on the Path option so the
  * dropdown reads "Dynamic Leadership (DL)" like the club forms do. */
@@ -52,11 +62,6 @@ const STATUS_STYLES: Record<SpeakerStatus, { label: string; bg: string; fg: stri
   confirmed: { label: 'Confirmed', bg: '#D1FAE5', fg: '#065F46' },
   delivered: { label: 'Delivered', bg: '#DBEAFE', fg: '#1E3A8A' },
 };
-
-interface MemberOption {
-  value: string;
-  label: string;
-}
 
 /** Uniform label + control wrapper. `span` maps to a `md:col-span-N` — the
  * grid is 6 wide on desktop and single-column on phones. */
@@ -233,17 +238,25 @@ function FeedbackBadge({ meetingId, speakerId }: { meetingId: string; speakerId:
   );
 }
 
+/** Resolves a member id to "First Last" — guests already carry their name on
+ * the `Assignee` itself, so only the member branch needs a roster lookup. */
+function personName(memberId: string | undefined, members: Member[]): string | undefined {
+  if (!memberId) return undefined;
+  const member = members.find((m) => m.id === memberId);
+  return member ? `${member.firstName} ${member.lastName}` : undefined;
+}
+
 interface SpeakerCardProps {
   index: number;
   meetingId: string;
   shareToken: string;
-  speaker: DraftSpeaker;
-  memberOptions: MemberOption[];
-  membersLoading: boolean;
-  onChange: (patch: Partial<DraftSpeaker>) => void;
-  onDelete: () => void;
-  onSave: () => void;
+  speaker: PreparedSpeakerWire;
+  members: Member[];
+  guests: Guest[];
+  expanded: boolean;
   onToggle: () => void;
+  onPatch: (patch: Partial<PreparedSpeakerWire>) => void;
+  onDelete: () => void;
 }
 
 function SpeakerCard({
@@ -251,12 +264,12 @@ function SpeakerCard({
   meetingId,
   shareToken,
   speaker,
-  memberOptions,
-  membersLoading,
-  onChange,
-  onDelete,
-  onSave,
+  members,
+  guests,
+  expanded,
   onToggle,
+  onPatch,
+  onDelete,
 }: SpeakerCardProps) {
   const { message } = App.useApp();
   const idPrefix = `speaker-${speaker.id}`;
@@ -264,28 +277,40 @@ function SpeakerCard({
 
   const projectOptions = useMemo(() => {
     if (!speaker.pathway) return [];
-    return getProjectsForPathway(speaker.pathway).map((project: ProjectDefinition) => ({
+    return getProjectsForPathway(speaker.pathway as Pathway).map((project: ProjectDefinition) => ({
       value: project.name,
       label: `L${project.level} · ${project.name}`,
     }));
   }, [speaker.pathway]);
 
   const selectedProject = speaker.project
-    ? findProject(speaker.project, speaker.pathway)
+    ? findProject(speaker.project, speaker.pathway as Pathway | undefined)
     : undefined;
-  const durationBounds = getProjectDuration(selectedProject?.name, speaker.pathway);
+  const durationBounds = getProjectDuration(
+    selectedProject?.name,
+    speaker.pathway as Pathway | undefined,
+  );
   const status = STATUS_STYLES[speaker.status];
 
-  const speakerName = speaker.memberId
-    ? memberOptions.find((option) => option.value === speaker.memberId)?.label
-    : undefined;
-  const trimmedTitle = speaker.title.trim();
+  const speakerAssigneeValue = speakerAssignee(speaker, guests);
+  const evaluatorAssigneeValue = evaluatorAssignee(speaker, guests);
+  const speakerName =
+    speakerAssigneeValue?.kind === 'member'
+      ? personName(speakerAssigneeValue.memberId, members)
+      : speakerAssigneeValue?.name;
+
+  const titleField = useBlurCommit(speaker.title, (next) => onPatch({ title: next }));
+  const notesField = useBlurCommit(speaker.notes ?? '', (next) => onPatch({ notes: next || null }));
+  const durationField = useBlurCommit(speaker.duration ?? undefined, (next) =>
+    onPatch({ duration: next ?? null }),
+  );
+  const trimmedTitle = titleField.value.trim();
 
   /* Changing the pathway invalidates any previously selected project — level
    * and duration derive from that project, so keeping the stale value would
    * silently mislead the panel below. */
   function handlePathwayChange(pathway: Pathway | undefined) {
-    onChange({ pathway, project: undefined });
+    onPatch({ pathway: pathway ?? null, project: null });
   }
 
   const [qrOpen, setQrOpen] = useState(false);
@@ -305,7 +330,7 @@ function SpeakerCard({
         <button
           type="button"
           onClick={onToggle}
-          aria-expanded={speaker.expanded}
+          aria-expanded={expanded}
           aria-controls={bodyId}
           className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
         >
@@ -314,7 +339,7 @@ function SpeakerCard({
             weight="bold"
             aria-hidden
             className={`shrink-0 text-ink-muted transition-transform ${
-              speaker.expanded ? '' : '-rotate-90'
+              expanded ? '' : '-rotate-90'
             }`}
           />
           <span className="text-sm font-semibold text-ink-muted">#{index}</span>
@@ -334,6 +359,16 @@ function SpeakerCard({
             )}
           </span>
         </button>
+        <Select
+          size="small"
+          variant="borderless"
+          className="w-27.5 shrink-0"
+          value={speaker.status}
+          options={SPEAKER_STATUSES.map((s) => ({ value: s, label: STATUS_STYLES[s].label }))}
+          onChange={(next) => onPatch({ status: next })}
+          aria-label={`Status for speaker #${index}`}
+          popupMatchSelectWidth={false}
+        />
         <span
           className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
           style={{ backgroundColor: status.bg, color: status.fg }}
@@ -350,6 +385,21 @@ function SpeakerCard({
             onClick={() => setQrOpen(true)}
           />
         </Tooltip>
+        <Popconfirm
+          title="Delete this speaker?"
+          okText="Delete"
+          cancelText="Cancel"
+          okButtonProps={{ danger: true }}
+          onConfirm={onDelete}
+        >
+          <Button
+            danger
+            type="text"
+            size="small"
+            aria-label={`Delete speaker #${index}`}
+            icon={<TrashSimple size={16} />}
+          />
+        </Popconfirm>
       </div>
 
       <EvaluationQrModal
@@ -370,21 +420,17 @@ function SpeakerCard({
 
       {/* Body stays mounted-then-hidden so form state doesn't reset on
        * collapse and antd Selects keep their dropdown portal roots. */}
-      <div id={bodyId} hidden={!speaker.expanded} className="border-t border-line p-4 sm:p-5">
+      <div id={bodyId} hidden={!expanded} className="border-t border-line p-4 sm:p-5">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
           <FieldWrap label="Speaker" span={4} htmlFor={`${idPrefix}-member`}>
-            <Select
-              id={`${idPrefix}-member`}
-              size="large"
-              className="w-full"
-              placeholder={membersLoading ? 'Loading members…' : 'Select a member'}
-              value={speaker.memberId}
-              options={memberOptions}
-              loading={membersLoading}
-              onChange={(value) => onChange({ memberId: value })}
-              showSearch
-              optionFilterProp="label"
-              allowClear
+            <AssigneeSelect
+              value={speakerAssigneeValue}
+              onChange={(next) => onPatch(assigneeToRef(next))}
+              members={members}
+              guests={guests}
+              placeholder="Select a speaker"
+              ariaLabel="Speaker"
+              allowFreeformGuest={false}
             />
           </FieldWrap>
 
@@ -395,9 +441,11 @@ function SpeakerCard({
               className="w-full"
               min={durationBounds.min}
               max={durationBounds.max}
-              value={speaker.duration}
+              value={durationField.value}
               placeholder={`${durationBounds.min}–${durationBounds.max}`}
-              onChange={(value) => onChange({ duration: value ?? undefined })}
+              onChange={(value) => durationField.onChange(value ?? undefined)}
+              onFocus={durationField.onFocus}
+              onBlur={durationField.onBlur}
             />
           </FieldWrap>
 
@@ -406,25 +454,26 @@ function SpeakerCard({
               id={`${idPrefix}-title`}
               size="large"
               placeholder="e.g. The fear of becoming yourself"
-              value={speaker.title}
+              value={titleField.value}
               maxLength={120}
-              onChange={(event) => onChange({ title: event.target.value })}
+              onChange={(event) => titleField.onChange(event.target.value)}
+              onFocus={titleField.onFocus}
+              onBlur={titleField.onBlur}
             />
           </FieldWrap>
 
           <FieldWrap label="Evaluator" span={2} htmlFor={`${idPrefix}-evaluator`}>
-            <Select
-              id={`${idPrefix}-evaluator`}
-              size="large"
-              className="w-full"
-              placeholder={membersLoading ? 'Loading…' : 'Select evaluator'}
-              value={speaker.evaluatorId}
-              options={memberOptions}
-              loading={membersLoading}
-              onChange={(value) => onChange({ evaluatorId: value })}
-              showSearch
-              optionFilterProp="label"
-              allowClear
+            <AssigneeSelect
+              value={evaluatorAssigneeValue}
+              onChange={(next) => {
+                const ref = assigneeToRef(next);
+                onPatch({ evaluatorMembershipId: ref.membershipId, evaluatorGuestId: ref.guestId });
+              }}
+              members={members}
+              guests={guests}
+              placeholder="Select evaluator"
+              ariaLabel="Evaluator"
+              allowFreeformGuest={false}
             />
           </FieldWrap>
 
@@ -434,7 +483,7 @@ function SpeakerCard({
               size="large"
               className="w-full"
               placeholder="Select a pathway"
-              value={speaker.pathway}
+              value={(speaker.pathway ?? undefined) as Pathway | undefined}
               options={PATHWAYS.map((pathway) => ({
                 value: pathway,
                 label: `${pathway} (${PATHWAY_ABBREV[pathway]})`,
@@ -452,10 +501,10 @@ function SpeakerCard({
               size="large"
               className="w-full"
               placeholder={speaker.pathway ? 'Select project' : 'Pick a path first'}
-              value={speaker.project}
+              value={speaker.project ?? undefined}
               options={projectOptions}
               disabled={!speaker.pathway}
-              onChange={(value) => onChange({ project: value })}
+              onChange={(value) => onPatch({ project: value ?? null })}
               showSearch
               optionFilterProp="label"
               allowClear
@@ -477,41 +526,28 @@ function SpeakerCard({
               id={`${idPrefix}-notes`}
               size="large"
               placeholder="e.g. Using presentation software"
-              value={speaker.notes ?? ''}
+              value={notesField.value}
               maxLength={160}
-              onChange={(event) => onChange({ notes: event.target.value })}
+              onChange={(event) => notesField.onChange(event.target.value)}
+              onFocus={notesField.onFocus}
+              onBlur={notesField.onBlur}
             />
           </FieldWrap>
         </div>
 
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[11px] text-ink-muted">
-            {selectedProject ? (
-              <>
-                Level and duration bounds ({durationBounds.min}–{durationBounds.max} min) come from
-                the Pathways project.
-              </>
-            ) : (
-              <>
-                Duration defaults to {durationBounds.min}–{durationBounds.max} min until a project
-                is selected.
-              </>
-            )}
-          </p>
-          <div className="flex items-center gap-2 self-end sm:self-auto">
-            <Button
-              danger
-              icon={<TrashSimple size={16} />}
-              onClick={onDelete}
-              aria-label={`Delete speaker #${index}`}
-            >
-              Delete
-            </Button>
-            <Button type="primary" onClick={onSave} disabled={!speaker.dirty}>
-              {speaker.dirty ? 'Save speaker' : 'Saved'}
-            </Button>
-          </div>
-        </div>
+        <p className="mt-4 text-[11px] text-ink-muted">
+          {selectedProject ? (
+            <>
+              Level and duration bounds ({durationBounds.min}–{durationBounds.max} min) come from
+              the Pathways project.
+            </>
+          ) : (
+            <>
+              Duration defaults to {durationBounds.min}–{durationBounds.max} min until a project is
+              selected.
+            </>
+          )}
+        </p>
       </div>
     </article>
   );
@@ -521,47 +557,63 @@ interface PreparedSpeakersTabProps {
   meeting: Meeting;
 }
 
-/** Prepared Speakers tab — an inline editor per speaker with a member picker,
- * pathway/project cascade (which drives the level and duration bounds), and a
- * quick-add row at the bottom capped at MAX_SPEAKERS. Speakers live in the
- * meeting draft, which is what the Overview → Agenda sheet prints from. */
+/** Prepared Speakers tab — an inline editor per speaker with a member/guest
+ * picker, pathway/project cascade (which drives the level and duration
+ * bounds), and a quick-add row at the bottom capped at MAX_SPEAKERS. Every
+ * field saves straight through the API as it's changed — text fields on
+ * blur, pickers immediately — matching the Roles tab's no-Save-button
+ * pattern. Speakers persist server-side (`MeetingSpeaker`) and mirror with
+ * the planner row this meeting was created from. */
 export function PreparedSpeakersTab({ meeting }: PreparedSpeakersTabProps) {
+  const { message } = App.useApp();
   const { data: members, isLoading: membersLoading } = useGetMembersQuery();
-  const dispatch = useAppDispatch();
-  const speakers = useAppSelector((state) => selectMeetingDraft(state, meeting.id)).speakers;
+  const { data: guests } = useGetGuestsQuery();
+  const { data: speakers, isLoading: speakersLoading } = useGetPreparedSpeakersQuery(meeting.id);
+  const [createSpeaker, { isLoading: isCreating }] = useCreatePreparedSpeakerMutation();
+  const [updateSpeaker] = useUpdatePreparedSpeakerMutation();
+  const [deleteSpeaker] = useDeletePreparedSpeakerMutation();
 
-  const canAdd = speakers.length < MAX_SPEAKERS;
+  /* New cards open expanded so the form is ready to fill; existing ones
+   * default collapsed (absent from the set) since a term's worth of
+   * speakers reads better as a scannable list. Purely local — nothing here
+   * is persisted. */
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
-  const memberOptions = useMemo<MemberOption[]>(
-    () =>
-      (members ?? [])
-        .map((member) => ({
-          value: member.id,
-          label: `${member.firstName} ${member.lastName}`,
-        }))
-        .sort((a, b) => a.label.localeCompare(b.label)),
-    [members],
-  );
+  const isLoading = membersLoading || speakersLoading;
+  const list = speakers ?? [];
+  const canAdd = list.length < MAX_SPEAKERS;
 
-  function handleAdd() {
+  async function handleAdd() {
     if (!canAdd) return;
-    dispatch(speakerAdded(meeting.id));
+    try {
+      const created = await createSpeaker({ meetingId: meeting.id }).unwrap();
+      setExpandedIds((prev) => new Set(prev).add(created.id));
+    } catch (err) {
+      message.error(getApiErrorMessage(err, 'Could not add the speaker'));
+    }
   }
 
-  function handleChange(speakerId: string, patch: Partial<DraftSpeaker>) {
-    dispatch(speakerChanged({ meetingId: meeting.id, speakerId, patch }));
+  function handlePatch(speakerId: string, patch: Partial<PreparedSpeakerWire>) {
+    updateSpeaker({ meetingId: meeting.id, speakerId, ...patch })
+      .unwrap()
+      .catch((err) => message.error(getApiErrorMessage(err, 'Could not save the change')));
   }
 
-  function handleDelete(speakerId: string) {
-    dispatch(speakerRemoved({ meetingId: meeting.id, speakerId }));
+  async function handleDelete(speakerId: string) {
+    try {
+      await deleteSpeaker({ meetingId: meeting.id, speakerId }).unwrap();
+    } catch (err) {
+      message.error(getApiErrorMessage(err, 'Could not delete the speaker'));
+    }
   }
 
-  function handleSave(speakerId: string) {
-    dispatch(speakerSaved({ meetingId: meeting.id, speakerId }));
-  }
-
-  function handleToggle(speakerId: string) {
-    dispatch(speakerToggled({ meetingId: meeting.id, speakerId }));
+  function toggle(speakerId: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(speakerId)) next.delete(speakerId);
+      else next.add(speakerId);
+      return next;
+    });
   }
 
   return (
@@ -576,11 +628,11 @@ export function PreparedSpeakersTab({ meeting }: PreparedSpeakersTabProps) {
             </p>
           </div>
           <span className="shrink-0 rounded-full bg-fill px-2.5 py-1 text-[11px] font-semibold text-ink-soft">
-            {speakers.length}/{MAX_SPEAKERS}
+            {list.length}/{MAX_SPEAKERS}
           </span>
         </header>
 
-        {speakers.length === 0 ? (
+        {isLoading && list.length === 0 ? null : list.length === 0 ? (
           <div className="rounded-xl border border-dashed border-line-strong px-6 py-10 text-center">
             <p className="text-sm font-medium text-ink">No speakers yet</p>
             <p className="mt-1 text-xs text-ink-muted">
@@ -589,19 +641,19 @@ export function PreparedSpeakersTab({ meeting }: PreparedSpeakersTabProps) {
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {speakers.map((speaker, index) => (
+            {list.map((speaker, index) => (
               <SpeakerCard
                 key={speaker.id}
                 index={index + 1}
                 meetingId={meeting.id}
                 shareToken={meeting.shareToken}
                 speaker={speaker}
-                memberOptions={memberOptions}
-                membersLoading={membersLoading}
-                onChange={(patch) => handleChange(speaker.id, patch)}
+                members={members ?? []}
+                guests={guests ?? []}
+                expanded={expandedIds.has(speaker.id)}
+                onToggle={() => toggle(speaker.id)}
+                onPatch={(patch) => handlePatch(speaker.id, patch)}
                 onDelete={() => handleDelete(speaker.id)}
-                onSave={() => handleSave(speaker.id)}
-                onToggle={() => handleToggle(speaker.id)}
               />
             ))}
           </div>
@@ -613,10 +665,11 @@ export function PreparedSpeakersTab({ meeting }: PreparedSpeakersTabProps) {
             size="large"
             type="dashed"
             icon={<Plus size={16} weight="bold" />}
+            loading={isCreating}
             disabled={!canAdd}
             onClick={handleAdd}
           >
-            Add speaker ({speakers.length}/{MAX_SPEAKERS})
+            Add speaker ({list.length}/{MAX_SPEAKERS})
           </Button>
         </div>
       </div>

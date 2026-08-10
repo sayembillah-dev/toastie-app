@@ -6,18 +6,22 @@ import {
   Clock,
   Hourglass,
   MicrophoneStage,
+  PencilSimple,
   Quotes,
   TextAa,
   UsersThree,
   Warning,
 } from '@phosphor-icons/react/dist/ssr';
-import { Progress } from 'antd';
-import { useMemo } from 'react';
+import { App, Button, Input, InputNumber, Modal, Progress } from 'antd';
+import { useMemo, useState } from 'react';
 
-import { buildAgenda } from '@/lib/meetings/agenda';
+import { buildAgenda, holderName } from '@/lib/meetings/agenda';
 import type { DraftSpeaker, MeetingDraft } from '@/lib/meetings/draft';
 import type { Meeting, MeetingStatus } from '@/lib/meetings/meetings';
+import { DEFAULT_START_TIME } from '@/lib/meetings/meetings';
 import { buildRoles } from '@/lib/meetings/roles';
+import { useUpdateMeetingMutation } from '@/store/api';
+import { getApiErrorMessage } from '@/store/api-error';
 import { useAppSelector } from '@/store/hooks';
 import { selectMeetingDraft } from '@/store/meeting-draft-slice';
 
@@ -69,7 +73,11 @@ interface Readiness {
 }
 
 function isSpeakerComplete(speaker: DraftSpeaker): boolean {
-  return Boolean(speaker.memberId && speaker.title.trim() && speaker.evaluatorId);
+  return Boolean(
+    (speaker.memberId || speaker.guestId) &&
+      speaker.title.trim() &&
+      (speaker.evaluatorId || speaker.evaluatorGuestId),
+  );
 }
 
 function buildReadiness(meeting: Meeting, draft: MeetingDraft): Readiness {
@@ -116,9 +124,10 @@ function buildReadiness(meeting: Meeting, draft: MeetingDraft): Readiness {
     gaps.push(`Book ${missing} more prepared speaker${missing > 1 ? 's' : ''}`);
   }
   draft.speakers.forEach((speaker, index) => {
-    if (!speaker.memberId) gaps.push(`Speech ${index + 1} has no speaker`);
+    if (!speaker.memberId && !speaker.guestId) gaps.push(`Speech ${index + 1} has no speaker`);
     if (!speaker.title.trim()) gaps.push(`Speech ${index + 1} has no title`);
-    if (!speaker.evaluatorId) gaps.push(`Speech ${index + 1} has no evaluator`);
+    if (!speaker.evaluatorId && !speaker.evaluatorGuestId)
+      gaps.push(`Speech ${index + 1} has no evaluator`);
   });
   for (const role of unassigned) gaps.push(`${role.label} is unassigned`);
 
@@ -156,6 +165,122 @@ function CountPill({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** "YYYY-MM-DD" / "HH:mm" read off a Date's *local* parts — matches how the
+ * planner's create-meeting dialog builds the same pair, so the two stay
+ * consistent about what a naive date-time string means. */
+function splitLocalDateTime(date: Date): { date: string; time: string } {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return {
+    date: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+    time: `${pad(date.getHours())}:${pad(date.getMinutes())}`,
+  };
+}
+
+interface EditMeetingDetailsModalProps {
+  open: boolean;
+  meeting: Meeting;
+  onClose: () => void;
+}
+
+/** Meeting number and date/time have no editor anywhere else — the planner
+ * is the only place that sets them today. This is the one spot on the
+ * meeting page itself to fix a typo'd number or reschedule after creation;
+ * the edit carries onto the linked planner row server-side (see
+ * `syncPlannerFieldsFromMeeting`). */
+function EditMeetingDetailsModal({ open, meeting, onClose }: EditMeetingDetailsModalProps) {
+  const { message } = App.useApp();
+  const [updateMeeting, { isLoading }] = useUpdateMeetingMutation();
+  const initial = splitLocalDateTime(new Date(meeting.dateTime));
+  const [meetingNumber, setMeetingNumber] = useState<number | null>(meeting.meetingNumber);
+  const [date, setDate] = useState(initial.date);
+  const [time, setTime] = useState(initial.time || DEFAULT_START_TIME);
+  const [error, setError] = useState<string | null>(null);
+
+  function handleOpenChange(next: boolean) {
+    if (next) {
+      const parts = splitLocalDateTime(new Date(meeting.dateTime));
+      setMeetingNumber(meeting.meetingNumber);
+      setDate(parts.date);
+      setTime(parts.time || DEFAULT_START_TIME);
+      setError(null);
+    }
+  }
+
+  async function handleSave() {
+    if (meetingNumber === null || !date) return;
+    setError(null);
+    try {
+      await updateMeeting({
+        meetingId: meeting.id,
+        meetingNumber,
+        dateTime: `${date}T${time || DEFAULT_START_TIME}:00`,
+      }).unwrap();
+      message.success('Meeting details updated');
+      onClose();
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not save the change'));
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      afterOpenChange={handleOpenChange}
+      onCancel={onClose}
+      onOk={() => {
+        void handleSave();
+      }}
+      confirmLoading={isLoading}
+      okText="Save"
+      cancelText="Cancel"
+      okButtonProps={{ disabled: meetingNumber === null || !date }}
+      title="Edit meeting number & date"
+      centered
+    >
+      <div className="flex flex-col gap-3 pt-2">
+        <div className="grid grid-cols-[6rem_1fr_1fr] gap-3">
+          <div>
+            <label htmlFor="hero-edit-number" className="mb-1 block text-xs font-medium text-ink">
+              No.
+            </label>
+            <InputNumber
+              id="hero-edit-number"
+              className="w-full"
+              min={1}
+              precision={0}
+              value={meetingNumber}
+              onChange={(value) => setMeetingNumber(value ?? null)}
+            />
+          </div>
+          <div>
+            <label htmlFor="hero-edit-date" className="mb-1 block text-xs font-medium text-ink">
+              Date
+            </label>
+            <Input
+              id="hero-edit-date"
+              type="date"
+              value={date}
+              onChange={(event) => setDate(event.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="hero-edit-time" className="mb-1 block text-xs font-medium text-ink">
+              Time
+            </label>
+            <Input
+              id="hero-edit-time"
+              type="time"
+              value={time}
+              onChange={(event) => setTime(event.target.value)}
+            />
+          </div>
+        </div>
+        {error ? <p className="text-xs text-red-600">{error}</p> : null}
+      </div>
+    </Modal>
+  );
+}
+
 /** Headline card: which meeting this is, and the window it occupies. */
 function Hero({
   meeting,
@@ -171,12 +296,21 @@ function Hero({
   runtime: number;
 }) {
   const status = STATUS_STYLES[meeting.status];
+  const [editOpen, setEditOpen] = useState(false);
 
   return (
     <section className="overflow-hidden rounded-2xl bg-linear-to-br from-slate-800 via-slate-700 to-slate-900 px-5 py-5 text-white sm:px-6">
       <div className="flex items-start justify-between gap-3">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-300">
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-300">
           Meeting #{meeting.meetingNumber}
+          <Button
+            type="text"
+            size="small"
+            className="print-hidden size-5! min-w-0! p-0! text-slate-300! hover:text-white!"
+            aria-label="Edit meeting number and date"
+            icon={<PencilSimple size={11} weight="bold" />}
+            onClick={() => setEditOpen(true)}
+          />
         </span>
         <span
           className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
@@ -185,6 +319,11 @@ function Hero({
           {status.label}
         </span>
       </div>
+      <EditMeetingDetailsModal
+        open={editOpen}
+        meeting={meeting}
+        onClose={() => setEditOpen(false)}
+      />
 
       <h2 className="mt-2 text-2xl font-semibold leading-tight sm:text-3xl">{theme}</h2>
 
@@ -304,7 +443,7 @@ function RolesCard({
     >
       <ul className="flex flex-col gap-2">
         {roles.map((role) => {
-          const name = nameOf(draft.roles[role.key]);
+          const name = holderName(nameOf, draft.roles[role.key]);
           return (
             <li key={role.key} className="flex items-center gap-2.5">
               <span
@@ -351,8 +490,12 @@ function SpeakersCard({
       ) : (
         <ol className="flex flex-col gap-2.5">
           {draft.speakers.map((speaker, index) => {
-            const speakerName = nameOf(speaker.memberId);
-            const evaluator = nameOf(speaker.evaluatorId);
+            const speakerName = speaker.memberId
+              ? nameOf(speaker.memberId)
+              : (speaker.speakerName ?? '');
+            const evaluator = speaker.evaluatorId
+              ? nameOf(speaker.evaluatorId)
+              : (speaker.evaluatorName ?? '');
             const context = [speaker.pathway, speaker.project].filter(Boolean).join(' · ');
 
             return (

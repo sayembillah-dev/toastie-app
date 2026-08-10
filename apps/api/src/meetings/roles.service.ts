@@ -5,6 +5,7 @@ import { ActivityService } from '@/activity';
 import { PrismaService } from '@/prisma';
 
 import type { SetMeetingRoleDto } from './dto/roles.dto';
+import { syncPlannerRolesFromMeeting } from './planner-mirror';
 import { type MeetingRoleAssignmentWire, toMeetingRoleAssignmentWire } from './serializers';
 
 /** Handles `/meetings/:meetingId/roles` — who's assigned to each of the
@@ -36,7 +37,11 @@ export class MeetingRolesService {
   ): Promise<MeetingRoleAssignmentWire> {
     const meeting = await this.requireMeeting(meetingId);
     this.assert(subject, meeting.clubId, 'update');
-    const membershipId = dto.membershipId;
+    /* A guest pick clears any member pick and vice versa — the two are
+     * mutually exclusive on the wire, matching the planner's `Assignee`
+     * union (a slot is either a member or a guest, never both). */
+    const membershipId = dto.guestId ? null : dto.membershipId;
+    const guestId = dto.membershipId ? null : (dto.guestId ?? null);
 
     if (membershipId) {
       const member = await this.prisma.membership.findUnique({
@@ -45,22 +50,30 @@ export class MeetingRolesService {
       });
       if (!member) throw new NotFoundException(`No member with id "${membershipId}" in this club`);
     }
+    if (guestId) {
+      const guest = await this.prisma.prospect.findUnique({
+        where: { clubId_id: { clubId: meeting.clubId, id: guestId } },
+        select: { id: true },
+      });
+      if (!guest) throw new NotFoundException(`No guest with id "${guestId}" in this club`);
+    }
 
     const row = await this.prisma.$transaction(async (tx) => {
       const saved = await tx.meetingRoleAssignment.upsert({
         where: {
           clubId_meetingId_roleKey: { clubId: meeting.clubId, meetingId: meeting.id, roleKey },
         },
-        create: { clubId: meeting.clubId, meetingId: meeting.id, roleKey, membershipId },
-        update: { membershipId },
+        create: { clubId: meeting.clubId, meetingId: meeting.id, roleKey, membershipId, guestId },
+        update: { membershipId, guestId },
       });
+      const holder = membershipId ?? guestId;
       await this.activity.record(
         {
           clubId: meeting.clubId,
           actorMembershipId,
           category: 'meeting',
-          action: membershipId ? 'assigned a meeting role' : 'cleared a meeting role',
-          summary: membershipId
+          action: holder ? 'assigned a meeting role' : 'cleared a meeting role',
+          summary: holder
             ? `Assigned "${roleKey}" for Meeting ${meeting.meetingNumber}`
             : `Cleared "${roleKey}" for Meeting ${meeting.meetingNumber}`,
           entityType: 'meetingRoleAssignment',
@@ -68,6 +81,7 @@ export class MeetingRolesService {
         },
         tx,
       );
+      await syncPlannerRolesFromMeeting(tx, meeting.clubId, meeting.id);
       return saved;
     });
     return toMeetingRoleAssignmentWire(row);

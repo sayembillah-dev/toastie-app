@@ -68,8 +68,18 @@ export class CreateMeetingDto {
 }
 
 /** Body for `PATCH /meetings/:meetingId` — the Save as Draft / Publish
- * buttons on the meeting page share this shape. */
+ * buttons, and the Overview tab's meeting-number/date editor, share this
+ * shape. */
 export class UpdateMeetingDto {
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  meetingNumber?: number;
+
+  @IsOptional()
+  @IsISO8601()
+  dateTime?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(THEME_MAX)

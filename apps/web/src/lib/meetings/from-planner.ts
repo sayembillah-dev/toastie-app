@@ -9,7 +9,7 @@ import type { Assignee, PlannerRow } from '@/lib/education/planner';
 /** Planner column → the role key the Roles tab and the agenda both read.
  * `president` and `sergeant-at-arms` have no planner column, so they stay
  * unassigned and get filled in on the meeting itself. */
-const ROLE_BY_FIELD: Array<[keyof PlannerRow, string]> = [
+export const ROLE_BY_FIELD: Array<[keyof PlannerRow, string]> = [
   ['tmod', 'toastmaster'],
   ['ttm', 'table-topic-master'],
   ['ttEvaluator', 'table-topic-evaluator'],
@@ -26,14 +26,23 @@ const SPEAKER_PAIRS: Array<[keyof PlannerRow, keyof PlannerRow]> = [
   ['speaker3', 'evaluator3'],
 ];
 
+/** Who a slot resolves to on the meeting side — a member or a roster guest.
+ * A typed, not-yet-in-the-roster guest (`guestId` absent) has nothing to
+ * point a foreign key at, so it resolves to `undefined` here same as an
+ * empty slot. */
+export interface PersonRef {
+  membershipId?: string;
+  guestId?: string;
+}
+
 export interface SpeakerSeed {
-  memberId?: string;
-  evaluatorId?: string;
+  speaker?: PersonRef;
+  evaluator?: PersonRef;
 }
 
 export interface MeetingSeed {
-  /** Role key → member id. */
-  roles: Record<string, string>;
+  /** Role key → who's holding it. */
+  roles: Record<string, PersonRef>;
   speakers: SpeakerSeed[];
 }
 
@@ -41,36 +50,42 @@ function assigneeOf(row: PlannerRow, field: keyof PlannerRow): Assignee | null {
   return (row[field] as Assignee | null) ?? null;
 }
 
-/* The meeting draft identifies people by member id, so a guest booked in the
- * planner has nothing to map onto. `countGuestAssignees` exists so the create
- * dialog can say so out loud rather than dropping them silently. */
-function memberIdOf(row: PlannerRow, field: keyof PlannerRow): string | undefined {
+function personRefOf(row: PlannerRow, field: keyof PlannerRow): PersonRef | undefined {
   const assignee = assigneeOf(row, field);
-  return assignee?.kind === 'member' ? assignee.memberId : undefined;
+  if (!assignee) return undefined;
+  if (assignee.kind === 'member') return { membershipId: assignee.memberId };
+  if (assignee.guestId) return { guestId: assignee.guestId };
+  return undefined;
 }
 
 export function buildMeetingSeed(row: PlannerRow): MeetingSeed {
-  const roles: Record<string, string> = {};
+  const roles: Record<string, PersonRef> = {};
   for (const [field, roleKey] of ROLE_BY_FIELD) {
-    const memberId = memberIdOf(row, field);
-    if (memberId) roles[roleKey] = memberId;
+    const ref = personRefOf(row, field);
+    if (ref) roles[roleKey] = ref;
   }
 
-  /* Only pairs with someone in them become speaker cards — three empty slots
-   * on the Prepared Speakers tab would be worse than none. */
+  /* Only pairs holding an actual speaker become speaker cards — an evaluator
+   * picked ahead of a speaker isn't a booked speech, and three empty slots on
+   * the Prepared Speakers tab would be worse than none. */
   const speakers: SpeakerSeed[] = [];
   for (const [speakerField, evaluatorField] of SPEAKER_PAIRS) {
-    const memberId = memberIdOf(row, speakerField);
-    const evaluatorId = memberIdOf(row, evaluatorField);
-    if (memberId || evaluatorId) speakers.push({ memberId, evaluatorId });
+    const speaker = personRefOf(row, speakerField);
+    if (!speaker) continue;
+    const evaluator = personRefOf(row, evaluatorField);
+    speakers.push({ speaker, evaluator });
   }
 
   return { roles, speakers };
 }
 
-/** How many slots on the row are held by a guest — none of which survive into
- * the meeting draft, since it keys everything by member id. */
-export function countGuestAssignees(row: PlannerRow): number {
+/** How many slots on the row are held by a guest with no roster entry —
+ * nothing for the meeting draft to link to, since it keys people by member
+ * or guest id. */
+export function countUnlinkedGuestAssignees(row: PlannerRow): number {
   const fields = [...ROLE_BY_FIELD.map(([field]) => field), ...SPEAKER_PAIRS.flat()];
-  return fields.filter((field) => assigneeOf(row, field)?.kind === 'guest').length;
+  return fields.filter((field) => {
+    const assignee = assigneeOf(row, field);
+    return assignee?.kind === 'guest' && !assignee.guestId;
+  }).length;
 }

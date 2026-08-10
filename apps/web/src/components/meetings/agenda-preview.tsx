@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { Fragment, useMemo } from 'react';
 
 import type { AgendaRow } from '@/lib/meetings/agenda';
-import { buildAgenda, CLUB } from '@/lib/meetings/agenda';
+import { buildAgenda, CLUB, holderName, speakerPerson } from '@/lib/meetings/agenda';
 import type { MeetingDraft } from '@/lib/meetings/draft';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { buildRoles } from '@/lib/meetings/roles';
@@ -219,7 +219,11 @@ function SheetRail({ meeting, draft, nameOf }: SheetRailProps) {
   const { word } = draft;
 
   const evaluators = [
-    ...new Set(draft.speakers.map((speaker) => nameOf(speaker.evaluatorId)).filter(Boolean)),
+    ...new Set(
+      draft.speakers
+        .map((speaker) => speakerPerson(nameOf, speaker.evaluatorId, speaker.evaluatorName))
+        .filter(Boolean),
+    ),
   ];
 
   return (
@@ -233,7 +237,7 @@ function SheetRail({ meeting, draft, nameOf }: SheetRailProps) {
     >
       {roles.map((role) => (
         <RailSection key={role.key} title={role.label}>
-          <RailName>{nameOf(draft.roles[role.key]) || '—'}</RailName>
+          <RailName>{holderName(nameOf, draft.roles[role.key]) || '—'}</RailName>
         </RailSection>
       ))}
 
@@ -251,7 +255,8 @@ function SheetRail({ meeting, draft, nameOf }: SheetRailProps) {
         ) : (
           draft.speakers.map((speaker, index) => (
             <div key={speaker.id} style={{ fontSize: 9.5, marginBottom: 3, fontStyle: 'italic' }}>
-              {index + 1}.&nbsp;{nameOf(speaker.memberId) || 'To be confirmed'}
+              {index + 1}.&nbsp;
+              {speakerPerson(nameOf, speaker.memberId, speaker.speakerName) || 'To be confirmed'}
             </div>
           ))
         )}

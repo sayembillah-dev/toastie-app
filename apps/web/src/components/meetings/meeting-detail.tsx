@@ -29,11 +29,17 @@ import { TimerTab } from '@/components/meetings/tabs/timer-tab';
 import { PageBreadcrumb } from '@/components/page-breadcrumb';
 import { AccessGate } from '@/components/permissions/access-gate';
 import type { Meeting } from '@/lib/meetings/meetings';
-import { toRoleAssignmentMap } from '@/lib/meetings/role-assignments';
-import { useGetMeetingQuery, useGetMeetingRolesQuery } from '@/store/api';
+import { toDraftSpeakers } from '@/lib/meetings/prepared-speakers';
+import { toRoleHolderMap } from '@/lib/meetings/role-assignments';
+import {
+  useGetGuestsQuery,
+  useGetMeetingQuery,
+  useGetMeetingRolesQuery,
+  useGetPreparedSpeakersQuery,
+} from '@/store/api';
 import { getApiErrorMessage, isNotFoundError } from '@/store/api-error';
 import { useAppDispatch } from '@/store/hooks';
-import { draftHydrated, rolesHydrated } from '@/store/meeting-draft-slice';
+import { draftHydrated, rolesHydrated, speakersHydrated } from '@/store/meeting-draft-slice';
 
 interface TabDef {
   key: string;
@@ -115,6 +121,8 @@ function DetailContent({ meeting }: { meeting: Meeting }) {
   const tabs = buildTabs(meeting);
   const dispatch = useAppDispatch();
   const { data: roleRows } = useGetMeetingRolesQuery(meeting.id);
+  const { data: speakerRows } = useGetPreparedSpeakersQuery(meeting.id);
+  const { data: guests } = useGetGuestsQuery();
 
   /* Seed the working draft from the saved record once the meeting lands.
    * Done here rather than inside the Theme tab because Overview's readiness
@@ -132,8 +140,23 @@ function DetailContent({ meeting }: { meeting: Meeting }) {
    * unsaved edit. */
   useEffect(() => {
     if (!roleRows) return;
-    dispatch(rolesHydrated({ meetingId: meeting.id, roles: toRoleAssignmentMap(roleRows) }));
-  }, [dispatch, meeting.id, roleRows]);
+    dispatch(
+      rolesHydrated({ meetingId: meeting.id, roles: toRoleHolderMap(roleRows, guests ?? []) }),
+    );
+  }, [dispatch, meeting.id, roleRows, guests]);
+
+  /* Same read-through pattern as roles, for the Prepared Speakers tab's own
+   * API-backed rows — Overview and the Agenda sheet only ever read the
+   * draft, never the query directly. */
+  useEffect(() => {
+    if (!speakerRows) return;
+    dispatch(
+      speakersHydrated({
+        meetingId: meeting.id,
+        speakers: toDraftSpeakers(speakerRows, guests ?? []),
+      }),
+    );
+  }, [dispatch, meeting.id, speakerRows, guests]);
 
   return (
     <div className="mx-auto max-w-6xl">

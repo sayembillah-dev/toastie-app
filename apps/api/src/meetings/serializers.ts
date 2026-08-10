@@ -3,6 +3,7 @@ import type {
   MeetingAttendance as MeetingAttendanceRow,
   MeetingGuestAttendance as MeetingGuestAttendanceRow,
   MeetingRoleAssignment as MeetingRoleAssignmentRow,
+  MeetingSpeaker as MeetingSpeakerRow,
   TableTopicQuestion as TableTopicQuestionRow,
 } from '@prisma/client';
 
@@ -58,12 +59,47 @@ export function toMeetingWire(row: Meeting): MeetingWire {
 export interface MeetingRoleAssignmentWire {
   roleKey: string;
   membershipId: string | null;
+  guestId: string | null;
 }
 
 export function toMeetingRoleAssignmentWire(
   row: MeetingRoleAssignmentRow,
 ): MeetingRoleAssignmentWire {
-  return { roleKey: row.roleKey, membershipId: row.membershipId };
+  return { roleKey: row.roleKey, membershipId: row.membershipId, guestId: row.guestId };
+}
+
+/** Wire shape matches the web `lib/meetings/prepared-speakers.ts`
+ * `PreparedSpeaker` interface. Meeting id is implicit in the URL. */
+export interface PreparedSpeakerWire {
+  id: string;
+  order: number;
+  status: string;
+  membershipId: string | null;
+  guestId: string | null;
+  evaluatorMembershipId: string | null;
+  evaluatorGuestId: string | null;
+  title: string;
+  duration: number | null;
+  pathway: string | null;
+  project: string | null;
+  notes: string | null;
+}
+
+export function toPreparedSpeakerWire(row: MeetingSpeakerRow): PreparedSpeakerWire {
+  return {
+    id: row.id,
+    order: row.order,
+    status: row.status,
+    membershipId: row.membershipId,
+    guestId: row.guestId,
+    evaluatorMembershipId: row.evaluatorMembershipId,
+    evaluatorGuestId: row.evaluatorGuestId,
+    title: row.title,
+    duration: row.duration,
+    pathway: row.pathway,
+    project: row.project,
+    notes: row.notes,
+  };
 }
 
 /** Wire shape matches the web `lib/meetings/table-topics.ts`

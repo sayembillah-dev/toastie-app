@@ -14,11 +14,16 @@ import { Fragment, useMemo, useState } from 'react';
 
 import { AssigneeSelect } from '@/components/education/assignee-select';
 import { PlannerCreateMeetingModal } from '@/components/education/planner-create-meeting-modal';
+import type { Member } from '@/lib/education/members';
 import type { Assignee, AssigneeField, PlannerRow } from '@/lib/education/planner';
 import { fromPlannerRowWire, plannerRowLabel, toAssigneesJson } from '@/lib/education/planner';
+import type { Meeting } from '@/lib/meetings/meetings';
+import type { Guest } from '@/lib/people/guests';
+import { useBlurCommit } from '@/lib/use-blur-commit';
 import {
   useCreatePlannerRowMutation,
   useDeletePlannerRowMutation,
+  useGetGuestsQuery,
   useGetMeetingsQuery,
   useGetMembersQuery,
   useGetPlannerRowsQuery,
@@ -102,6 +107,225 @@ function monthLabel(dateTime: string): string {
   return MONTH_LABEL_FMT.format(new Date(dateTime));
 }
 
+const MEETING_MIN_W = 96;
+const DATE_MIN_W = 140;
+const ACTION_MIN_W = 96;
+
+/* -----------------------------------------------------------------------------
+ * PlannerTableRow
+ * Broken out from PlannerTab so each row's fields can hold independent
+ * useBlurCommit state — hooks can't live inside a .map() callback.
+ * -------------------------------------------------------------------------- */
+
+interface PlannerTableRowProps {
+  row: PlannerRow;
+  rowLabel: string;
+  monthDividerLabel: string | null;
+  created: Meeting | undefined;
+  members: Member[];
+  guests: Guest[];
+  patchRow: (
+    id: string,
+    patch: Partial<Pick<PlannerRow, 'meetingNumber' | 'dateTime' | 'theme' | 'notes'>>,
+  ) => void;
+  updateAssignee: (id: string, field: AssigneeField, next: Assignee | null) => void;
+  onCreateMeeting: () => void;
+  onDelete: () => void;
+}
+
+function PlannerTableRow({
+  row,
+  rowLabel,
+  monthDividerLabel,
+  created,
+  members,
+  guests,
+  patchRow,
+  updateAssignee,
+  onCreateMeeting,
+  onDelete,
+}: PlannerTableRowProps) {
+  const meetingNumberField = useBlurCommit(row.meetingNumber, (next) =>
+    patchRow(row.id, { meetingNumber: next }),
+  );
+  const dateTimeField = useBlurCommit(row.dateTime, (next) => patchRow(row.id, { dateTime: next }));
+  const themeField = useBlurCommit(row.theme, (next) => patchRow(row.id, { theme: next }));
+  const notesField = useBlurCommit(row.notes, (next) => patchRow(row.id, { notes: next }));
+
+  /* Tailwind needs literal class strings, so the created and pending tints
+   * are spelled out rather than composed. */
+  const cellClass = created
+    ? 'bg-emerald-50/70 group-hover:bg-emerald-50'
+    : 'bg-canvas group-hover:bg-fill/30';
+  const stickyCellClass = created
+    ? 'bg-emerald-50 group-hover:bg-emerald-100/70'
+    : 'bg-sidebar group-hover:bg-fill/70';
+
+  return (
+    <Fragment>
+      {monthDividerLabel !== null ? (
+        <tr>
+          <td
+            colSpan={ALL_ASSIGNEE_COLUMNS.length + 5}
+            className="border-b border-line bg-sidebar p-0"
+          >
+            <div className="sticky left-0 flex w-fit items-center gap-2 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-soft">
+              <CalendarBlank size={12} weight="bold" />
+              {monthDividerLabel}
+            </div>
+          </td>
+        </tr>
+      ) : null}
+      <tr className="group">
+        <td
+          className={`sticky left-0 z-20 border-b border-r border-line-strong px-2 py-1.5 align-middle text-sm font-medium text-ink ${stickyCellClass}`}
+          style={{ minWidth: MEETING_MIN_W }}
+        >
+          {/* Typed in, never derived — clubs number their meetings on their
+           * own scheme, and this number is what ties the row to a created
+           * meeting. */}
+          <span className="flex items-center gap-1">
+            <span aria-hidden className="text-ink-muted">
+              #
+            </span>
+            <input
+              type="number"
+              min={1}
+              step={1}
+              placeholder="No."
+              className="w-14 rounded bg-transparent px-1 py-1 text-sm text-ink outline-none transition-colors focus:bg-canvas"
+              value={meetingNumberField.value ?? ''}
+              onChange={(event) =>
+                meetingNumberField.onChange(
+                  event.target.value === '' ? null : Number(event.target.value),
+                )
+              }
+              onFocus={meetingNumberField.onFocus}
+              onBlur={meetingNumberField.onBlur}
+              aria-label={`Meeting number for ${rowLabel}`}
+            />
+          </span>
+        </td>
+        <td
+          className={`border-b border-line px-1.5 py-1 align-middle ${cellClass}`}
+          style={{ minWidth: DATE_MIN_W }}
+        >
+          <input
+            type="datetime-local"
+            className="w-full rounded bg-transparent px-1.5 py-1 text-xs text-ink outline-none transition-colors focus:bg-canvas"
+            value={dateTimeField.value ?? ''}
+            onChange={(event) => dateTimeField.onChange(event.target.value || null)}
+            onFocus={dateTimeField.onFocus}
+            onBlur={dateTimeField.onBlur}
+            aria-label={`Date and time for ${rowLabel}`}
+          />
+        </td>
+
+        {ALL_ASSIGNEE_COLUMNS.map((col) => (
+          <td
+            key={col.field}
+            className={`border-b border-line px-1.5 py-1 align-middle ${cellClass}`}
+            style={{ minWidth: col.minWidth }}
+          >
+            <AssigneeSelect
+              value={row[col.field] as Assignee | null}
+              onChange={(next) => updateAssignee(row.id, col.field, next)}
+              members={members}
+              guests={guests}
+              placeholder={col.label}
+              ariaLabel={`${col.label} for ${rowLabel}`}
+            />
+          </td>
+        ))}
+
+        <td
+          className={`border-b border-line px-1.5 py-1 align-middle ${cellClass}`}
+          style={{ minWidth: 220 }}
+        >
+          <Input
+            variant="borderless"
+            size="small"
+            placeholder="Meeting theme…"
+            value={themeField.value}
+            onChange={(event) => themeField.onChange(event.target.value)}
+            onFocus={themeField.onFocus}
+            onBlur={themeField.onBlur}
+            aria-label={`Theme for ${rowLabel}`}
+          />
+        </td>
+        <td
+          className={`border-b border-line px-1.5 py-1 align-middle ${cellClass}`}
+          style={{ minWidth: 240 }}
+        >
+          <Input
+            variant="borderless"
+            size="small"
+            placeholder="Anything to remember…"
+            value={notesField.value}
+            onChange={(event) => notesField.onChange(event.target.value)}
+            onFocus={notesField.onFocus}
+            onBlur={notesField.onBlur}
+            aria-label={`Notes for ${rowLabel}`}
+          />
+        </td>
+        <td
+          className={`border-b border-line px-1 py-1 text-center align-middle ${cellClass}`}
+          style={{ minWidth: ACTION_MIN_W }}
+        >
+          <div className="flex items-center justify-center gap-0.5">
+            {created ? (
+              /* Already a meeting — the row's job here is done, so the slot
+               * becomes a way back to it. */
+              <Tooltip title={`Created · open meeting #${created.meetingNumber}`}>
+                <Link
+                  href={`/meetings/${created.id}`}
+                  aria-label={`Open the meeting created from ${rowLabel}`}
+                  className="inline-flex size-6 items-center justify-center rounded-full text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700"
+                >
+                  <CheckCircle size={16} weight="fill" />
+                </Link>
+              </Tooltip>
+            ) : (
+              <Tooltip title="Create meeting from this row">
+                <Button
+                  type="text"
+                  size="small"
+                  shape="circle"
+                  onClick={onCreateMeeting}
+                  aria-label={`Create a meeting from ${rowLabel}`}
+                  icon={<CalendarPlus size={16} className="text-ink-soft" />}
+                />
+              </Tooltip>
+            )}
+
+            <Popconfirm
+              title="Delete this row?"
+              description={
+                created
+                  ? 'The meeting created from it stays on the Meetings page.'
+                  : 'Everything assigned on the row is lost.'
+              }
+              okText="Delete"
+              cancelText="Cancel"
+              okButtonProps={{ danger: true }}
+              onConfirm={onDelete}
+            >
+              <Button
+                type="text"
+                size="small"
+                shape="circle"
+                danger
+                aria-label={`Delete ${rowLabel} from the planner`}
+                icon={<Trash size={16} />}
+              />
+            </Popconfirm>
+          </div>
+        </td>
+      </tr>
+    </Fragment>
+  );
+}
+
 /* -----------------------------------------------------------------------------
  * PlannerTab
  * -------------------------------------------------------------------------- */
@@ -109,6 +333,7 @@ function monthLabel(dateTime: string): string {
 export function PlannerTab() {
   const { message } = App.useApp();
   const { data: members = [], isLoading: membersLoading, isError, error } = useGetMembersQuery();
+  const { data: guests = [] } = useGetGuestsQuery();
   const { data: meetings = [] } = useGetMeetingsQuery();
   const {
     data: rowsData,
@@ -194,10 +419,6 @@ export function PlannerTab() {
   }
 
   const isLoading = membersLoading || rowsLoading;
-
-  const MEETING_MIN_W = 96;
-  const DATE_MIN_W = 140;
-  const ACTION_MIN_W = 96;
 
   return (
     <div className="flex flex-col gap-3">
@@ -291,173 +512,24 @@ export function PlannerTab() {
                   {rows.map((row, idx) => {
                     const currMonth = monthKey(row.dateTime);
                     const prevMonth = idx > 0 ? monthKey(rows[idx - 1].dateTime) : null;
-                    const showMonthDivider = currMonth !== null && currMonth !== prevMonth;
-                    const created = findCreated(row);
-                    const rowLabel = plannerRowLabel(row);
-                    /* Tailwind needs literal class strings, so the created and
-                     * pending tints are spelled out rather than composed. */
-                    const cellClass = created
-                      ? 'bg-emerald-50/70 group-hover:bg-emerald-50'
-                      : 'bg-canvas group-hover:bg-fill/30';
-                    const stickyCellClass = created
-                      ? 'bg-emerald-50 group-hover:bg-emerald-100/70'
-                      : 'bg-sidebar group-hover:bg-fill/70';
+                    const monthDividerLabel =
+                      currMonth !== null && currMonth !== prevMonth
+                        ? monthLabel(row.dateTime as string)
+                        : null;
                     return (
-                      <Fragment key={row.id}>
-                        {showMonthDivider ? (
-                          <tr>
-                            <td
-                              colSpan={ALL_ASSIGNEE_COLUMNS.length + 5}
-                              className="border-b border-line bg-sidebar p-0"
-                            >
-                              <div className="sticky left-0 flex w-fit items-center gap-2 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-soft">
-                                <CalendarBlank size={12} weight="bold" />
-                                {monthLabel(row.dateTime as string)}
-                              </div>
-                            </td>
-                          </tr>
-                        ) : null}
-                        <tr className="group">
-                          <td
-                            className={`sticky left-0 z-20 border-b border-r border-line-strong px-2 py-1.5 align-middle text-sm font-medium text-ink ${stickyCellClass}`}
-                            style={{ minWidth: MEETING_MIN_W }}
-                          >
-                            {/* Typed in, never derived — clubs number their
-                             * meetings on their own scheme, and this number is what
-                             * ties the row to a created meeting. */}
-                            <span className="flex items-center gap-1">
-                              <span aria-hidden className="text-ink-muted">
-                                #
-                              </span>
-                              <input
-                                type="number"
-                                min={1}
-                                step={1}
-                                placeholder="No."
-                                className="w-14 rounded bg-transparent px-1 py-1 text-sm text-ink outline-none transition-colors focus:bg-canvas"
-                                value={row.meetingNumber ?? ''}
-                                onChange={(event) =>
-                                  patchRow(row.id, {
-                                    meetingNumber:
-                                      event.target.value === '' ? null : Number(event.target.value),
-                                  })
-                                }
-                                aria-label={`Meeting number for ${rowLabel}`}
-                              />
-                            </span>
-                          </td>
-                          <td
-                            className={`border-b border-line px-1.5 py-1 align-middle ${cellClass}`}
-                            style={{ minWidth: DATE_MIN_W }}
-                          >
-                            <input
-                              type="datetime-local"
-                              className="w-full rounded bg-transparent px-1.5 py-1 text-xs text-ink outline-none transition-colors focus:bg-canvas"
-                              value={row.dateTime ?? ''}
-                              onChange={(event) =>
-                                patchRow(row.id, { dateTime: event.target.value || null })
-                              }
-                              aria-label={`Date and time for ${rowLabel}`}
-                            />
-                          </td>
-
-                          {ALL_ASSIGNEE_COLUMNS.map((col) => (
-                            <td
-                              key={col.field}
-                              className={`border-b border-line px-1.5 py-1 align-middle ${cellClass}`}
-                              style={{ minWidth: col.minWidth }}
-                            >
-                              <AssigneeSelect
-                                value={row[col.field] as Assignee | null}
-                                onChange={(next) => updateAssignee(row.id, col.field, next)}
-                                members={members}
-                                placeholder={col.label}
-                                ariaLabel={`${col.label} for ${rowLabel}`}
-                              />
-                            </td>
-                          ))}
-
-                          <td
-                            className={`border-b border-line px-1.5 py-1 align-middle ${cellClass}`}
-                            style={{ minWidth: 220 }}
-                          >
-                            <Input
-                              variant="borderless"
-                              size="small"
-                              placeholder="Meeting theme…"
-                              value={row.theme}
-                              onChange={(event) => patchRow(row.id, { theme: event.target.value })}
-                              aria-label={`Theme for ${rowLabel}`}
-                            />
-                          </td>
-                          <td
-                            className={`border-b border-line px-1.5 py-1 align-middle ${cellClass}`}
-                            style={{ minWidth: 240 }}
-                          >
-                            <Input
-                              variant="borderless"
-                              size="small"
-                              placeholder="Anything to remember…"
-                              value={row.notes}
-                              onChange={(event) => patchRow(row.id, { notes: event.target.value })}
-                              aria-label={`Notes for ${rowLabel}`}
-                            />
-                          </td>
-                          <td
-                            className={`border-b border-line px-1 py-1 text-center align-middle ${cellClass}`}
-                            style={{ minWidth: ACTION_MIN_W }}
-                          >
-                            <div className="flex items-center justify-center gap-0.5">
-                              {created ? (
-                                /* Already a meeting — the row's job here is done, so
-                                 * the slot becomes a way back to it. */
-                                <Tooltip title={`Created · open meeting #${created.meetingNumber}`}>
-                                  <Link
-                                    href={`/meetings/${created.id}`}
-                                    aria-label={`Open the meeting created from ${rowLabel}`}
-                                    className="inline-flex size-6 items-center justify-center rounded-full text-emerald-600 transition-colors hover:bg-emerald-100 hover:text-emerald-700"
-                                  >
-                                    <CheckCircle size={16} weight="fill" />
-                                  </Link>
-                                </Tooltip>
-                              ) : (
-                                <Tooltip title="Create meeting from this row">
-                                  <Button
-                                    type="text"
-                                    size="small"
-                                    shape="circle"
-                                    onClick={() => setCreateDialog({ row, open: true })}
-                                    aria-label={`Create a meeting from ${rowLabel}`}
-                                    icon={<CalendarPlus size={16} className="text-ink-soft" />}
-                                  />
-                                </Tooltip>
-                              )}
-
-                              <Popconfirm
-                                title="Delete this row?"
-                                description={
-                                  created
-                                    ? 'The meeting created from it stays on the Meetings page.'
-                                    : 'Everything assigned on the row is lost.'
-                                }
-                                okText="Delete"
-                                cancelText="Cancel"
-                                okButtonProps={{ danger: true }}
-                                onConfirm={() => deleteRow(row.id)}
-                              >
-                                <Button
-                                  type="text"
-                                  size="small"
-                                  shape="circle"
-                                  danger
-                                  aria-label={`Delete ${rowLabel} from the planner`}
-                                  icon={<Trash size={16} />}
-                                />
-                              </Popconfirm>
-                            </div>
-                          </td>
-                        </tr>
-                      </Fragment>
+                      <PlannerTableRow
+                        key={row.id}
+                        row={row}
+                        rowLabel={plannerRowLabel(row)}
+                        monthDividerLabel={monthDividerLabel}
+                        created={findCreated(row)}
+                        members={members}
+                        guests={guests}
+                        patchRow={patchRow}
+                        updateAssignee={updateAssignee}
+                        onCreateMeeting={() => setCreateDialog({ row, open: true })}
+                        onDelete={() => deleteRow(row.id)}
+                      />
                     );
                   })}
                 </tbody>
@@ -486,6 +558,7 @@ export function PlannerTab() {
         open={createDialog.open}
         row={createDialog.row}
         members={members}
+        guests={guests}
         onClose={() => setCreateDialog((prev) => ({ ...prev, open: false }))}
         onClosed={() => setCreateDialog({ row: null, open: false })}
       />

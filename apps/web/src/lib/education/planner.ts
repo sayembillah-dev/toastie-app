@@ -1,9 +1,13 @@
 import type { Member } from '@/lib/education/members';
 
-/** A slot on the agenda is either filled by a club member or by an invited
- * guest (someone not in the roster). The two shapes let the UI show the right
- * badge and, later, let the back-end resolve member IDs vs. free-text names. */
-export type Assignee = { kind: 'member'; memberId: string } | { kind: 'guest'; name: string };
+/** A slot on the agenda is either filled by a club member or by a guest.
+ * A guest is either someone already in the club's Guests roster (`guestId`
+ * set — carries through to the meeting's own roles/speakers) or a one-off
+ * name typed on the spot (`guestId` absent — nothing to link to, so it stays
+ * planner-only, same as before guests had a roster). */
+export type Assignee =
+  | { kind: 'member'; memberId: string }
+  | { kind: 'guest'; name: string; guestId?: string };
 
 /** The row fields that hold a person. Named as a type so the grid and the
  * create dialog can both drive their column lists off one list of keys. */
@@ -118,7 +122,9 @@ function isAssignee(value: unknown): value is Assignee {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
   if (v.kind === 'member') return typeof v.memberId === 'string';
-  if (v.kind === 'guest') return typeof v.name === 'string';
+  if (v.kind === 'guest') {
+    return typeof v.name === 'string' && (v.guestId === undefined || typeof v.guestId === 'string');
+  }
   return false;
 }
 

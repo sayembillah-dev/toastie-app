@@ -65,6 +65,10 @@ import type {
   PublicMeeting,
   UpdateMeetingInput,
 } from '@/lib/meetings/meetings';
+import type {
+  PreparedSpeakerWire,
+  UpdatePreparedSpeakerInput,
+} from '@/lib/meetings/prepared-speakers';
 import type { RoleAssignment } from '@/lib/meetings/role-assignments';
 import type {
   CreateTableTopicQuestionInput,
@@ -146,6 +150,7 @@ export const toastlyApi = createApi({
     'PlannerIdea',
     'Checklist',
     'MeetingRoleAssignment',
+    'PreparedSpeaker',
     'TableTopicQuestion',
     'MeetingAttendance',
     'MeetingGuestAttendance',
@@ -405,7 +410,20 @@ export const toastlyApi = createApi({
           patch.undo();
         }
       },
-      invalidatesTags: (_row, _error, { rowId }) => [{ type: 'PlannerRow', id: rowId }],
+      /* A row linked to a meeting can carry number/date/theme/assignee edits
+       * onto that meeting server-side (see `syncMeetingFromPlannerRow`) — bust
+       * its caches too so the Meeting page, Roles tab and Prepared Speakers
+       * tab pick the mirrored change up without a manual refresh. */
+      invalidatesTags: (row, _error, { rowId }) => [
+        { type: 'PlannerRow', id: rowId },
+        ...(row?.meetingId
+          ? ([
+              { type: 'Meeting', id: row.meetingId },
+              { type: 'MeetingRoleAssignment', id: row.meetingId },
+              { type: 'PreparedSpeaker', id: row.meetingId },
+            ] as const)
+          : []),
+      ],
     }),
 
     deletePlannerRow: build.mutation<null, { rowId: string }>({
@@ -469,9 +487,13 @@ export const toastlyApi = createApi({
         method: 'PATCH',
         body,
       }),
+      /* Number/date/theme edits here can carry onto a linked planner row
+       * server-side (see `syncPlannerFieldsFromMeeting`) — bust the grid's
+       * cache too so it doesn't show a stale value until next visit. */
       invalidatesTags: (_meeting, _error, { meetingId }) => [
         { type: 'Meeting', id: meetingId },
         { type: 'Meeting', id: 'LIST' },
+        { type: 'PlannerRow', id: 'LIST' },
         { type: 'ActivityLog', id: 'LIST' },
       ],
     }),
@@ -1108,22 +1130,83 @@ export const toastlyApi = createApi({
 
     setMeetingRole: build.mutation<
       RoleAssignment,
-      { meetingId: string; roleKey: string; membershipId: string | null }
+      { meetingId: string; roleKey: string; membershipId: string | null; guestId?: string | null }
     >({
-      query: ({ meetingId, roleKey, membershipId }) => ({
+      query: ({ meetingId, roleKey, membershipId, guestId }) => ({
         url: `/meetings/${meetingId}/roles/${roleKey}`,
         method: 'PUT',
-        body: { membershipId },
+        body: { membershipId, guestId },
       }),
       onQueryStarted: async (
-        { meetingId, roleKey, membershipId },
+        { meetingId, roleKey, membershipId, guestId },
         { dispatch, queryFulfilled },
       ) => {
+        const resolvedGuestId = guestId ?? null;
         const patch = dispatch(
           toastlyApi.util.updateQueryData('getMeetingRoles', meetingId, (draft) => {
             const entry = draft.find((row) => row.roleKey === roleKey);
-            if (entry) entry.membershipId = membershipId;
-            else draft.push({ roleKey, membershipId });
+            if (entry) {
+              entry.membershipId = membershipId;
+              entry.guestId = resolvedGuestId;
+            } else {
+              draft.push({ roleKey, membershipId, guestId: resolvedGuestId });
+            }
+          }),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+      /* A role held by a guest is not carried onto the planner from this
+       * endpoint alone — bust the grid's cache too so a linked row's mirrored
+       * columns (see `syncPlannerRolesFromMeeting`) show up without a manual
+       * refresh. */
+      invalidatesTags: (_row, _error, { meetingId }) => [
+        { type: 'MeetingRoleAssignment', id: meetingId },
+        { type: 'PlannerRow', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    /* Prepared Speakers — ordered 1–3, seeded/mirrored from the planner's
+     * Speaker 1–3 columns server-side (see `planner-mirror.ts`). */
+    getPreparedSpeakers: build.query<PreparedSpeakerWire[], string>({
+      query: (meetingId) => ({ url: `/meetings/${meetingId}/prepared-speakers`, method: 'GET' }),
+      providesTags: (_rows, _error, meetingId) => [{ type: 'PreparedSpeaker', id: meetingId }],
+    }),
+
+    createPreparedSpeaker: build.mutation<PreparedSpeakerWire, { meetingId: string }>({
+      query: ({ meetingId }) => ({
+        url: `/meetings/${meetingId}/prepared-speakers`,
+        method: 'POST',
+        body: {},
+      }),
+      invalidatesTags: (_row, _error, { meetingId }) => [
+        { type: 'PreparedSpeaker', id: meetingId },
+        { type: 'PlannerRow', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    updatePreparedSpeaker: build.mutation<
+      PreparedSpeakerWire,
+      { meetingId: string; speakerId: string } & UpdatePreparedSpeakerInput
+    >({
+      query: ({ meetingId, speakerId, ...body }) => ({
+        url: `/meetings/${meetingId}/prepared-speakers/${speakerId}`,
+        method: 'PATCH',
+        body,
+      }),
+      onQueryStarted: async (
+        { meetingId, speakerId, ...changes },
+        { dispatch, queryFulfilled },
+      ) => {
+        const patch = dispatch(
+          toastlyApi.util.updateQueryData('getPreparedSpeakers', meetingId, (draft) => {
+            const entry = draft.find((row) => row.id === speakerId);
+            if (entry) Object.assign(entry, changes);
           }),
         );
         try {
@@ -1133,7 +1216,32 @@ export const toastlyApi = createApi({
         }
       },
       invalidatesTags: (_row, _error, { meetingId }) => [
-        { type: 'MeetingRoleAssignment', id: meetingId },
+        { type: 'PreparedSpeaker', id: meetingId },
+        { type: 'PlannerRow', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    deletePreparedSpeaker: build.mutation<null, { meetingId: string; speakerId: string }>({
+      query: ({ meetingId, speakerId }) => ({
+        url: `/meetings/${meetingId}/prepared-speakers/${speakerId}`,
+        method: 'DELETE',
+      }),
+      onQueryStarted: async ({ meetingId, speakerId }, { dispatch, queryFulfilled }) => {
+        const patch = dispatch(
+          toastlyApi.util.updateQueryData('getPreparedSpeakers', meetingId, (draft) =>
+            draft.filter((entry) => entry.id !== speakerId),
+          ),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+      invalidatesTags: (_row, _error, { meetingId }) => [
+        { type: 'PreparedSpeaker', id: meetingId },
+        { type: 'PlannerRow', id: 'LIST' },
         { type: 'ActivityLog', id: 'LIST' },
       ],
     }),
@@ -2160,6 +2268,10 @@ export const {
   useDeleteChecklistItemMutation,
   useGetMeetingRolesQuery,
   useSetMeetingRoleMutation,
+  useGetPreparedSpeakersQuery,
+  useCreatePreparedSpeakerMutation,
+  useUpdatePreparedSpeakerMutation,
+  useDeletePreparedSpeakerMutation,
   useGetTableTopicsQuery,
   useCreateTableTopicQuestionMutation,
   useUpdateTableTopicQuestionMutation,

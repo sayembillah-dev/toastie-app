@@ -16,17 +16,12 @@ import { AssigneeSelect } from '@/components/education/assignee-select';
 import type { Member } from '@/lib/education/members';
 import type { Assignee, AssigneeField, PlannerRow } from '@/lib/education/planner';
 import { toAssigneesJson } from '@/lib/education/planner';
-import { buildMeetingSeed, countGuestAssignees } from '@/lib/meetings/from-planner';
+import { countUnlinkedGuestAssignees } from '@/lib/meetings/from-planner';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { DEFAULT_START_TIME } from '@/lib/meetings/meetings';
-import {
-  useCreateMeetingMutation,
-  useSetMeetingRoleMutation,
-  useUpdatePlannerRowMutation,
-} from '@/store/api';
+import type { Guest } from '@/lib/people/guests';
+import { useCreateMeetingMutation, useUpdatePlannerRowMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
-import { useAppDispatch } from '@/store/hooks';
-import { draftSeeded } from '@/store/meeting-draft-slice';
 
 interface PlannerCreateMeetingModalProps {
   open: boolean;
@@ -34,6 +29,7 @@ interface PlannerCreateMeetingModalProps {
    * `onClosed` so the body stays rendered through the exit animation. */
   row: PlannerRow | null;
   members: Member[];
+  guests: Guest[];
   onClose: () => void;
   /** Fired once the dialog has finished animating away. */
   onClosed: () => void;
@@ -134,6 +130,7 @@ export function PlannerCreateMeetingModal({
   open,
   row,
   members,
+  guests,
   onClose,
   onClosed,
 }: PlannerCreateMeetingModalProps) {
@@ -143,9 +140,7 @@ export function PlannerCreateMeetingModal({
   const [edits, setEdits] = useState<PlannerRow | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [createMeeting, { isLoading: isSubmitting }] = useCreateMeetingMutation();
-  const [setMeetingRole] = useSetMeetingRoleMutation();
   const [updatePlannerRow] = useUpdatePlannerRowMutation();
-  const dispatch = useAppDispatch();
   const { message } = App.useApp();
 
   const form = edits ?? row;
@@ -154,7 +149,7 @@ export function PlannerCreateMeetingModal({
   const theme = form?.theme.trim() ?? '';
   const canSubmit = form !== null && form.meetingNumber !== null && date !== '' && theme !== '';
 
-  const guestCount = form ? countGuestAssignees(form) : 0;
+  const guestCount = form ? countUnlinkedGuestAssignees(form) : 0;
   const unassignedCount = form
     ? ALL_ROLE_FIELDS.filter((role) => (form[role.field] as Assignee | null) === null).length
     : 0;
@@ -192,18 +187,12 @@ export function PlannerCreateMeetingModal({
 
     /* Everything past this point is best-effort follow-up — the meeting
      * itself already exists, so a hiccup here surfaces as a toast rather
-     * than blocking the dialog on a meeting that was, in fact, created. */
+     * than blocking the dialog on a meeting that was, in fact, created.
+     * Linking the row (with its current assignees) carries the roles and
+     * prepared speakers onto the meeting server-side in one shot — see
+     * `syncMeetingFromPlannerRow` — no separate role/speaker calls needed
+     * here. */
     try {
-      const seed = buildMeetingSeed(form);
-      await Promise.all(
-        Object.entries(seed.roles).map(([roleKey, memberId]) =>
-          setMeetingRole({ meetingId: created.id, roleKey, membershipId: memberId }).unwrap(),
-        ),
-      );
-      /* Speaker pairs still seed into the client-only draft — Prepared
-       * Speakers has no backend of its own yet. */
-      dispatch(draftSeeded(created.id, seed));
-
       await updatePlannerRow({
         rowId: form.id,
         meetingId: created.id,
@@ -329,6 +318,7 @@ export function PlannerCreateMeetingModal({
                               patch({ [role.field]: next } as Partial<PlannerRow>)
                             }
                             members={members}
+                            guests={guests}
                             placeholder="Unassigned"
                             ariaLabel={role.label}
                           />
@@ -348,7 +338,7 @@ export function PlannerCreateMeetingModal({
                     ? `${unassignedCount} ${unassignedCount === 1 ? 'slot is' : 'slots are'} still unassigned — you can fill them in on the meeting page. `
                     : null}
                   {guestCount > 0
-                    ? `${guestCount} ${guestCount === 1 ? 'slot is' : 'slots are'} held by a guest; guests stay on the planner and are not carried into the meeting's roles.`
+                    ? `${guestCount} ${guestCount === 1 ? 'slot is' : 'slots are'} held by a guest who isn't in your Guests list yet; add them there first if you want the pick to carry onto the meeting.`
                     : null}
                 </span>
               </div>

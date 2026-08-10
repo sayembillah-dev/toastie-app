@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import type { Prisma } from '@prisma/client';
 import { can, type PermissionSubject } from '@toastly/access';
 
+import { syncMeetingFromPlannerRow } from '@/meetings/planner-mirror';
 import { PrismaService } from '@/prisma';
 
 import type { UpdatePlannerRowDto } from './dto/planner-rows.dto';
@@ -58,7 +59,25 @@ export class PlannerRowsService {
     if (dto.assignees !== undefined) data.assignees = dto.assignees as Prisma.InputJsonValue;
     if (dto.meetingId !== undefined) data.meetingId = dto.meetingId;
 
-    const row = await this.prisma.plannerRow.update({ where: { id: rowId }, data });
+    const row = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.plannerRow.update({ where: { id: rowId }, data });
+      /* Only carry across what this call actually changed — number/date/theme
+       * are scalar overwrites, so touching one that wasn't sent would clobber
+       * an edit made from the meeting side moments earlier. `assignees`
+       * always mirrors in full: the client sends the whole 13-slot blob on
+       * every write, so it's always the authoritative current state, not a
+       * partial patch. */
+      if (updated.meetingId) {
+        await syncMeetingFromPlannerRow(tx, existing.clubId, {
+          meetingId: updated.meetingId,
+          meetingNumber: dto.meetingNumber !== undefined ? updated.meetingNumber : null,
+          dateTime: dto.dateTime !== undefined ? updated.dateTime : null,
+          theme: dto.theme !== undefined ? updated.theme : undefined,
+          assignees: updated.assignees,
+        });
+      }
+      return updated;
+    });
     return toPlannerRowWire(row);
   }
 

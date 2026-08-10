@@ -48,8 +48,12 @@ export interface CreateMeetingInput {
 }
 
 /** What the meeting page's Save as Draft / Publish buttons commit: the status
- * they set, plus the fields the working draft owns on the meeting record. */
+ * they set, plus the fields the working draft owns on the meeting record.
+ * `meetingNumber`/`dateTime` back the Overview tab's number/date editor —
+ * omitted, they're left untouched, same as every other field here. */
 export interface UpdateMeetingInput {
+  meetingNumber?: number;
+  dateTime?: string;
   status?: MeetingStatus;
   theme?: string;
   /** Sent whole. An empty `word` clears the stored block; omitting the key

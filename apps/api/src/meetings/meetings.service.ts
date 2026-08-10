@@ -12,6 +12,7 @@ import { can, type PermissionSubject } from '@toastly/access';
 import { PrismaService } from '@/prisma';
 
 import type { CreateMeetingDto, UpdateMeetingDto } from './dto/meetings.dto';
+import { syncPlannerFieldsFromMeeting } from './planner-mirror';
 import { type MeetingWire, toMeetingWire } from './serializers';
 
 /** Handles `/meetings` — the club's meeting roster. Every meeting is born
@@ -102,6 +103,8 @@ export class MeetingsService {
     }
 
     const data: Prisma.MeetingUpdateInput = {};
+    if (dto.meetingNumber !== undefined) data.meetingNumber = dto.meetingNumber;
+    if (dto.dateTime !== undefined) data.dateTime = new Date(dto.dateTime);
     if (dto.theme !== undefined) data.theme = dto.theme.trim();
     if (dto.word !== undefined) {
       const word = dto.word.word.trim();
@@ -126,8 +129,32 @@ export class MeetingsService {
       data.status = dto.status;
     }
 
-    const row = await this.prisma.meeting.update({ where: { id: meetingId }, data });
-    return toMeetingWire(row);
+    try {
+      const row = await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.meeting.update({ where: { id: meetingId }, data });
+        if (
+          dto.meetingNumber !== undefined ||
+          dto.dateTime !== undefined ||
+          dto.theme !== undefined
+        ) {
+          await syncPlannerFieldsFromMeeting(tx, existing.clubId, meetingId, {
+            meetingNumber: dto.meetingNumber,
+            dateTime: dto.dateTime !== undefined ? updated.dateTime : undefined,
+            theme: dto.theme !== undefined ? updated.theme : undefined,
+          });
+        }
+        return updated;
+      });
+      return toMeetingWire(row);
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException({
+          code: 'MEETING_NUMBER_TAKEN',
+          message: `Meeting ${dto.meetingNumber} already exists in this club`,
+        });
+      }
+      throw err;
+    }
   }
 
   private async load(meetingId: string) {

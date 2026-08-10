@@ -10,20 +10,41 @@ export interface WordOfTheDay {
 
 export type SpeakerStatus = 'requested' | 'confirmed' | 'delivered';
 
+/** Who holds a meeting role (see `draft.roles`) — a member resolves through
+ * the roster via `nameOf`; a guest carries its own pre-resolved `name`
+ * instead, the same split `DraftSpeaker` uses for a guest speaker/evaluator,
+ * since a guest has no roster lookup a plain id could drive. */
+export interface RoleHolder {
+  memberId?: string;
+  guestId?: string;
+  name?: string;
+}
+
+/** A read-mirror of the API-persisted `MeetingSpeaker` rows (see
+ * `lib/meetings/prepared-speakers.ts`) — populated by `speakersHydrated`,
+ * the same way `draft.roles` mirrors `MeetingRoleAssignment`. The Prepared
+ * Speakers tab itself writes straight through the API, not this slice;
+ * everything else that only *reads* the speaker lineup (Overview, the
+ * Agenda sheet) keeps reading here.
+ *
+ * `memberId`/`evaluatorId` are set only when a member holds the slot — a
+ * guest holds it instead via `guestId`/`evaluatorGuestId`, with the display
+ * name pre-resolved into `speakerName`/`evaluatorName` since a guest has no
+ * roster lookup a plain id could drive the way `nameOf(memberId)` does. */
 export interface DraftSpeaker {
   id: string;
   status: SpeakerStatus;
   memberId?: string;
+  guestId?: string;
+  speakerName?: string;
   duration?: number;
   title: string;
   evaluatorId?: string;
+  evaluatorGuestId?: string;
+  evaluatorName?: string;
   pathway?: Pathway;
   project?: string;
   notes?: string;
-  /** Un-saved edits since the last Save — controls the primary CTA state. */
-  dirty: boolean;
-  /** Accordion state — new cards open expanded so the form is ready to fill. */
-  expanded: boolean;
 }
 
 /**
@@ -34,8 +55,8 @@ export interface MeetingDraft {
   /** Overrides the seeded meeting theme once the Theme tab is filled in. */
   theme: string;
   word: WordOfTheDay;
-  /** Role key (see `roles.ts`) → member id. */
-  roles: Record<string, string | undefined>;
+  /** Role key (see `roles.ts`) → who holds it. */
+  roles: Record<string, RoleHolder | undefined>;
   speakers: DraftSpeaker[];
 }
 
