@@ -131,10 +131,24 @@ export class AttendanceService {
           update: { present: dto.present },
         });
       }
+      const meetingGuests = await tx.meetingGuestAttendance.findMany({
+        where: { clubId: meeting.clubId, meetingId: meeting.id },
+        select: { guestId: true, present: true },
+      });
       await tx.meetingGuestAttendance.updateMany({
         where: { clubId: meeting.clubId, meetingId: meeting.id },
         data: { present: dto.present, updatedAt: new Date() },
       });
+      // Bulk toggle confirms/unconfirms attendance same as the per-guest
+      // path — each guest's profile visit log has to follow along here too.
+      for (const guest of meetingGuests) {
+        if (!guest.guestId || guest.present === dto.present) continue;
+        if (dto.present) {
+          await this.logGuestVisit(tx, meeting, guest.guestId);
+        } else {
+          await this.unlogGuestVisit(tx, meeting, guest.guestId);
+        }
+      }
       await this.activity.record(
         {
           clubId: meeting.clubId,
@@ -196,8 +210,8 @@ export class AttendanceService {
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         throw new ConflictException({
-          code: 'GUEST_ALREADY_CHECKED_IN',
-          message: `${prospect.firstName} ${prospect.lastName} is already checked in to this meeting`,
+          code: 'GUEST_ALREADY_ADDED',
+          message: `${prospect.firstName} ${prospect.lastName} is already on this meeting's guest list`,
         });
       }
       throw err;
@@ -210,45 +224,26 @@ export class AttendanceService {
     actorMembershipId: string | null,
   ): Promise<MeetingGuestAttendanceWire> {
     const row = await this.prisma.$transaction(async (tx) => {
+      // Added, not yet confirmed — mirrors how a member row starts
+      // unchecked. The visit log only gets written once someone actually
+      // marks this guest present (see `updateGuest`), not just for
+      // appearing on the roster.
       const guest = await tx.meetingGuestAttendance.create({
         data: {
           clubId: meeting.clubId,
           meetingId: meeting.id,
           guestId: prospect.id,
           name: `${prospect.firstName} ${prospect.lastName}`.trim(),
-          present: true,
+          present: false,
         },
       });
-      // First time this guest is linked to this meeting — log the visit and
-      // roll it into their derived stats/stage the same way a manual visit
-      // log from the guest profile does.
-      const existingVisit = await tx.visitLog.findFirst({
-        where: {
-          clubId: meeting.clubId,
-          prospectId: prospect.id,
-          meetingId: meeting.id,
-          origin: 'meeting',
-        },
-        select: { id: true },
-      });
-      if (!existingVisit) {
-        await tx.visitLog.create({
-          data: {
-            clubId: meeting.clubId,
-            prospectId: prospect.id,
-            meetingId: meeting.id,
-            origin: 'meeting',
-          },
-        });
-        await syncGuestVisitStats(tx, prospect.id);
-      }
       await this.activity.record(
         {
           clubId: meeting.clubId,
           actorMembershipId,
           category: 'meeting',
-          action: 'checked in a guest',
-          summary: `Checked in guest "${guest.name}" for Meeting ${meeting.meetingNumber}`,
+          action: 'added a guest',
+          summary: `Added guest "${guest.name}" to Meeting ${meeting.meetingNumber}`,
           entityType: 'meetingGuestAttendance',
           entityId: guest.id,
         },
@@ -286,6 +281,18 @@ export class AttendanceService {
       });
       // Only a check-in/out toggle is audit-worthy — a name correction isn't.
       if (dto.present !== undefined && dto.present !== existing.present) {
+        // Confirming attendance is what lands on the guest's profile — mark
+        // present logs the visit and rolls it into their derived stats/stage
+        // the same way a manual visit log from the guest profile does;
+        // marking absent again unwinds it so a mis-tap doesn't leave a
+        // phantom visit behind.
+        if (existing.guestId) {
+          if (dto.present) {
+            await this.logGuestVisit(tx, meeting, existing.guestId);
+          } else {
+            await this.unlogGuestVisit(tx, meeting, existing.guestId);
+          }
+        }
         await this.activity.record(
           {
             clubId: meeting.clubId,
@@ -321,22 +328,11 @@ export class AttendanceService {
 
     await this.prisma.$transaction(async (tx) => {
       await tx.meetingGuestAttendance.delete({ where: { id: guestId } });
-      // Unwind the auto-logged visit this check-in created, so removing a
-      // mis-added guest doesn't leave a phantom meeting on their record.
+      // Unwind the auto-logged visit a confirmed check-in created, so
+      // removing a mis-added guest doesn't leave a phantom meeting on their
+      // record. A no-op if they were never actually marked present.
       if (existing.guestId) {
-        const autoLog = await tx.visitLog.findFirst({
-          where: {
-            clubId: meeting.clubId,
-            prospectId: existing.guestId,
-            meetingId: meeting.id,
-            origin: 'meeting',
-          },
-          select: { id: true },
-        });
-        if (autoLog) {
-          await tx.visitLog.delete({ where: { id: autoLog.id } });
-          await syncGuestVisitStats(tx, existing.guestId);
-        }
+        await this.unlogGuestVisit(tx, meeting, existing.guestId);
       }
       await this.activity.record(
         {
@@ -352,6 +348,43 @@ export class AttendanceService {
       );
     });
     return null;
+  }
+
+  /** Confirms this guest visited: creates the `origin: 'meeting'` visit log
+   * for this meeting if one doesn't already exist, and re-syncs the
+   * prospect's derived stats/stage. Idempotent — a guest can be toggled
+   * present more than once without double-logging. */
+  private async logGuestVisit(
+    tx: Prisma.TransactionClient,
+    meeting: { id: string; clubId: string },
+    prospectId: string,
+  ): Promise<void> {
+    const existingVisit = await tx.visitLog.findFirst({
+      where: { clubId: meeting.clubId, prospectId, meetingId: meeting.id, origin: 'meeting' },
+      select: { id: true },
+    });
+    if (existingVisit) return;
+    await tx.visitLog.create({
+      data: { clubId: meeting.clubId, prospectId, meetingId: meeting.id, origin: 'meeting' },
+    });
+    await syncGuestVisitStats(tx, prospectId);
+  }
+
+  /** Undoes `logGuestVisit` — removes this meeting's auto-log (if any) and
+   * re-syncs stats. A no-op if the guest was never actually confirmed
+   * present, so it's safe to call unconditionally on remove/un-check. */
+  private async unlogGuestVisit(
+    tx: Prisma.TransactionClient,
+    meeting: { id: string; clubId: string },
+    prospectId: string,
+  ): Promise<void> {
+    const autoLog = await tx.visitLog.findFirst({
+      where: { clubId: meeting.clubId, prospectId, meetingId: meeting.id, origin: 'meeting' },
+      select: { id: true },
+    });
+    if (!autoLog) return;
+    await tx.visitLog.delete({ where: { id: autoLog.id } });
+    await syncGuestVisitStats(tx, prospectId);
   }
 
   private async requireMeeting(meetingId: string) {
