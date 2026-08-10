@@ -12,6 +12,7 @@ import {
   subscribeToRoleState,
   updateRoleState,
 } from '@/lib/meetings/role-state';
+import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
 import { useGetMembersQuery } from '@/store/api';
 
 function totalOf(speaker: AhSpeakerCount, categories: readonly string[]): number {
@@ -455,6 +456,7 @@ interface AhCounterViewProps {
  * State is persisted per meeting so both surfaces stay in sync. */
 export function AhCounterView({ meetingId, showShare }: AhCounterViewProps) {
   const { data: members } = useGetMembersQuery();
+  const { activeKey, onChange } = usePersistentTab('ahc', 'speakers');
 
   const subscribe = useCallback(
     (notify: () => void) => subscribeToRoleState('ah-counter', meetingId, notify),
@@ -562,7 +564,8 @@ export function AhCounterView({ meetingId, showShare }: AhCounterViewProps) {
   return (
     <section className="mx-auto max-w-4xl">
       <Tabs
-        defaultActiveKey="speakers"
+        activeKey={activeKey}
+        onChange={onChange}
         size="middle"
         items={[
           {

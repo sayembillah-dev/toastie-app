@@ -23,6 +23,7 @@ import {
   type TimerSpeakerType,
   updateRoleState,
 } from '@/lib/meetings/role-state';
+import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
 import { useGetMembersQuery } from '@/store/api';
 
 interface Bracket {
@@ -598,6 +599,7 @@ interface TimerViewProps {
  * State is persisted per meeting so both surfaces stay in sync. */
 export function TimerView({ meetingId, showShare }: TimerViewProps) {
   const { data: members } = useGetMembersQuery();
+  const { activeKey, onChange } = usePersistentTab('timer-view', 'speaker');
 
   const subscribe = useCallback(
     (notify: () => void) => subscribeToRoleState('timer', meetingId, notify),
@@ -759,7 +761,8 @@ export function TimerView({ meetingId, showShare }: TimerViewProps) {
   return (
     <section className="mx-auto max-w-4xl">
       <Tabs
-        defaultActiveKey="speaker"
+        activeKey={activeKey}
+        onChange={onChange}
         size="middle"
         items={[
           {

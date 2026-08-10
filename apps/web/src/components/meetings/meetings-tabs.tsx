@@ -15,6 +15,7 @@ import { NewMeetingModal } from '@/components/meetings/new-meeting-modal';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { nextMeetingNumber, partitionMeetings } from '@/lib/meetings/meetings';
 import { useCan } from '@/lib/permissions/use-can';
+import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
 import { useGetMeetingsQuery } from '@/store/api';
 
 /* `useSyncExternalStore` compares snapshots with `Object.is` — a fresh
@@ -166,6 +167,7 @@ export function MeetingsTabs() {
   const canMutate = can('update', 'meeting');
   const [isCreateOpen, setCreateOpen] = useState(false);
   const router = useRouter();
+  const { activeKey, onChange } = usePersistentTab('tab', 'current');
 
   const partitioned = useMemo(() => {
     if (now === null || !meetings) {
@@ -219,7 +221,8 @@ export function MeetingsTabs() {
       </header>
 
       <Tabs
-        defaultActiveKey="current"
+        activeKey={activeKey}
+        onChange={onChange}
         size="middle"
         items={[
           {

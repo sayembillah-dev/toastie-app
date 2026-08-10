@@ -7,11 +7,13 @@ import { BudgetTab } from '@/components/finance/budget-tab';
 import { DuesTab } from '@/components/finance/dues-tab';
 import { OverviewTab } from '@/components/finance/overview-tab';
 import { TransactionsTab } from '@/components/finance/transactions-tab';
+import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
 
 /** Tabs live on the Finance page so every treasurer surface shares the same
  * header, breadcrumb and content padding — same shell as Inventory, Library
  * and People. */
 export function FinanceTabs() {
+  const { activeKey, onChange } = usePersistentTab('tab', 'overview');
   return (
     <div className="mx-auto max-w-7xl">
       <header className="mb-4">
@@ -22,7 +24,8 @@ export function FinanceTabs() {
       </header>
 
       <Tabs
-        defaultActiveKey="overview"
+        activeKey={activeKey}
+        onChange={onChange}
         size="middle"
         items={[
           {

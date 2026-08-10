@@ -6,11 +6,13 @@ import { Tabs } from 'antd';
 import { InvitePanel } from '@/components/club-admin/invite-panel';
 import { MembersDirectory } from '@/components/education/directory';
 import { GuestsDirectory } from '@/components/people/guests-directory';
+import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
 
 /** People hub — two tabs sharing the same header. Guests lists visitors so we
  * can follow up; Members reuses the education directory grid so the roster
  * stays a single source of truth. */
 export function PeopleTabs() {
+  const { activeKey, onChange } = usePersistentTab('tab', 'guests');
   return (
     <div className="mx-auto max-w-7xl">
       <header className="mb-4">
@@ -22,7 +24,8 @@ export function PeopleTabs() {
       </header>
 
       <Tabs
-        defaultActiveKey="guests"
+        activeKey={activeKey}
+        onChange={onChange}
         size="middle"
         items={[
           {

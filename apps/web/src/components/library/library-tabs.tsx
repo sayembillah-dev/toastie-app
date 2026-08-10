@@ -6,10 +6,12 @@ import { Tabs } from 'antd';
 import { AssetsTab } from '@/components/library/assets-tab';
 import { DocumentsTab } from '@/components/library/documents-tab';
 import { PlannerTab } from '@/components/library/planner-tab';
+import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
 
 /** Tabs live on the Library page so all sections share the same header,
  * breadcrumb and content padding. */
 export function LibraryTabs() {
+  const { activeKey, onChange } = usePersistentTab('tab', 'planner');
   return (
     <div className="mx-auto max-w-7xl">
       <header className="mb-4">
@@ -20,7 +22,8 @@ export function LibraryTabs() {
       </header>
 
       <Tabs
-        defaultActiveKey="planner"
+        activeKey={activeKey}
+        onChange={onChange}
         size="middle"
         items={[
           {

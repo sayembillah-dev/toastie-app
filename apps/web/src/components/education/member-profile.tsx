@@ -14,6 +14,7 @@ import { PageBreadcrumb } from '@/components/page-breadcrumb';
 import { AccessGate } from '@/components/permissions/access-gate';
 import type { Member } from '@/lib/education/members';
 import { formatRoles, getInitials } from '@/lib/education/members';
+import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
 import { useGetMemberQuery } from '@/store/api';
 import { getApiErrorMessage, isNotFoundError } from '@/store/api-error';
 
@@ -93,6 +94,7 @@ function ProfileHeader({ member, onStartPathway }: { member: Member; onStartPath
 
 function ProfileContent({ member }: { member: Member }) {
   const [modalOpen, setModalOpen] = useState(false);
+  const { activeKey, onChange } = usePersistentTab('tab', 'progress');
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
@@ -111,7 +113,8 @@ function ProfileContent({ member }: { member: Member }) {
       <ProfileHeader member={member} onStartPathway={() => setModalOpen(true)} />
 
       <Tabs
-        defaultActiveKey="progress"
+        activeKey={activeKey}
+        onChange={onChange}
         size="middle"
         items={[
           {

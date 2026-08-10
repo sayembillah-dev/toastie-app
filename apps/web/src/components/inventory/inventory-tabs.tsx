@@ -5,10 +5,12 @@ import { Tabs } from 'antd';
 
 import { InventoryTab } from '@/components/inventory/inventory-tab';
 import { MeetingChecklistTab } from '@/components/inventory/meeting-checklist-tab';
+import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
 
 /** Tabs live on the Inventory page so both sections share the same header,
  * breadcrumb and content padding. */
 export function InventoryTabs() {
+  const { activeKey, onChange } = usePersistentTab('tab', 'meeting-checklist');
   return (
     <div className="mx-auto max-w-7xl">
       <header className="mb-4">
@@ -19,7 +21,8 @@ export function InventoryTabs() {
       </header>
 
       <Tabs
-        defaultActiveKey="meeting-checklist"
+        activeKey={activeKey}
+        onChange={onChange}
         size="middle"
         items={[
           {

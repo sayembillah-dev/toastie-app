@@ -6,6 +6,7 @@ import { Tabs } from 'antd';
 import { AgendaPreview } from '@/components/meetings/agenda-preview';
 import { AtAGlance } from '@/components/meetings/at-a-glance';
 import type { Meeting } from '@/lib/meetings/meetings';
+import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
 
 interface OverviewTabProps {
   meeting: Meeting;
@@ -15,9 +16,11 @@ interface OverviewTabProps {
  * glance" is the meeting's control panel, and "Agenda" is the printable A4
  * run-of-show. Both read the same meeting draft the other tabs write to. */
 export function OverviewTab({ meeting }: OverviewTabProps) {
+  const { activeKey, onChange } = usePersistentTab('overview', 'at-a-glance');
   return (
     <Tabs
-      defaultActiveKey="at-a-glance"
+      activeKey={activeKey}
+      onChange={onChange}
       size="middle"
       items={[
         {

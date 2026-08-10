@@ -28,6 +28,7 @@ import {
   subscribeToIdentity,
   writeIdentity,
 } from '@/lib/evaluation/storage';
+import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
 import { useGetPublicMeetingQuery } from '@/store/api';
 import { useAppSelector } from '@/store/hooks';
 import { selectMeetingDraft } from '@/store/meeting-draft-slice';
@@ -71,6 +72,8 @@ export function EvaluatePage() {
     ? `Meeting #${meeting.meetingNumber} · ${MEETING_DATE_FMT.format(new Date(meeting.dateTime))}`
     : '';
   const clubName = meeting?.clubName ?? '';
+
+  const { activeKey, onChange: onTabChange } = usePersistentTab('tab', 'audio');
 
   /* Identity is synced from localStorage via useSyncExternalStore so a same-tab
    * write (see `writeIdentity`) notifies subscribers without us needing to
@@ -231,7 +234,8 @@ export function EvaluatePage() {
             </p>
           </div>
           <Tabs
-            defaultActiveKey="audio"
+            activeKey={activeKey}
+            onChange={onTabChange}
             size="large"
             items={[
               {

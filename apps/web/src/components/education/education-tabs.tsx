@@ -6,11 +6,13 @@ import { Tabs } from 'antd';
 import { MembersDirectory } from '@/components/education/directory';
 import { PathwaysTab } from '@/components/education/pathways-tab';
 import { PlannerTab } from '@/components/education/planner-tab';
+import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
 
 /** Tabs live on the Education page so both sections share the same header,
  * breadcrumb and content padding. Each label pairs an icon with the text so
  * the active tab is legible on narrow screens where labels can wrap. */
 export function EducationTabs() {
+  const { activeKey, onChange } = usePersistentTab('tab', 'members');
   return (
     <div className="mx-auto max-w-7xl">
       <header className="mb-4">
@@ -21,7 +23,8 @@ export function EducationTabs() {
       </header>
 
       <Tabs
-        defaultActiveKey="members"
+        activeKey={activeKey}
+        onChange={onChange}
         size="middle"
         items={[
           {

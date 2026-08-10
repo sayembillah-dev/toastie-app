@@ -31,6 +31,7 @@ import { AccessGate } from '@/components/permissions/access-gate';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { toDraftSpeakers } from '@/lib/meetings/prepared-speakers';
 import { toRoleHolderMap } from '@/lib/meetings/role-assignments';
+import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
 import {
   useGetGuestsQuery,
   useGetMeetingQuery,
@@ -123,6 +124,7 @@ function DetailContent({ meeting }: { meeting: Meeting }) {
   const { data: roleRows } = useGetMeetingRolesQuery(meeting.id);
   const { data: speakerRows } = useGetPreparedSpeakersQuery(meeting.id);
   const { data: guests } = useGetGuestsQuery();
+  const { activeKey, onChange } = usePersistentTab('tab', 'overview');
 
   /* Seed the working draft from the saved record once the meeting lands.
    * Done here rather than inside the Theme tab because Overview's readiness
@@ -165,7 +167,8 @@ function DetailContent({ meeting }: { meeting: Meeting }) {
       {/* antd Tabs already scrolls horizontally with arrow controls when the
        * label row overflows — no extra wiring needed for the mobile case. */}
       <Tabs
-        defaultActiveKey="overview"
+        activeKey={activeKey}
+        onChange={onChange}
         size="middle"
         items={tabs.map(({ key, label, Icon, content }) => ({
           key,
