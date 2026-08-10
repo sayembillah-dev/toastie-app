@@ -246,6 +246,7 @@ jobs:
           API_URL: http://127.0.0.1:4000
           PORT: 4000
           CORS_ORIGINS: ${{ vars.CORS_ORIGINS }}
+          SITE_URL: ${{ secrets.SITE_URL }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
           JWT_ACCESS_TTL: ${{ vars.JWT_ACCESS_TTL || '15m' }}
@@ -260,6 +261,7 @@ jobs:
             echo "API_URL=$API_URL"
             echo "PORT=$PORT"
             echo "CORS_ORIGINS=$CORS_ORIGINS"
+            echo "SITE_URL=$SITE_URL"
             echo "DATABASE_URL=$DATABASE_URL"
             echo "JWT_ACCESS_SECRET=$JWT_ACCESS_SECRET"
             echo "JWT_ACCESS_TTL=$JWT_ACCESS_TTL"

@@ -7,13 +7,29 @@ import { StoreProvider } from '@/components/store-provider';
 import './globals.css';
 import './print.css';
 
+// Falls back to prod so a build without `SITE_URL` set still produces
+// absolute og:image/canonical URLs instead of broken relative ones.
+const SITE_URL = process.env.SITE_URL ?? 'https://toastie.niftyitsolution.com';
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: 'Toastie',
-  description: 'Next.js + NestJS monorepo with Tailwind CSS and Ant Design',
+  description: 'Club management for Toastmasters clubs — meetings, education, and members.',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
     title: 'Toastie',
+  },
+  openGraph: {
+    title: 'Toastie',
+    description: 'Club management for Toastmasters clubs — meetings, education, and members.',
+    siteName: 'Toastie',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'Toastie',
+    description: 'Club management for Toastmasters clubs — meetings, education, and members.',
   },
 };
 
