@@ -1,54 +1,67 @@
-/** A committee or officer action item assigned to one member by name — distinct
- * from `ChecklistItem`, which is meeting-scoped SAA prep rather than a
- * personal to-do. */
+import type { OfficerRole } from '@/lib/education/members';
+
+/** A club officer action item — optionally assigned to one or more
+ * officers, closed out by any one of them. Distinct from `ChecklistItem`,
+ * which is meeting-scoped SAA prep rather than a standalone to-do. */
 
 export const TASK_TITLE_MAX = 120;
+export const TASK_DESCRIPTION_MAX = 2000;
+export const TASK_NOTE_MAX = 1000;
+
+export const TASK_PRIORITIES = ['Low', 'Medium', 'High'] as const;
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];
+
+export interface TaskPerson {
+  id: string;
+  firstName: string;
+  lastName: string;
+  roles: OfficerRole[];
+}
+
+export interface TaskNote {
+  id: string;
+  body: string;
+  createdAt: string;
+  author: TaskPerson;
+}
 
 export interface Task {
   id: string;
-  /** Tenant boundary — copied from the assigned member's club. */
+  /** Tenant boundary — the club the task belongs to. */
   clubId: string;
-  memberId: string;
   title: string;
-  /** Free-text "who asked" — a role and a name, e.g. "SAA · Yara Ibrahim". */
-  assignedBy: string;
+  description?: string;
+  priority: TaskPriority;
   dueDate?: string;
   done: boolean;
+  doneBy?: TaskPerson;
+  doneAt?: string;
+  createdBy: TaskPerson;
+  assignees: TaskPerson[];
+  notes: TaskNote[];
   createdAt: string;
 }
 
-/** Body for `PATCH /tasks/:taskId`. Toggling done is the only edit the Me
- * page needs — assignment itself happens wherever the officer works. */
-export interface UpdateTaskInput {
-  done: boolean;
+/** Body for `POST /tasks`. */
+export interface CreateTaskInput {
+  title: string;
+  description?: string;
+  priority?: TaskPriority;
+  assigneeMembershipIds: string[];
 }
 
-export const SEED_TASKS: Omit<Task, 'clubId'>[] = [
-  {
-    id: 'task-m-01-1',
-    memberId: 'm-01',
-    title: "Submit President's note for the August newsletter",
-    assignedBy: 'VPPR · Daniel Ortiz',
-    dueDate: '2026-08-10',
-    done: false,
-    createdAt: '2026-08-01T09:00:00.000Z',
-  },
-  {
-    id: 'task-m-01-2',
-    memberId: 'm-01',
-    title: 'Confirm judges for the Humorous Speech contest',
-    assignedBy: 'SAA · Yara Ibrahim',
-    dueDate: '2026-08-15',
-    done: false,
-    createdAt: '2026-08-02T09:00:00.000Z',
-  },
-  {
-    id: 'task-m-01-3',
-    memberId: 'm-01',
-    title: 'Review and sign off the Q3 budget',
-    assignedBy: 'Treasurer · Nathan Brooks',
-    dueDate: '2026-08-07',
-    done: true,
-    createdAt: '2026-07-29T09:00:00.000Z',
-  },
-];
+/** Body for `PATCH /tasks/:taskId`. Every field optional — the server
+ * decides what the caller is allowed to touch (see `tasks.service.ts` on
+ * the API side): editing title/description/priority/assignees is the
+ * creator's call, toggling `done` can also come from any assignee. */
+export interface UpdateTaskInput {
+  title?: string;
+  description?: string;
+  priority?: TaskPriority;
+  assigneeMembershipIds?: string[];
+  done?: boolean;
+}
+
+export interface CreateTaskNoteInput {
+  body: string;
+}

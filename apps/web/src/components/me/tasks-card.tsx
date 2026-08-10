@@ -91,7 +91,7 @@ export function TasksCard({ memberId }: { memberId: string }) {
                     {task.title}
                   </span>
                   <span className="mt-0.5 block text-[11px] text-ink-muted">
-                    {task.assignedBy}
+                    {task.createdBy.firstName} {task.createdBy.lastName}
                     {task.dueDate ? ` · Due ${formatDueDate(task.dueDate)}` : ''}
                   </span>
                 </span>

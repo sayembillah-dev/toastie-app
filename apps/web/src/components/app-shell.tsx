@@ -7,6 +7,7 @@ import {
   Bell,
   BookOpen,
   CaretRight,
+  CheckSquare,
   ClipboardText,
   ClockCounterClockwise,
   Gear,
@@ -114,6 +115,12 @@ const primaryNav: NavEntry[] = [
     title: 'Inventory & checklist',
     Icon: ClipboardText,
     access: { resource: 'inventory', action: 'read' },
+  },
+  {
+    href: '/tasks',
+    title: 'Tasks',
+    Icon: CheckSquare,
+    access: { resource: 'task', action: 'read' },
   },
   {
     href: '/finance',

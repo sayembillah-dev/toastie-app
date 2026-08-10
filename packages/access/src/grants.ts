@@ -50,6 +50,9 @@ const CLUB_BASE_READ: Grant[] = [
   { resource: 'budget', action: 'read', scope: 'club' },
   { resource: 'dues', action: 'read', scope: 'club' },
   { resource: 'activityLog', action: 'read', scope: 'club' },
+  // Every club member sees the full Tasks page (mine + everyone's) — only
+  // creating one is restricted to officers, via `OFFICER_TASK_ACCESS` below.
+  { resource: 'task', action: 'read', scope: 'club' },
 ];
 
 const OWN_TASK_ACCESS: Grant[] = [
@@ -60,12 +63,23 @@ const OWN_TASK_ACCESS: Grant[] = [
   { resource: 'speechRequest', action: 'create', scope: 'own' },
 ];
 
+/** Any club officer can open the Tasks page and create a task; editing/
+ * deleting one they created is `own` scope (the service checks
+ * `createdByMembershipId` against the caller), same trick `OWN_TASK_ACCESS`
+ * uses for an assignee completing their own task. VPEducation/ClubAdmin get
+ * the wider `rw('task')` below instead, so they can moderate any task. */
+const OFFICER_TASK_ACCESS: Grant[] = [
+  { resource: 'task', action: 'create', scope: 'club' },
+  { resource: 'task', action: 'delete', scope: 'own' },
+];
+
 const GUEST_ROLE: Grant[] = [{ resource: 'club', action: 'read', scope: 'club' }];
 
 const MEMBER_ROLE: Grant[] = [...CLUB_BASE_READ, ...OWN_TASK_ACCESS];
 
 const SERGEANT_AT_ARMS_ROLE: Grant[] = [
   ...MEMBER_ROLE,
+  ...OFFICER_TASK_ACCESS,
   ...rw('checklist'),
   ...rw('inventory'),
   ...rw('attendance'),
@@ -73,6 +87,7 @@ const SERGEANT_AT_ARMS_ROLE: Grant[] = [
 
 const PRESIDENT_ROLE: Grant[] = [
   ...MEMBER_ROLE,
+  ...OFFICER_TASK_ACCESS,
   ...rw('meeting'),
   ...rw('meetingRole'),
   ...rw('tableTopic'),
@@ -84,6 +99,7 @@ const PRESIDENT_ROLE: Grant[] = [
 
 const TREASURER_ROLE: Grant[] = [
   ...MEMBER_ROLE,
+  ...OFFICER_TASK_ACCESS,
   ...rw('transaction'),
   ...rw('budget'),
   ...rw('dues'),
@@ -91,12 +107,13 @@ const TREASURER_ROLE: Grant[] = [
 
 const VP_MEMBERSHIP_ROLE: Grant[] = [
   ...MEMBER_ROLE,
+  ...OFFICER_TASK_ACCESS,
   ...rw('guest'),
   ...rw('guestLog'),
   ...cr('invite'),
 ];
 
-const VP_PR_ROLE: Grant[] = [...MEMBER_ROLE, ...rw('library')];
+const VP_PR_ROLE: Grant[] = [...MEMBER_ROLE, ...OFFICER_TASK_ACCESS, ...rw('library')];
 
 const VP_EDUCATION_ROLE: Grant[] = [
   ...MEMBER_ROLE,
@@ -109,10 +126,16 @@ const VP_EDUCATION_ROLE: Grant[] = [
   ...rw('task'),
 ];
 
-const IPP_ROLE: Grant[] = [...MEMBER_ROLE, ...r('report'), ...r('activityLog')];
+const IPP_ROLE: Grant[] = [
+  ...MEMBER_ROLE,
+  ...OFFICER_TASK_ACCESS,
+  ...r('report'),
+  ...r('activityLog'),
+];
 
 const SECRETARY_ROLE: Grant[] = [
   ...MEMBER_ROLE,
+  ...OFFICER_TASK_ACCESS,
   ...rw('meeting'),
   ...rw('meetingRole'),
   ...rw('attendance'),

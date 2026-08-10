@@ -117,10 +117,29 @@ describe('can — multi-assignment union', () => {
 });
 
 describe('can — own scope', () => {
-  it("a Member can read their own tasks and cannot read another member's", () => {
+  it("a Member can read every task in their club (the Tasks page shows everyone's)", () => {
     const s = subject([clubAssignment({ membershipId: 'm-8', roles: ['Member'] })]);
     expect(can(s, 'read', 'task', { clubId: 'club-a', ownerMembershipId: 'm-8' })).toBe(true);
-    expect(can(s, 'read', 'task', { clubId: 'club-a', ownerMembershipId: 'm-2' })).toBe(false);
+    expect(can(s, 'read', 'task', { clubId: 'club-a', ownerMembershipId: 'm-2' })).toBe(true);
+  });
+
+  it("a Member can update their own task and cannot update another member's", () => {
+    const s = subject([clubAssignment({ membershipId: 'm-8', roles: ['Member'] })]);
+    expect(can(s, 'update', 'task', { clubId: 'club-a', ownerMembershipId: 'm-8' })).toBe(true);
+    expect(can(s, 'update', 'task', { clubId: 'club-a', ownerMembershipId: 'm-2' })).toBe(false);
+  });
+
+  it('a plain Member cannot create a task; an officer can', () => {
+    const member = subject([clubAssignment({ membershipId: 'm-8', roles: ['Member'] })]);
+    const president = subject([clubAssignment({ membershipId: 'm-9', roles: ['President'] })]);
+    expect(can(member, 'create', 'task', { clubId: 'club-a' })).toBe(false);
+    expect(can(president, 'create', 'task', { clubId: 'club-a' })).toBe(true);
+  });
+
+  it('an officer can delete a task they created but not one created by someone else', () => {
+    const s = subject([clubAssignment({ membershipId: 'm-9', roles: ['President'] })]);
+    expect(can(s, 'delete', 'task', { clubId: 'club-a', ownerMembershipId: 'm-9' })).toBe(true);
+    expect(can(s, 'delete', 'task', { clubId: 'club-a', ownerMembershipId: 'm-2' })).toBe(false);
   });
 });
 

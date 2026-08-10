@@ -28,7 +28,7 @@ const RESOURCE_LABELS: Partial<Record<ResourceKey, string>> = {
   dues: 'dues',
   evaluation: 'evaluations',
   speechRequest: 'speech requests',
-  task: 'meeting tasks',
+  task: 'Tasks',
   activityLog: 'the Activity Log',
   invite: 'invites',
   joinRequest: 'join requests',

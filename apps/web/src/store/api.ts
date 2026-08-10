@@ -99,7 +99,12 @@ import type { CreateGuestInput, Guest, UpdateGuestInput } from '@/lib/people/gue
 import type { CreateVisitLogInput, UpdateVisitLogInput, VisitLog } from '@/lib/people/visit-logs';
 import type { Profile, UpdateProfileInput } from '@/lib/profile/profile';
 import type { PushSubscriptionInput } from '@/lib/push/push-notifications';
-import type { Task, UpdateTaskInput } from '@/lib/tasks/tasks';
+import type {
+  CreateTaskInput,
+  CreateTaskNoteInput,
+  Task,
+  UpdateTaskInput,
+} from '@/lib/tasks/tasks';
 
 import { routedBaseQuery } from './routed-base-query';
 
@@ -1683,6 +1688,18 @@ export const toastlyApi = createApi({
       ],
     }),
 
+    /* Club-wide list — the Tasks page. Every task the caller's club has,
+     * mine-first grouping happens client-side (see `tasks-directory.tsx`). */
+    getAllTasks: build.query<Task[], void>({
+      query: () => ({ url: '/tasks', method: 'GET' }),
+      providesTags: (tasks) => [
+        { type: 'Task', id: 'LIST' },
+        ...(tasks ?? []).map((task) => ({ type: 'Task' as const, id: task.id })),
+      ],
+    }),
+
+    /* Kept for the "Me" dashboard/profile widget — tasks assigned to one
+     * member specifically. */
     getTasks: build.query<Task[], string>({
       query: (memberId) => ({ url: `/members/${memberId}/tasks`, method: 'GET' }),
       providesTags: (tasks, _error, memberId) => [
@@ -1691,16 +1708,30 @@ export const toastlyApi = createApi({
       ],
     }),
 
-    /* Toggling done is the hot path — an optimistic update keeps the checkbox
-     * feeling instant while the round trip finishes, same pattern as the
-     * meeting checklist's `updateChecklistItem`. */
-    updateTask: build.mutation<Task, { taskId: string; memberId: string } & UpdateTaskInput>({
+    createTask: build.mutation<Task, CreateTaskInput>({
+      query: (body) => ({ url: '/tasks', method: 'POST', body }),
+      invalidatesTags: (task) => [
+        { type: 'Task', id: 'LIST' },
+        // A brand-new task can't yet appear in any assignee's per-member
+        // cache via its own tag, so their `memberId` tag is invalidated
+        // directly instead.
+        ...(task ? task.assignees.map((a) => ({ type: 'Task' as const, id: a.id })) : []),
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    /* Covers structural edits (title/description/priority/assignees), the
+     * creator-or-assignee "mark done" toggle, and the "Me" widget's
+     * checkbox — `memberId` is only passed by the latter, purely to drive
+     * its optimistic patch so the toggle feels instant. */
+    updateTask: build.mutation<Task, { taskId: string; memberId?: string } & UpdateTaskInput>({
       query: ({ taskId, memberId: _memberId, ...body }) => ({
         url: `/tasks/${taskId}`,
         method: 'PATCH',
         body,
       }),
       onQueryStarted: async ({ taskId, memberId, done }, { dispatch, queryFulfilled }) => {
+        if (!memberId || done === undefined) return;
         const patch = dispatch(
           toastlyApi.util.updateQueryData('getTasks', memberId, (draft) => {
             const task = draft.find((entry) => entry.id === taskId);
@@ -1713,11 +1744,27 @@ export const toastlyApi = createApi({
           patch.undo();
         }
       },
-      invalidatesTags: (_task, _error, { taskId, memberId }) => [
+      invalidatesTags: (task, _error, { taskId, memberId }) => [
         { type: 'Task', id: taskId },
-        { type: 'Task', id: memberId },
+        { type: 'Task', id: 'LIST' },
+        ...(memberId ? [{ type: 'Task' as const, id: memberId }] : []),
+        ...(task ? task.assignees.map((a) => ({ type: 'Task' as const, id: a.id })) : []),
         { type: 'ActivityLog', id: 'LIST' },
       ],
+    }),
+
+    deleteTask: build.mutation<null, string>({
+      query: (taskId) => ({ url: `/tasks/${taskId}`, method: 'DELETE' }),
+      invalidatesTags: (_result, _error, taskId) => [
+        { type: 'Task', id: taskId },
+        { type: 'Task', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    addTaskNote: build.mutation<Task, { taskId: string } & CreateTaskNoteInput>({
+      query: ({ taskId, ...body }) => ({ url: `/tasks/${taskId}/notes`, method: 'POST', body }),
+      invalidatesTags: (_task, _error, { taskId }) => [{ type: 'Task', id: taskId }],
     }),
 
     /* The full feed — every officer action across the app, newest first. The
@@ -2352,8 +2399,12 @@ export const {
   useGetMemberAhCounterEntriesQuery,
   useGetSpeechSlotRequestsQuery,
   useCreateSpeechSlotRequestMutation,
+  useGetAllTasksQuery,
   useGetTasksQuery,
+  useCreateTaskMutation,
   useUpdateTaskMutation,
+  useDeleteTaskMutation,
+  useAddTaskNoteMutation,
   useGetActivityLogsQuery,
   useListDistrictsQuery,
   useCreateDistrictMutation,

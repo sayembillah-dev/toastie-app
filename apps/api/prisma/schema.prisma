@@ -13,7 +13,7 @@
 // lives in `apps/api/src/access/roles.compat.ts`.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   // The query engine is a native binary picked per platform. CI builds the
   // deploy bundle on ubuntu-latest and ships it to an Ubuntu VPS, so the
   // Debian/OpenSSL 3 engine must be generated alongside the local one —
@@ -23,8 +23,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   // Neon's pooled endpoint (`-pooler` host) runs PgBouncer in transaction
   // mode, which doesn't guarantee `migrate deploy`'s session-scoped
   // pg_advisory_lock lands on the same backend connection across statements
@@ -195,7 +195,7 @@ model User {
   memberships       Membership[]
   orgAssignments    OrgAssignment[]
   refreshTokens     RefreshToken[]
-  invitesSent       Invite[]         @relation("InviteInvitedBy")
+  invitesSent       Invite[]           @relation("InviteInvitedBy")
   joinRequests      JoinRequest[]
   credentialShare   CredentialShare?
   pushSubscriptions PushSubscription[]
@@ -406,7 +406,10 @@ model Membership {
   ahCounterEntries       AhCounterEntry[]
   speechSlotRequests     SpeechSlotRequest[]
   duesRecords            DuesRecord[]
-  tasks                  Task[]
+  tasksCreated           Task[]                  @relation("TaskCreatedBy")
+  tasksCompleted         Task[]                  @relation("TaskDoneBy")
+  taskAssignments        TaskAssignee[]
+  taskNotes              TaskNote[]
   meetingRoleAssignments MeetingRoleAssignment[]
   meetingAttendance      MeetingAttendance[]
   speakerSlots           MeetingSpeaker[]        @relation("MeetingSpeakerAsSpeaker")
@@ -1087,23 +1090,74 @@ model BudgetLine {
 
 // -------------------------------------------------------- tasks --
 
-/// A committee or officer action item assigned to one member by name.
-/// Distinct from `ChecklistItem` (meeting-scoped SAA prep). Composite FK
-/// against `Membership.(clubId, id)` — assignment is club-scoped.
+enum TaskPriority {
+  Low
+  Medium
+  High
+}
+
+/// A club officer action item, optionally assigned to one or more members
+/// (`TaskAssignee`). Distinct from `ChecklistItem` (meeting-scoped SAA
+/// prep). Composite FKs against `Membership.(clubId, id)` throughout —
+/// every relation here is club-scoped.
 model Task {
-  id           String    @id @default(cuid())
+  id                    String       @id @default(cuid())
+  clubId                String
+  title                 String
+  description           String?
+  priority              TaskPriority @default(Medium)
+  dueDate               String?
+  done                  Boolean      @default(false)
+  /// Set together with `done`; whichever assignee closed it out. Multiple
+  /// people can be assigned, but the task is completed once, by one of them.
+  doneByMembershipId    String?
+  doneAt                DateTime?
+  createdByMembershipId String
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime?
+
+  createdBy Membership     @relation("TaskCreatedBy", fields: [clubId, createdByMembershipId], references: [clubId, id], onDelete: Cascade)
+  doneBy    Membership?    @relation("TaskDoneBy", fields: [clubId, doneByMembershipId], references: [clubId, id], onDelete: SetNull)
+  assignees TaskAssignee[]
+  notes     TaskNote[]
+
+  @@index([clubId])
+  @@index([clubId, createdByMembershipId])
+  @@index([clubId, doneByMembershipId])
+}
+
+/// Pivot: which members a task is assigned to. `clubId` is denormalised
+/// (rather than joined through `Task`) so the FK into `Membership` can use
+/// the tenant-safe composite `(clubId, id)` pattern every other child table
+/// uses.
+model TaskAssignee {
+  taskId       String
   clubId       String
   membershipId String
-  title        String
-  /// Free-text "who asked" — a role and a name, e.g. "SAA · Yara Ibrahim".
-  assignedBy   String
-  dueDate      String?
-  done         Boolean   @default(false)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime?
+  createdAt    DateTime @default(now())
 
+  task       Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
   membership Membership @relation(fields: [clubId, membershipId], references: [clubId, id], onDelete: Cascade)
 
+  @@id([taskId, membershipId])
+  @@index([clubId, membershipId])
+}
+
+/// A freeform progress note left by the creator or an assignee — a running
+/// log rather than a single overwritable field, so two assignees updating
+/// at once don't clobber each other.
+model TaskNote {
+  id           String   @id @default(cuid())
+  taskId       String
+  clubId       String
+  membershipId String
+  body         String
+  createdAt    DateTime @default(now())
+
+  task       Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  membership Membership @relation(fields: [clubId, membershipId], references: [clubId, id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
   @@index([clubId, membershipId])
 }
 
