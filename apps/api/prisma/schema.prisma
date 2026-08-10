@@ -192,12 +192,13 @@ model User {
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
 
-  memberships     Membership[]
-  orgAssignments  OrgAssignment[]
-  refreshTokens   RefreshToken[]
-  invitesSent     Invite[]         @relation("InviteInvitedBy")
-  joinRequests    JoinRequest[]
-  credentialShare CredentialShare?
+  memberships       Membership[]
+  orgAssignments    OrgAssignment[]
+  refreshTokens     RefreshToken[]
+  invitesSent       Invite[]         @relation("InviteInvitedBy")
+  joinRequests      JoinRequest[]
+  credentialShare   CredentialShare?
+  pushSubscriptions PushSubscription[]
 }
 
 /// A one-time, unauthenticated handoff of a freshly-created account's
@@ -239,6 +240,28 @@ model RefreshToken {
 
   @@index([userId, expiresAt])
   @@index([familyId])
+}
+
+/// One row per browser/device Web Push subscription — a user signed in on
+/// two devices holds two rows. `endpoint` is the push service URL the
+/// browser generated (unique per registration, so it doubles as the natural
+/// key for upsert-on-resubscribe); `p256dh`/`auth` are the encryption keys
+/// `web-push` needs to encrypt the payload for that endpoint. No
+/// `expiresAt` — subscriptions don't expire on a schedule, they die when the
+/// browser revokes them, which surfaces as a 404/410 from the push service
+/// on send (the pipeline should delete the row then, not before).
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // -------------------------------------------------------- org tree --

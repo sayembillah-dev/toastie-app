@@ -98,6 +98,7 @@ import type {
 import type { Guest, UpdateGuestInput } from '@/lib/people/guests';
 import type { CreateVisitLogInput, UpdateVisitLogInput, VisitLog } from '@/lib/people/visit-logs';
 import type { Profile, UpdateProfileInput } from '@/lib/profile/profile';
+import type { PushSubscriptionInput } from '@/lib/push/push-notifications';
 import type { Task, UpdateTaskInput } from '@/lib/tasks/tasks';
 
 import { routedBaseQuery } from './routed-base-query';
@@ -2096,6 +2097,17 @@ export const toastlyApi = createApi({
         ],
       },
     ),
+
+    /* Web Push — self-service, tied to the signed-in user rather than a
+     * club context. No query/tag to invalidate: subscription state lives in
+     * the browser's PushManager, not in any cached list this app renders. */
+    subscribeToPush: build.mutation<void, PushSubscriptionInput & { userAgent?: string }>({
+      query: (body) => ({ url: '/push/subscribe', method: 'POST', body }),
+    }),
+
+    unsubscribeFromPush: build.mutation<void, { endpoint: string }>({
+      query: (body) => ({ url: '/push/unsubscribe', method: 'POST', body }),
+    }),
   }),
 });
 
@@ -2375,4 +2387,6 @@ export const {
   useGetPlatformUserOrgAssignmentsQuery,
   useAddPlatformUserOrgAssignmentMutation,
   useRemovePlatformUserOrgAssignmentMutation,
+  useSubscribeToPushMutation,
+  useUnsubscribeFromPushMutation,
 } = toastlyApi;

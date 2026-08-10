@@ -26,6 +26,7 @@ import { OrgModule } from './org';
 import { OrgAssignmentsModule } from './org-assignments';
 import { PeopleModule } from './people';
 import { PrismaModule } from './prisma';
+import { PushModule } from './push';
 import { QueueModule } from './queue';
 import { TasksModule } from './tasks';
 import { UsersModule } from './users';
@@ -71,6 +72,7 @@ import { UsersModule } from './users';
     TasksModule,
     UsersModule,
     OrgAssignmentsModule,
+    PushModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

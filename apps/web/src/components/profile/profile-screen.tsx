@@ -14,6 +14,7 @@ import { App, Button, Form, Input, Select, Space, Upload } from 'antd';
 import Link from 'next/link';
 import { useEffect, useMemo } from 'react';
 
+import { PushNotificationToggle } from '@/components/push/push-notification-toggle';
 import {
   getProfileInitials,
   PROFILE_SOCIAL_PLATFORMS,
@@ -420,6 +421,8 @@ function ProfileForm({ profile }: { profile: Profile }) {
           </Button>
         </div>
       </Form>
+
+      <PushNotificationToggle />
     </div>
   );
 }

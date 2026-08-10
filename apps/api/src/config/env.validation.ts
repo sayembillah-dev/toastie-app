@@ -73,6 +73,24 @@ class EnvironmentVariables {
   @IsOptional()
   @Matches(/^rediss?:\/\/.+/, { message: 'REDIS_URL must be a redis:// or rediss:// URL' })
   REDIS_URL?: string;
+
+  // Web Push pipeline (see src/push). All three optional together — nobody
+  // has generated real keys yet (`pnpm dlx web-push generate-vapid-keys`),
+  // so `PushService.send()` just no-ops until they're set rather than
+  // failing boot. Subscribe/unsubscribe work with no keys at all.
+  @IsOptional()
+  @IsString()
+  VAPID_PUBLIC_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  VAPID_PRIVATE_KEY?: string;
+
+  // A contact URI the push services can reach if they need to reach the
+  // sender — conventionally `mailto:someone@example.com`.
+  @IsOptional()
+  @IsString()
+  VAPID_SUBJECT?: string;
 }
 
 /** Wired into `ConfigModule.forRoot({ validate })`, so it runs once at boot and
