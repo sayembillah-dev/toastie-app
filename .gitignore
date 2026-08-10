@@ -7,6 +7,11 @@ dist/
 out/
 build/
 
+# deploy bundle staged by .github/workflows/ci-cd.yml (and by anyone
+# reproducing that step locally) — ~100MB of node_modules and standalone output
+release/
+release.tar.gz
+
 # env
 .env
 .env.local

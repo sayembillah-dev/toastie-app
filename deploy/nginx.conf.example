@@ -1,0 +1,80 @@
+# Nginx site config for Toastly. Copy to /etc/nginx/sites-available/toastly,
+# symlink into sites-enabled, then `nginx -t && systemctl reload nginx`.
+#
+# Assumes TLS is already terminated here (certbot/Let's Encrypt). Both app
+# processes bind 127.0.0.1 only — see deploy/ecosystem.config.cjs — so this is
+# the sole public entrypoint.
+
+upstream toastly_web {
+    server 127.0.0.1:3000;
+    keepalive 32;
+}
+
+upstream toastly_api {
+    server 127.0.0.1:4000;
+    keepalive 32;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name toastly.example.com;
+
+    # Certbot writes its challenge here; everything else goes to HTTPS.
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name toastly.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/toastly.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/toastly.example.com/privkey.pem;
+
+    # File uploads go through /api; Nest's default body limits still apply.
+    client_max_body_size 25m;
+
+    # Next streams RSC payloads — buffering them adds latency for no gain.
+    proxy_http_version 1.1;
+    proxy_set_header Connection        "";
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Host  $host;
+
+    # --- API ---------------------------------------------------------------
+    # Routed straight to Nest rather than through Next's /api/:path* rewrite.
+    # That rewrite exists for `pnpm dev`; in production it would mean every API
+    # call takes an extra hop through the Node web process for no benefit.
+    # Nest sets a global 'api' prefix, so the path is passed through unchanged.
+    location /api/ {
+        proxy_pass http://toastly_api;
+        proxy_read_timeout 60s;
+    }
+
+    # --- Next static assets -------------------------------------------------
+    # Content-hashed filenames, so they are safe to cache immutably. Served by
+    # the Next process (from the .next/static copied into the standalone
+    # bundle) rather than from disk, to avoid coupling Nginx to the release
+    # directory layout — one less thing to break on a symlink flip.
+    location /_next/static/ {
+        proxy_pass http://toastly_web;
+        proxy_cache_valid 200 60m;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # --- App ----------------------------------------------------------------
+    location / {
+        proxy_pass http://toastly_web;
+        proxy_read_timeout 60s;
+    }
+}
