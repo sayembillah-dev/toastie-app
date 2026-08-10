@@ -68,7 +68,11 @@ export function NextMeetingCard({ meeting, myRole }: NextMeetingCardProps) {
   const startsAt = new Date(meeting.dateTime);
 
   return (
-    <section className="relative overflow-hidden rounded-2xl bg-linear-to-br from-slate-800 via-slate-700 to-slate-900 px-5 py-5 text-white sm:px-7 sm:py-7">
+    <section
+      className={`relative overflow-hidden rounded-2xl bg-linear-to-br from-slate-800 via-slate-700 to-slate-900 px-5 py-5 text-white sm:px-7 sm:py-7 ${
+        myRole ? 'ring-2 ring-emerald-400/60 ring-offset-2 ring-offset-canvas' : ''
+      }`}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-300">
