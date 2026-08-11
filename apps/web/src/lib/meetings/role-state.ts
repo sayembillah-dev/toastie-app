@@ -17,9 +17,15 @@ export type RoleKind = 'ah-counter' | 'timer' | 'grammarian';
 export interface AhSpeakerCount {
   id: string;
   memberId?: string;
+  guestId?: string;
   name: string;
   counts: Record<string, number>;
   expanded: boolean;
+  /** Set when this row was populated by "Take from agenda" — the agenda
+   * source's stable key (see `agenda-speaker-sources.ts`), so a later click
+   * updates this same row instead of adding a duplicate. Absent for
+   * manually added speakers, which "Take from agenda" never touches. */
+  agendaKey?: string;
 }
 
 export interface AhCounterState {
@@ -45,9 +51,17 @@ export type TimerSpeakerType = (typeof TIMER_SPEAKER_TYPES)[number];
 
 export type TimerStatus = 'idle' | 'running' | 'done';
 
+/** Green/yellow/red thresholds, in seconds. */
+export interface Bracket {
+  green: number;
+  yellow: number;
+  red: number;
+}
+
 export interface TimerSpeaker {
   id: string;
   memberId?: string;
+  guestId?: string;
   name: string;
   type: TimerSpeakerType;
   status: TimerStatus;
@@ -56,6 +70,13 @@ export interface TimerSpeaker {
   elapsed: number;
   /** Wall-clock ms at the last Start. Undefined unless status === 'running'. */
   startedAt?: number;
+  /** Overrides the type's default bracket — set by "Take from agenda" for a
+   * prepared speaker so the lights follow that speech's own project timing
+   * instead of the generic 5–6–7 default. */
+  brackets?: Bracket;
+  /** Set when this row was populated by "Take from agenda" — see
+   * `AhSpeakerCount.agendaKey`. */
+  agendaKey?: string;
 }
 
 export interface TimerState {

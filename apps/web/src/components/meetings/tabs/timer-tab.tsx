@@ -2,6 +2,7 @@
 
 import {
   ArrowCounterClockwise,
+  ClipboardText,
   DotsThreeVertical,
   PencilSimple,
   Play,
@@ -10,11 +11,16 @@ import {
   X,
 } from '@phosphor-icons/react/dist/ssr';
 import type { InputRef } from 'antd';
-import { AutoComplete, Button, Dropdown, Input, Select, Tabs } from 'antd';
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { Button, Dropdown, Input, Select, Tabs } from 'antd';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
+import { AssigneeSelect } from '@/components/education/assignee-select';
 import { ShareRoleButton } from '@/components/meetings/tabs/share-role-button';
+import type { Member } from '@/lib/education/members';
+import type { Assignee } from '@/lib/education/planner';
+import { buildAgendaSpeakerSources } from '@/lib/meetings/agenda-speaker-sources';
 import {
+  type Bracket,
   parseRoleState,
   readRoleStateRaw,
   subscribeToRoleState,
@@ -23,14 +29,14 @@ import {
   type TimerSpeakerType,
   updateRoleState,
 } from '@/lib/meetings/role-state';
+import type { Guest } from '@/lib/people/guests';
 import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
-import { useGetMembersQuery } from '@/store/api';
-
-interface Bracket {
-  green: number;
-  yellow: number;
-  red: number;
-}
+import {
+  useGetGuestsQuery,
+  useGetMeetingRolesQuery,
+  useGetMembersQuery,
+  useGetPreparedSpeakersQuery,
+} from '@/store/api';
 
 const TYPE_BRACKETS: Record<TimerSpeakerType, Bracket> = {
   'Prepared Speaker': { green: 5 * 60, yellow: 6 * 60, red: 7 * 60 },
@@ -41,9 +47,30 @@ const TYPE_BRACKETS: Record<TimerSpeakerType, Bracket> = {
   'General Evaluator': { green: 5 * 60, yellow: 6 * 60, red: 7 * 60 },
 };
 
-interface MemberOption {
-  value: string;
-  label: string;
+/** A prepared speaker's own bracket, once "Take from agenda" derives it from
+ * the project's timed range — green/red at the bounds, yellow at the
+ * midpoint, matching the proportions of the hardcoded defaults above. */
+function bracketFromDuration(bounds: { min: number; max: number }): Bracket {
+  const green = bounds.min * 60;
+  const red = bounds.max * 60;
+  return { green, yellow: Math.round((green + red) / 2), red };
+}
+
+/** Resolves an `AssigneeSelect` pick into the speaker draft this tab stores —
+ * a member arrives with only its id, so the display name is looked up here;
+ * a guest already carries its own resolved name. */
+function assigneeToDraft(
+  assignee: Assignee,
+  members: Member[],
+): { memberId?: string; guestId?: string; name: string } {
+  if (assignee.kind === 'member') {
+    const member = members.find((m) => m.id === assignee.memberId);
+    return {
+      memberId: assignee.memberId,
+      name: member ? `${member.firstName} ${member.lastName}` : 'Unknown member',
+    };
+  }
+  return { guestId: assignee.guestId, name: assignee.name };
 }
 
 function formatTime(seconds: number): string {
@@ -138,7 +165,7 @@ interface TimerCardProps {
 }
 
 function TimerCard({ speaker, elapsed, onStart, onStop, onReset }: TimerCardProps) {
-  const brackets = TYPE_BRACKETS[speaker.type];
+  const brackets = speaker.brackets ?? TYPE_BRACKETS[speaker.type];
   const bracketColor = currentBracketColor(elapsed, brackets);
   const running = speaker.status === 'running';
 
@@ -222,35 +249,25 @@ function TimerCard({ speaker, elapsed, onStart, onStop, onReset }: TimerCardProp
 }
 
 interface AddSpeakerFormProps {
-  memberOptions: MemberOption[];
-  onCommit: (draft: { memberId?: string; name: string; type: TimerSpeakerType }) => void;
+  members: Member[];
+  guests: Guest[];
+  onCommit: (draft: {
+    memberId?: string;
+    guestId?: string;
+    name: string;
+    type: TimerSpeakerType;
+  }) => void;
   onCancel: () => void;
 }
 
-function AddSpeakerForm({ memberOptions, onCommit, onCancel }: AddSpeakerFormProps) {
+function AddSpeakerForm({ members, guests, onCommit, onCancel }: AddSpeakerFormProps) {
   const [type, setType] = useState<TimerSpeakerType>('Prepared Speaker');
-  const [draftName, setDraftName] = useState('');
+  const [pending, setPending] = useState<Assignee | null>(null);
 
   function commit() {
-    const trimmed = draftName.trim();
-    if (!trimmed) return;
-    const matched = memberOptions.find(
-      (option) => option.label.toLowerCase() === trimmed.toLowerCase(),
-    );
-    if (matched) onCommit({ memberId: matched.value, name: matched.label, type });
-    else onCommit({ name: trimmed, type });
-    setDraftName('');
-  }
-
-  function commitWith(value: string) {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    const matched = memberOptions.find(
-      (option) => option.label.toLowerCase() === trimmed.toLowerCase(),
-    );
-    if (matched) onCommit({ memberId: matched.value, name: matched.label, type });
-    else onCommit({ name: trimmed, type });
-    setDraftName('');
+    if (!pending) return;
+    onCommit({ ...assigneeToDraft(pending, members), type });
+    setPending(null);
   }
 
   return (
@@ -263,33 +280,18 @@ function AddSpeakerForm({ memberOptions, onCommit, onCancel }: AddSpeakerFormPro
           onChange={(value: TimerSpeakerType) => setType(value)}
           options={TIMER_SPEAKER_TYPES.map((entry) => ({ value: entry, label: entry }))}
         />
-        <AutoComplete
-          className="min-w-0 flex-1"
-          size="large"
-          value={draftName}
-          onChange={(value) => setDraftName(value)}
-          onSelect={(value: string) => {
-            setDraftName(value);
-            commitWith(value);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              commit();
-            }
-          }}
-          options={memberOptions.map((option) => ({ value: option.label }))}
-          filterOption={(input, option) =>
-            String(option?.value ?? '')
-              .toLowerCase()
-              .includes(input.toLowerCase())
-          }
-          defaultActiveFirstOption={false}
-          placeholder="Search or type a name…"
-          autoFocus
-        />
+        <div className="min-w-0 flex-1 rounded-lg border border-line bg-canvas px-2">
+          <AssigneeSelect
+            value={pending}
+            onChange={setPending}
+            members={members}
+            guests={guests}
+            placeholder="Search or type a name…"
+            ariaLabel="Speaker"
+          />
+        </div>
         <div className="flex items-center gap-2 sm:shrink-0">
-          <Button type="primary" onClick={commit} disabled={!draftName.trim()}>
+          <Button type="primary" onClick={commit} disabled={!pending}>
             Add
           </Button>
           <Button
@@ -427,13 +429,19 @@ interface SpeakerViewProps {
   speakers: TimerSpeaker[];
   activeId: string | null;
   now: number;
-  memberOptions: MemberOption[];
+  members: Member[];
+  guests: Guest[];
   adding: boolean;
   editingId: string | null;
   editingName: string;
   onStartAdd: () => void;
   onCancelAdd: () => void;
-  onAdd: (draft: { memberId?: string; name: string; type: TimerSpeakerType }) => void;
+  onAdd: (draft: {
+    memberId?: string;
+    guestId?: string;
+    name: string;
+    type: TimerSpeakerType;
+  }) => void;
   onSelect: (id: string) => void;
   onRename: (id: string) => void;
   onDelete: (id: string) => void;
@@ -443,6 +451,7 @@ interface SpeakerViewProps {
   onStart: () => void;
   onStop: () => void;
   onReset: () => void;
+  onTakeFromAgenda?: () => void;
   shareSlot: React.ReactNode;
 }
 
@@ -450,7 +459,8 @@ function SpeakerView({
   speakers,
   activeId,
   now,
-  memberOptions,
+  members,
+  guests,
   adding,
   editingId,
   editingName,
@@ -466,6 +476,7 @@ function SpeakerView({
   onStart,
   onStop,
   onReset,
+  onTakeFromAgenda,
   shareSlot,
 }: SpeakerViewProps) {
   const active = speakers.find((speaker) => speaker.id === activeId) ?? null;
@@ -486,17 +497,29 @@ function SpeakerView({
       ) : null}
 
       {adding ? (
-        <AddSpeakerForm memberOptions={memberOptions} onCommit={onAdd} onCancel={onCancelAdd} />
+        <AddSpeakerForm members={members} guests={guests} onCommit={onAdd} onCancel={onCancelAdd} />
       ) : (
-        <Button
-          block
-          size="large"
-          type="dashed"
-          icon={<Play size={14} weight="fill" className="rotate-90" />}
-          onClick={onStartAdd}
-        >
-          + Add Speaker
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button
+            block
+            size="large"
+            type="dashed"
+            icon={<Play size={14} weight="fill" className="rotate-90" />}
+            onClick={onStartAdd}
+          >
+            + Add Speaker
+          </Button>
+          {onTakeFromAgenda ? (
+            <Button
+              block
+              size="large"
+              icon={<ClipboardText size={16} weight="bold" />}
+              onClick={onTakeFromAgenda}
+            >
+              Take from agenda
+            </Button>
+          ) : null}
+        </div>
       )}
 
       {speakers.length === 0 ? (
@@ -568,7 +591,7 @@ function ReportView({ speakers }: { speakers: TimerSpeaker[] }) {
           </thead>
           <tbody>
             {done.map((speaker) => {
-              const brackets = TYPE_BRACKETS[speaker.type];
+              const brackets = speaker.brackets ?? TYPE_BRACKETS[speaker.type];
               const result = classifyResult(speaker.elapsed, brackets);
               return (
                 <tr key={speaker.id} className="border-b border-line last:border-b-0">
@@ -599,6 +622,9 @@ interface TimerViewProps {
  * State is persisted per meeting so both surfaces stay in sync. */
 export function TimerView({ meetingId, showShare }: TimerViewProps) {
   const { data: members } = useGetMembersQuery();
+  const { data: guests } = useGetGuestsQuery();
+  const { data: roleRows } = useGetMeetingRolesQuery(meetingId, { skip: !showShare });
+  const { data: preparedSpeakers } = useGetPreparedSpeakersQuery(meetingId, { skip: !showShare });
   const { activeKey, onChange } = usePersistentTab('timer-view', 'speaker');
 
   const subscribe = useCallback(
@@ -618,17 +644,6 @@ export function TimerView({ meetingId, showShare }: TimerViewProps) {
   const [editingName, setEditingName] = useState('');
   const [now, setNow] = useState(0);
 
-  const memberOptions = useMemo<MemberOption[]>(
-    () =>
-      (members ?? [])
-        .map((member) => ({
-          value: member.id,
-          label: `${member.firstName} ${member.lastName}`,
-        }))
-        .sort((a, b) => a.label.localeCompare(b.label)),
-    [members],
-  );
-
   const activeSpeaker = speakers.find((speaker) => speaker.id === activeId) ?? null;
   const isRunning = activeSpeaker?.status === 'running';
 
@@ -638,7 +653,12 @@ export function TimerView({ meetingId, showShare }: TimerViewProps) {
     return () => window.clearInterval(interval);
   }, [isRunning, activeId]);
 
-  function handleAdd(draft: { memberId?: string; name: string; type: TimerSpeakerType }) {
+  function handleAdd(draft: {
+    memberId?: string;
+    guestId?: string;
+    name: string;
+    type: TimerSpeakerType;
+  }) {
     const id = crypto.randomUUID();
     updateRoleState('timer', meetingId, (previous) => ({
       activeId: id,
@@ -647,6 +667,7 @@ export function TimerView({ meetingId, showShare }: TimerViewProps) {
         {
           id,
           memberId: draft.memberId,
+          guestId: draft.guestId,
           name: draft.name,
           type: draft.type,
           status: 'idle',
@@ -655,6 +676,82 @@ export function TimerView({ meetingId, showShare }: TimerViewProps) {
       ],
     }));
     setAdding(false);
+  }
+
+  function handleTakeFromAgenda() {
+    const sources = buildAgendaSpeakerSources(
+      preparedSpeakers ?? [],
+      roleRows ?? [],
+      members ?? [],
+      guests ?? [],
+    );
+    updateRoleState('timer', meetingId, (previous) => {
+      const manual = previous.speakers.filter((speaker) => !speaker.agendaKey);
+      const byAgendaKey = new Map(
+        previous.speakers.filter((speaker) => speaker.agendaKey).map((s) => [s.agendaKey!, s]),
+      );
+
+      const nextAgendaSpeakers = sources.map((source) => {
+        const type: TimerSpeakerType =
+          source.role === 'speaker'
+            ? 'Prepared Speaker'
+            : source.role === 'evaluator'
+              ? 'Speech Evaluator'
+              : source.role === 'general-evaluator'
+                ? 'General Evaluator'
+                : 'TT Evaluator';
+        const brackets = source.durationBounds
+          ? bracketFromDuration(source.durationBounds)
+          : undefined;
+
+        const existing = byAgendaKey.get(source.agendaKey);
+        if (existing) {
+          return {
+            ...existing,
+            memberId: source.memberId,
+            guestId: source.guestId,
+            name: source.name,
+            type,
+            brackets,
+          };
+        }
+        const adoptedIndex = manual.findIndex(
+          (speaker) =>
+            (source.memberId && speaker.memberId === source.memberId) ||
+            (source.guestId && speaker.guestId === source.guestId),
+        );
+        if (adoptedIndex !== -1) {
+          const [adopted] = manual.splice(adoptedIndex, 1);
+          return {
+            ...adopted,
+            memberId: source.memberId,
+            guestId: source.guestId,
+            name: source.name,
+            type,
+            brackets,
+            agendaKey: source.agendaKey,
+          };
+        }
+        return {
+          id: crypto.randomUUID(),
+          memberId: source.memberId,
+          guestId: source.guestId,
+          name: source.name,
+          type,
+          status: 'idle' as const,
+          elapsed: 0,
+          brackets,
+          agendaKey: source.agendaKey,
+        };
+      });
+
+      const nextSpeakers = [...nextAgendaSpeakers, ...manual];
+      const activeStillPresent = nextSpeakers.some((speaker) => speaker.id === previous.activeId);
+      return {
+        speakers: nextSpeakers,
+        activeId: activeStillPresent ? previous.activeId : null,
+      };
+    });
   }
 
   function handleDelete(id: string) {
@@ -773,7 +870,8 @@ export function TimerView({ meetingId, showShare }: TimerViewProps) {
                 speakers={speakers}
                 activeId={activeId}
                 now={now}
-                memberOptions={memberOptions}
+                members={members ?? []}
+                guests={guests ?? []}
                 adding={adding}
                 editingId={editingId}
                 editingName={editingName}
@@ -789,6 +887,7 @@ export function TimerView({ meetingId, showShare }: TimerViewProps) {
                 onStart={handleStart}
                 onStop={handleStop}
                 onReset={handleReset}
+                onTakeFromAgenda={showShare ? handleTakeFromAgenda : undefined}
                 shareSlot={shareSlot}
               />
             ),

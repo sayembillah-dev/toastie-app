@@ -1,10 +1,22 @@
 'use client';
 
-import { CaretDown, Minus, Plus, Tag, TrashSimple, X } from '@phosphor-icons/react/dist/ssr';
-import { AutoComplete, Button, Input, Popover, Tabs } from 'antd';
+import {
+  CaretDown,
+  ClipboardText,
+  Minus,
+  Plus,
+  Tag,
+  TrashSimple,
+  X,
+} from '@phosphor-icons/react/dist/ssr';
+import { Button, Input, Popover, Tabs } from 'antd';
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 
+import { AssigneeSelect } from '@/components/education/assignee-select';
 import { ShareRoleButton } from '@/components/meetings/tabs/share-role-button';
+import type { Member } from '@/lib/education/members';
+import type { Assignee } from '@/lib/education/planner';
+import { buildAgendaSpeakerSources } from '@/lib/meetings/agenda-speaker-sources';
 import {
   type AhSpeakerCount,
   parseRoleState,
@@ -12,8 +24,31 @@ import {
   subscribeToRoleState,
   updateRoleState,
 } from '@/lib/meetings/role-state';
+import type { Guest } from '@/lib/people/guests';
 import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
-import { useGetMembersQuery } from '@/store/api';
+import {
+  useGetGuestsQuery,
+  useGetMeetingRolesQuery,
+  useGetMembersQuery,
+  useGetPreparedSpeakersQuery,
+} from '@/store/api';
+
+/** Resolves an `AssigneeSelect` pick into the speaker draft this tab stores —
+ * a member arrives with only its id, so the display name is looked up here;
+ * a guest already carries its own resolved name. */
+function assigneeToDraft(
+  assignee: Assignee,
+  members: Member[],
+): { memberId?: string; guestId?: string; name: string } {
+  if (assignee.kind === 'member') {
+    const member = members.find((m) => m.id === assignee.memberId);
+    return {
+      memberId: assignee.memberId,
+      name: member ? `${member.firstName} ${member.lastName}` : 'Unknown member',
+    };
+  }
+  return { guestId: assignee.guestId, name: assignee.name };
+}
 
 function totalOf(speaker: AhSpeakerCount, categories: readonly string[]): number {
   let sum = 0;
@@ -28,11 +63,6 @@ function cardLabel(category: string): string {
 function tableLabel(category: string): string {
   if (category.length === 0) return category;
   return category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
-}
-
-interface MemberOption {
-  value: string;
-  label: string;
 }
 
 interface CountCellProps {
@@ -239,52 +269,36 @@ function FillersPopover({ categories, onAdd, onRemove }: FillersPopoverProps) {
 }
 
 interface SpeakerPickerProps {
-  availableOptions: MemberOption[];
-  onCommit: (draft: { memberId?: string; name: string }) => void;
+  members: Member[];
+  guests: Guest[];
+  onCommit: (draft: { memberId?: string; guestId?: string; name: string }) => void;
   onCancel: () => void;
 }
 
-function SpeakerPicker({ availableOptions, onCommit, onCancel }: SpeakerPickerProps) {
-  const [draft, setDraft] = useState('');
+function SpeakerPicker({ members, guests, onCommit, onCancel }: SpeakerPickerProps) {
+  const [pending, setPending] = useState<Assignee | null>(null);
 
-  function commit(value: string) {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    const matched = availableOptions.find(
-      (option) => option.label.toLowerCase() === trimmed.toLowerCase(),
-    );
-    if (matched) onCommit({ memberId: matched.value, name: matched.label });
-    else onCommit({ name: trimmed });
-    setDraft('');
+  function commit() {
+    if (!pending) return;
+    onCommit(assigneeToDraft(pending, members));
+    setPending(null);
   }
 
   return (
     <div className="rounded-xl border border-dashed border-line-strong bg-sidebar p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <AutoComplete
-          className="w-full"
-          size="large"
-          value={draft}
-          onChange={(value) => setDraft(value)}
-          onSelect={(value: string) => commit(value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              commit(draft);
-            }
-          }}
-          options={availableOptions.map((option) => ({ value: option.label }))}
-          filterOption={(input, option) =>
-            String(option?.value ?? '')
-              .toLowerCase()
-              .includes(input.toLowerCase())
-          }
-          defaultActiveFirstOption={false}
-          placeholder="Search a member or type a guest name"
-          autoFocus
-        />
+        <div className="w-full rounded-lg border border-line bg-canvas px-2">
+          <AssigneeSelect
+            value={pending}
+            onChange={setPending}
+            members={members}
+            guests={guests}
+            placeholder="Search a member or type a guest name"
+            ariaLabel="Speaker"
+          />
+        </div>
         <div className="flex items-center gap-2 sm:shrink-0">
-          <Button type="primary" onClick={() => commit(draft)} disabled={!draft.trim()}>
+          <Button type="primary" onClick={commit} disabled={!pending}>
             Add
           </Button>
           <Button onClick={onCancel}>Cancel</Button>
@@ -300,23 +314,26 @@ function SpeakerPicker({ availableOptions, onCommit, onCancel }: SpeakerPickerPr
 interface SpeakersViewProps {
   speakers: AhSpeakerCount[];
   categories: string[];
-  availableOptions: MemberOption[];
+  availableMembers: Member[];
+  availableGuests: Guest[];
   adding: boolean;
   onStartAdd: () => void;
   onCancelAdd: () => void;
-  onAdd: (draft: { memberId?: string; name: string }) => void;
+  onAdd: (draft: { memberId?: string; guestId?: string; name: string }) => void;
   onDelete: (id: string) => void;
   onAdjust: (id: string, category: string, delta: number) => void;
   onToggle: (id: string) => void;
   onAddCategory: (label: string) => boolean;
   onRemoveCategory: (label: string) => void;
+  onTakeFromAgenda?: () => void;
   shareSlot: React.ReactNode;
 }
 
 function SpeakersView({
   speakers,
   categories,
-  availableOptions,
+  availableMembers,
+  availableGuests,
   adding,
   onStartAdd,
   onCancelAdd,
@@ -326,6 +343,7 @@ function SpeakersView({
   onToggle,
   onAddCategory,
   onRemoveCategory,
+  onTakeFromAgenda,
   shareSlot,
 }: SpeakersViewProps) {
   return (
@@ -340,6 +358,15 @@ function SpeakersView({
             onAdd={onAddCategory}
             onRemove={onRemoveCategory}
           />
+          {onTakeFromAgenda ? (
+            <Button
+              size="middle"
+              icon={<ClipboardText size={14} weight="bold" />}
+              onClick={onTakeFromAgenda}
+            >
+              Take from agenda
+            </Button>
+          ) : null}
           <Button
             size="middle"
             type="primary"
@@ -356,7 +383,8 @@ function SpeakersView({
       <div className="flex flex-col gap-3">
         {adding ? (
           <SpeakerPicker
-            availableOptions={availableOptions}
+            members={availableMembers}
+            guests={availableGuests}
             onCommit={onAdd}
             onCancel={onCancelAdd}
           />
@@ -456,6 +484,9 @@ interface AhCounterViewProps {
  * State is persisted per meeting so both surfaces stay in sync. */
 export function AhCounterView({ meetingId, showShare }: AhCounterViewProps) {
   const { data: members } = useGetMembersQuery();
+  const { data: guests } = useGetGuestsQuery();
+  const { data: roleRows } = useGetMeetingRolesQuery(meetingId, { skip: !showShare });
+  const { data: preparedSpeakers } = useGetPreparedSpeakersQuery(meetingId, { skip: !showShare });
   const { activeKey, onChange } = usePersistentTab('ahc', 'speakers');
 
   const subscribe = useCallback(
@@ -472,28 +503,25 @@ export function AhCounterView({ meetingId, showShare }: AhCounterViewProps) {
 
   const [adding, setAdding] = useState(false);
 
-  const memberOptions = useMemo<MemberOption[]>(
-    () =>
-      (members ?? [])
-        .map((member) => ({
-          value: member.id,
-          label: `${member.firstName} ${member.lastName}`,
-        }))
-        .sort((a, b) => a.label.localeCompare(b.label)),
-    [members],
-  );
-
-  const availableOptions = useMemo(() => {
+  const availableMembers = useMemo(() => {
     const usedIds = new Set(
       speakers.map((speaker) => speaker.memberId).filter((id): id is string => Boolean(id)),
     );
-    return memberOptions.filter((option) => !usedIds.has(option.value));
-  }, [memberOptions, speakers]);
+    return (members ?? []).filter((member) => !usedIds.has(member.id));
+  }, [members, speakers]);
 
-  function handleAdd(draft: { memberId?: string; name: string }) {
+  const availableGuests = useMemo(() => {
+    const usedIds = new Set(
+      speakers.map((speaker) => speaker.guestId).filter((id): id is string => Boolean(id)),
+    );
+    return (guests ?? []).filter((guest) => !usedIds.has(guest.id));
+  }, [guests, speakers]);
+
+  function handleAdd(draft: { memberId?: string; guestId?: string; name: string }) {
     const speaker: AhSpeakerCount = {
       id: crypto.randomUUID(),
       memberId: draft.memberId,
+      guestId: draft.guestId,
       name: draft.name,
       counts: {},
       expanded: true,
@@ -503,6 +531,59 @@ export function AhCounterView({ meetingId, showShare }: AhCounterViewProps) {
       speakers: [...previous.speakers, speaker],
     }));
     setAdding(false);
+  }
+
+  function handleTakeFromAgenda() {
+    const sources = buildAgendaSpeakerSources(
+      preparedSpeakers ?? [],
+      roleRows ?? [],
+      members ?? [],
+      guests ?? [],
+    );
+    updateRoleState('ah-counter', meetingId, (previous) => {
+      const manual = previous.speakers.filter((speaker) => !speaker.agendaKey);
+      const byAgendaKey = new Map(
+        previous.speakers.filter((speaker) => speaker.agendaKey).map((s) => [s.agendaKey!, s]),
+      );
+
+      const nextAgendaSpeakers = sources.map((source) => {
+        const existing = byAgendaKey.get(source.agendaKey);
+        if (existing) {
+          return {
+            ...existing,
+            memberId: source.memberId,
+            guestId: source.guestId,
+            name: source.name,
+          };
+        }
+        const adoptedIndex = manual.findIndex(
+          (speaker) =>
+            (source.memberId && speaker.memberId === source.memberId) ||
+            (source.guestId && speaker.guestId === source.guestId),
+        );
+        if (adoptedIndex !== -1) {
+          const [adopted] = manual.splice(adoptedIndex, 1);
+          return {
+            ...adopted,
+            memberId: source.memberId,
+            guestId: source.guestId,
+            name: source.name,
+            agendaKey: source.agendaKey,
+          };
+        }
+        return {
+          id: crypto.randomUUID(),
+          memberId: source.memberId,
+          guestId: source.guestId,
+          name: source.name,
+          counts: {},
+          expanded: false,
+          agendaKey: source.agendaKey,
+        };
+      });
+
+      return { ...previous, speakers: [...nextAgendaSpeakers, ...manual] };
+    });
   }
 
   function handleDelete(id: string) {
@@ -575,7 +656,8 @@ export function AhCounterView({ meetingId, showShare }: AhCounterViewProps) {
               <SpeakersView
                 speakers={speakers}
                 categories={categories}
-                availableOptions={availableOptions}
+                availableMembers={availableMembers}
+                availableGuests={availableGuests}
                 adding={adding}
                 onStartAdd={() => setAdding(true)}
                 onCancelAdd={() => setAdding(false)}
@@ -585,6 +667,7 @@ export function AhCounterView({ meetingId, showShare }: AhCounterViewProps) {
                 onToggle={handleToggle}
                 onAddCategory={handleAddCategory}
                 onRemoveCategory={handleRemoveCategory}
+                onTakeFromAgenda={showShare ? handleTakeFromAgenda : undefined}
                 shareSlot={shareSlot}
               />
             ),
