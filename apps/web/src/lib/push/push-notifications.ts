@@ -24,7 +24,10 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   return outputArray;
 }
 
-async function registerServiceWorker(): Promise<ServiceWorkerRegistration> {
+/** Idempotent — safe to call from both the app-wide PWA bootstrap
+ * (`PwaServiceWorker`) and `subscribeToPush()`; the browser reuses the
+ * existing registration instead of creating a duplicate. */
+export async function registerServiceWorker(): Promise<ServiceWorkerRegistration> {
   return navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' });
 }
 

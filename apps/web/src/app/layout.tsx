@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 
 import { AntdProvider } from '@/components/antd-provider';
 import { OfflineScreen } from '@/components/offline-screen';
+import { PwaServiceWorker } from '@/components/pwa-service-worker';
 import { StoreProvider } from '@/components/store-provider';
 
 import './globals.css';
@@ -46,6 +47,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <AntdProvider>{children}</AntdProvider>
         </StoreProvider>
         <OfflineScreen />
+        <PwaServiceWorker />
       </body>
     </html>
   );

@@ -1,12 +1,17 @@
-// Push-only service worker — deliberately has no `fetch` handler, so it
-// never intercepts requests or caches pages/assets. That keeps it out of
-// the "full offline support" scope (see docs/PWA guide); its only job is
-// receiving Web Push events while the app isn't in the foreground.
+// Push-only service worker. Registered app-wide (see
+// components/pwa-service-worker.tsx) mainly because Chrome on Android
+// requires a registered service worker before it will offer "Install app" —
+// iOS Safari's "Add to Home Screen" has no such requirement.
 //
-// Registered from lib/push/push-notifications.ts. A subscription created
-// against this worker is only as useful as the server side of the pipeline
-// — see apps/api/src/push — which needs real VAPID keys before any
-// notification actually goes out.
+// A subscription created against this worker is only as useful as the
+// server side of the pipeline — see apps/api/src/push — which needs real
+// VAPID keys before any notification actually goes out.
+
+// No-op: satisfies Chrome's install criteria (a registered SW with a fetch
+// handler) without calling `respondWith`, so every request still falls
+// through to the network untouched — no caching, no offline support. See
+// docs/PWA guide's "Extending your PWA" section for adding real caching.
+self.addEventListener('fetch', () => {});
 
 self.addEventListener('push', (event) => {
   if (!event.data) return;
