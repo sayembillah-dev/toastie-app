@@ -35,6 +35,7 @@ const CLUB_PROFILE_SELECT = {
   motto: true,
   venueAddress: true,
   venueMapUrl: true,
+  contactPhone: true,
   socials: true,
   updatedAt: true,
   area: {
@@ -367,6 +368,9 @@ export class ClubsService {
     }
     if ('venueMapUrl' in dto && dto.venueMapUrl !== undefined) {
       data.venueMapUrl = dto.venueMapUrl === null ? null : dto.venueMapUrl.trim() || null;
+    }
+    if ('contactPhone' in dto && dto.contactPhone !== undefined) {
+      data.contactPhone = dto.contactPhone === null ? null : dto.contactPhone.trim() || null;
     }
     if (dto.socials !== undefined) {
       data.socials = dto.socials.map((social) => ({

@@ -70,6 +70,7 @@ import type {
   PreparedSpeakerWire,
   UpdatePreparedSpeakerInput,
 } from '@/lib/meetings/prepared-speakers';
+import type { PublicMeetingAgenda } from '@/lib/meetings/public-agenda';
 import type { RoleAssignment } from '@/lib/meetings/role-assignments';
 import type {
   CreateTableTopicQuestionInput,
@@ -519,6 +520,14 @@ export const toastlyApi = createApi({
         url: `/public/meetings/${meetingId}?t=${encodeURIComponent(token)}`,
         method: 'GET',
       }),
+    }),
+
+    /* Public agenda endpoint — matched by `isPublicUrl` the same as
+     * `getPublicMeeting`, but gated by the meeting's `published` status
+     * rather than a share token: anyone with the meeting id can view it
+     * once it's published. A draft meeting 404s the same as an unknown id. */
+    getPublicMeetingAgenda: build.query<PublicMeetingAgenda, string>({
+      query: (meetingId) => ({ url: `/public/meetings/${meetingId}/agenda`, method: 'GET' }),
     }),
 
     /* Only the roster changes — a brand-new meeting has no detail cache entry
@@ -2406,6 +2415,7 @@ export const {
   useGetMeetingsQuery,
   useGetMeetingQuery,
   useGetPublicMeetingQuery,
+  useGetPublicMeetingAgendaQuery,
   useCreateMeetingMutation,
   useUpdateMeetingMutation,
   useDeleteMeetingMutation,

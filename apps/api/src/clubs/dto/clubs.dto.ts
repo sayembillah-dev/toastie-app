@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
@@ -6,10 +6,13 @@ import {
   IsIn,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   MinLength,
   ValidateNested,
 } from 'class-validator';
+
+import { normalizePhone, PHONE_REGEX } from '@/common';
 
 const NAME_MAX = 80;
 const CLUB_NUMBER_MAX = 20;
@@ -128,6 +131,15 @@ export class UpdateClubProfileDto {
   @IsString()
   @MaxLength(VENUE_MAP_URL_MAX)
   venueMapUrl?: string | null;
+
+  /** `null` clears the number; `undefined` leaves it alone. Same 11-digit
+   * local format as `UpdateProfileDto.phone`, but never a credential — no
+   * `currentPassword` re-confirmation needed. */
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }) => (value === undefined || value === null ? value : normalizePhone(value)))
+  @Matches(PHONE_REGEX, { message: 'Phone must be exactly 11 digits' })
+  contactPhone?: string | null;
 
   @IsOptional()
   @IsArray()

@@ -336,6 +336,7 @@ model Club {
   motto           String?
   venueAddress    String?
   venueMapUrl     String?
+  contactPhone    String?
   /// Same embedded-JSON shape as `User.socials` — see that field's comment.
   socials         Json                @default("[]")
   /// Short, out-of-band join credential — a Club Admin reads this off their

@@ -10,7 +10,13 @@ import {
   type ClubSocial,
   type ClubSocialPlatform,
 } from '@/lib/club/club-profile';
-import { nameRules, textFieldRules, urlRules } from '@/lib/validation/rules';
+import {
+  nameRules,
+  normalizePhone,
+  phoneRules,
+  textFieldRules,
+  urlRules,
+} from '@/lib/validation/rules';
 import { useGetClubProfileQuery, useUpdateClubProfileMutation } from '@/store/api';
 import { getApiErrorMessage, getFieldErrors } from '@/store/api-error';
 
@@ -20,6 +26,7 @@ interface FormValues {
   motto?: string;
   venueAddress?: string;
   venueMapUrl?: string;
+  contactPhone?: string;
   socials: ClubSocial[];
 }
 
@@ -30,6 +37,7 @@ function deserialize(club: ClubProfile): FormValues {
     motto: club.motto ?? '',
     venueAddress: club.venueAddress ?? '',
     venueMapUrl: club.venueMapUrl ?? '',
+    contactPhone: club.contactPhone ?? '',
     socials: club.socials.map((social) => ({ ...social })),
   };
 }
@@ -112,6 +120,7 @@ function ClubProfileForm({ club }: { club: ClubProfile }) {
         motto: values.motto?.trim() || null,
         venueAddress: values.venueAddress?.trim() || null,
         venueMapUrl: values.venueMapUrl?.trim() || null,
+        contactPhone: values.contactPhone?.trim() ? normalizePhone(values.contactPhone) : null,
         socials: cleanedSocials,
       }).unwrap();
       message.success('Club profile saved');
@@ -186,10 +195,18 @@ function ClubProfileForm({ club }: { club: ClubProfile }) {
           <Form.Item
             label="Google Maps link"
             name="venueMapUrl"
-            className="!mb-0"
             rules={urlRules('Google Maps link')}
           >
             <Input placeholder="https://maps.google.com/…" />
+          </Form.Item>
+
+          <Form.Item
+            label="Contact phone"
+            name="contactPhone"
+            className="!mb-0"
+            rules={phoneRules({ required: false })}
+          >
+            <Input placeholder="01568286512" type="tel" inputMode="tel" />
           </Form.Item>
         </div>
 

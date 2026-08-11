@@ -62,6 +62,7 @@ export interface ClubProfileWire {
   motto?: string;
   venueAddress?: string;
   venueMapUrl?: string;
+  contactPhone?: string;
   socials: { platform: string; url: string }[];
   areaName?: string;
   divisionName?: string;
@@ -78,6 +79,7 @@ export function toClubProfileWire(
     | 'motto'
     | 'venueAddress'
     | 'venueMapUrl'
+    | 'contactPhone'
     | 'socials'
     | 'updatedAt'
   > & {
@@ -94,6 +96,7 @@ export function toClubProfileWire(
   if (row.motto) out.motto = row.motto;
   if (row.venueAddress) out.venueAddress = row.venueAddress;
   if (row.venueMapUrl) out.venueMapUrl = row.venueMapUrl;
+  if (row.contactPhone) out.contactPhone = row.contactPhone;
   if (row.area) {
     out.areaName = row.area.name;
     if (row.area.division) {

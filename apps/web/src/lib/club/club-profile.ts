@@ -31,6 +31,7 @@ export interface ClubProfile {
   motto: string | null;
   venueAddress: string | null;
   venueMapUrl: string | null;
+  contactPhone: string | null;
   socials: ClubSocial[];
   areaName: string | null;
   divisionName: string | null;
@@ -41,5 +42,8 @@ export interface ClubProfile {
 /** Fields the Club Profile page can write. `null` explicitly clears a
  * field; omitting a key leaves it alone. */
 export type UpdateClubProfileInput = Partial<
-  Pick<ClubProfile, 'name' | 'clubNumber' | 'motto' | 'venueAddress' | 'venueMapUrl' | 'socials'>
+  Pick<
+    ClubProfile,
+    'name' | 'clubNumber' | 'motto' | 'venueAddress' | 'venueMapUrl' | 'contactPhone' | 'socials'
+  >
 >;
