@@ -15,14 +15,19 @@ export interface OrgClubWire {
   updatedAt?: string;
 }
 
-/** Minimal projection for the anonymous `GET /clubs/directory` endpoint —
- * the public directory a self-registering user browses before signing up.
- * Includes only what the directory renders; no lineage. */
+/** Projection for the anonymous `GET /clubs/directory` endpoint — the public
+ * directory a self-registering or clubless user browses. Lineage names are
+ * included (not just ids) so a "basic info" card can render "Area 3B,
+ * Division C, District 88" without a second round-trip; a self-registered,
+ * still-unplaced club simply omits them. */
 export interface PublicClubWire {
   id: string;
   slug: string;
   name: string;
   clubNumber?: string;
+  areaName?: string;
+  divisionName?: string;
+  districtName?: string;
 }
 
 export function toOrgClubWire(row: Club): OrgClubWire {
@@ -47,9 +52,18 @@ export function toOrgClubWire(row: Club): OrgClubWire {
 }
 
 export function toPublicClubWire(
-  row: Pick<Club, 'id' | 'slug' | 'name' | 'clubNumber'>,
+  row: Pick<Club, 'id' | 'slug' | 'name' | 'clubNumber'> & {
+    area?: { name: string; division?: { name: string; district?: { name: string } } } | null;
+  },
 ): PublicClubWire {
   const out: PublicClubWire = { id: row.id, slug: row.slug, name: row.name };
   if (row.clubNumber) out.clubNumber = row.clubNumber;
+  if (row.area) {
+    out.areaName = row.area.name;
+    if (row.area.division) {
+      out.divisionName = row.area.division.name;
+      if (row.area.division.district) out.districtName = row.area.division.district.name;
+    }
+  }
   return out;
 }

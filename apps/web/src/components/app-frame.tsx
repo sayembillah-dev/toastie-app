@@ -41,29 +41,33 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
+  const isOnboarding =
+    status === 'ready' &&
+    memberships.length === 0 &&
+    orgAssignments.length === 0 &&
+    !user?.isSuperAdmin;
+
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.replace('/login');
     }
   }, [status, router]);
 
+  /* Skip the non-club redirect for onboarding users: their `contextKey`
+   * falls back to `'global'` (the backend has nowhere else to send a user
+   * with zero memberships and zero org assignments), which would otherwise
+   * push the URL to `/super-admin` while `OnboardingScreen` renders. */
   useEffect(() => {
-    if (status !== 'ready' || pathname !== '/') return;
+    if (status !== 'ready' || pathname !== '/' || isOnboarding) return;
     const unit = unitKeyForContext(contextKey);
     if (unit && unit !== 'club') {
       router.replace(defaultRouteForContext(contextKey));
     }
-  }, [status, pathname, contextKey, router]);
+  }, [status, pathname, contextKey, router, isOnboarding]);
 
   if (status === 'unauthenticated') {
     return null;
   }
-
-  const isOnboarding =
-    status === 'ready' &&
-    memberships.length === 0 &&
-    orgAssignments.length === 0 &&
-    !user?.isSuperAdmin;
 
   if (isOnboarding) return <OnboardingScreen />;
   return <AppShell>{children}</AppShell>;

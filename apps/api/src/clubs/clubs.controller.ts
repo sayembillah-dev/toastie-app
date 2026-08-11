@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -14,15 +15,19 @@ import {
 import { CurrentContext, Public, type RequestContext, Requires } from '@/access';
 
 import { ClubsService } from './clubs.service';
-import { CreateOrgClubDto, UpdateOrgClubDto } from './dto/clubs.dto';
+import { CreateOrgClubDto, JoinByCodeDto, UpdateOrgClubDto } from './dto/clubs.dto';
 import { type OrgClubWire, type PublicClubWire } from './serializers';
 
 /** Two controllers, two URL trees:
- *   - `/clubs/directory` (public)  — anyone browsing for a club to join
- *   - `/org-clubs/*`     (authed)  — CRUD for the directory-management UI
+ *   - `/clubs/*`     — anyone browsing for a club (`directory`, public) and
+ *     a signed-in-but-clubless user joining one (`join-by-code`), plus the
+ *     Club Admin's own `join-code` readback. Not all-public despite the
+ *     class name; only `directory` carries `@Public()`.
+ *   - `/org-clubs/*` (authed) — CRUD for the directory-management UI
  *
- * Keeping them separate avoids the `@Public()` wart-per-route pattern and
- * makes the public projection's minimal shape a compile-time property. */
+ * Keeping the public/self-service tree separate from `/org-clubs` avoids the
+ * `@Public()` wart-per-route pattern there and makes the public projection's
+ * minimal shape a compile-time property. */
 
 @Controller('clubs')
 export class PublicClubsController {
@@ -36,6 +41,37 @@ export class PublicClubsController {
   directory(): Promise<PublicClubWire[]> {
     return this.clubs.directory();
   }
+
+  /** Club Admin's own dashboard reads its club's standing join code here to
+   * display + copy it. Gated by `club:update` (same grant that lets a Club
+   * Admin rename their club) rather than a bespoke permission. */
+  @Requires('club', 'update')
+  @Get('join-code')
+  getJoinCode(@CurrentContext() ctx: RequestContext): Promise<{ code: string }> {
+    return this.clubs.getJoinCode(requireClubContext(ctx));
+  }
+
+  /** No `@Requires` — the caller isn't a member of the target club yet, so
+   * no grant could ever match. Same reasoning as `InvitesController#accept`
+   * and the requester-side routes on `JoinRequestsController`: validity is
+   * enforced in the service, not the permission engine. */
+  @Post('join-by-code')
+  joinByCode(
+    @CurrentContext() ctx: RequestContext,
+    @Body() dto: JoinByCodeDto,
+  ): Promise<{ clubId: string; clubName: string }> {
+    return this.clubs.joinByCode(ctx.session.user.id, dto.code);
+  }
+}
+
+function requireClubContext(ctx: RequestContext): string {
+  if (!ctx.clubId) {
+    throw new BadRequestException({
+      code: 'CLUB_CONTEXT_REQUIRED',
+      message: 'The club join code is only accessible from a club context',
+    });
+  }
+  return ctx.clubId;
 }
 
 @Controller('org-clubs')

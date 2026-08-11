@@ -12,6 +12,7 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 import { Skeleton } from 'antd';
 import { useMemo, useSyncExternalStore } from 'react';
+import { ClubCodePanel } from '@/components/club-admin/club-code-panel';
 import { StatTile } from '@/components/finance/stat-tile';
 import { ORG_GRID_CLASSES, OrgCard } from '@/components/org/org-card';
 import { getInitials, getPrimaryRole } from '@/lib/education/members';
@@ -167,6 +168,8 @@ export function OverviewTab() {
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6">
+      <ClubCodePanel />
+
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile icon={<Users size={16} />} label="Active members" value={String(activeMembers)} />
         <StatTile

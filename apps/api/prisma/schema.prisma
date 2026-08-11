@@ -331,6 +331,12 @@ model Club {
   /// URL-safe identifier for the public directory (`/clubs/<slug>`).
   slug            String              @unique
   clubNumber      String?             @unique
+  /// Short, out-of-band join credential — a Club Admin reads this off their
+  /// own dashboard and hands it to someone directly (text, verbally, etc.).
+  /// Deliberately separate from `slug`: the slug is public (it's in the
+  /// directory URL), this is not. Pasting it onto `/clubs/join-by-code`
+  /// creates an active `Member` membership immediately, no approval step.
+  joinCode        String              @unique
   directoryStatus ClubDirectoryStatus @default(active)
   lifecycle       ClubLifecycle       @default(active)
   joinPolicy      ClubJoinPolicy      @default(request)

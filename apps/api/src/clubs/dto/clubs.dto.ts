@@ -28,6 +28,16 @@ export class CreateOrgClubDto {
   status?: OrgClubStatus;
 }
 
+/** Body for `POST /clubs/join-by-code`. Codes are 8 unambiguous characters
+ * (see `ClubsService.randomJoinCode`) but the field accepts a looser range
+ * so a stray space or lowercase paste doesn't 400 before normalisation. */
+export class JoinByCodeDto {
+  @IsString()
+  @MinLength(4)
+  @MaxLength(20)
+  code!: string;
+}
+
 export class UpdateOrgClubDto {
   @IsOptional()
   @IsString()

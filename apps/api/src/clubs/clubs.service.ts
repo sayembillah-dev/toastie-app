@@ -57,7 +57,18 @@ export class ClubsService {
   async directory(): Promise<PublicClubWire[]> {
     const rows = await this.prisma.club.findMany({
       where: { directoryStatus: 'active', lifecycle: 'active' },
-      select: { id: true, slug: true, name: true, clubNumber: true },
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        clubNumber: true,
+        area: {
+          select: {
+            name: true,
+            division: { select: { name: true, district: { select: { name: true } } } },
+          },
+        },
+      },
       orderBy: { name: 'asc' },
     });
     return rows.map(toPublicClubWire);
@@ -79,6 +90,7 @@ export class ClubsService {
     if (!area) throw new NotFoundException(`No area with id "${dto.areaId}"`);
 
     const slug = await this.uniqueSlug(dto.name.trim());
+    const joinCode = await this.uniqueJoinCode();
     const trimmedNumber = dto.clubNumber?.trim() || undefined;
 
     try {
@@ -89,6 +101,7 @@ export class ClubsService {
           districtId: area.districtId,
           name: dto.name.trim(),
           slug,
+          joinCode,
           clubNumber: trimmedNumber,
           directoryStatus: dto.status ?? 'active',
           lifecycle: 'active',
@@ -221,6 +234,97 @@ export class ClubsService {
     if (!existing) return base;
     const suffix = Math.random().toString(36).slice(2, 8);
     return `${base}-${suffix}`;
+  }
+
+  /** Read by the Club Admin dashboard so the code can be copied and handed
+   * to someone directly. Permission is enforced at the route (`club:update`)
+   * against `ctx.clubId`, so no extra ownership check is needed here. */
+  async getJoinCode(clubId: string): Promise<{ code: string }> {
+    const club = await this.prisma.club.findUnique({
+      where: { id: clubId },
+      select: { joinCode: true },
+    });
+    if (!club) throw new NotFoundException(`No club with id "${clubId}"`);
+    return { code: club.joinCode };
+  }
+
+  /** The clubless-onboarding counterpart to `InvitesService.acceptByToken` —
+   * same "already a member?" guard and same `Membership` shape, but keyed
+   * off the club's standing `joinCode` instead of a single-use invite token,
+   * and always lands the caller as a plain `Member` (a code has no
+   * admin-picked roles to carry, unlike an invite). */
+  async joinByCode(userId: string, rawCode: string): Promise<{ clubId: string; clubName: string }> {
+    const code = rawCode.trim().toUpperCase();
+    const club = await this.prisma.club.findUnique({
+      where: { joinCode: code },
+      select: { id: true, name: true },
+    });
+    if (!club) {
+      throw new NotFoundException({
+        code: 'INVALID_CLUB_CODE',
+        message: 'No club matches that code',
+      });
+    }
+
+    const existingMembership = await this.prisma.membership.findFirst({
+      where: { clubId: club.id, userId, status: 'active' },
+      select: { id: true },
+    });
+    if (existingMembership) {
+      throw new ConflictException({
+        code: 'ALREADY_MEMBER',
+        message: 'You are already a member of this club',
+      });
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, lastName: true, email: true },
+    });
+    if (!user) throw new NotFoundException(`No user with id "${userId}"`);
+
+    await this.prisma.membership.create({
+      data: {
+        clubId: club.id,
+        userId,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        roles: ['Member'],
+        isClubAdmin: false,
+        status: 'active',
+        grantOverrides: {},
+      },
+    });
+
+    return { clubId: club.id, clubName: club.name };
+  }
+
+  private readonly joinCodeAlphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+  /** `joinCode` is `@unique` on `Club` — regenerate on the rare collision
+   * rather than suffixing (unlike `uniqueSlug`, a code has no readable base
+   * to suffix onto). */
+  private async uniqueJoinCode(): Promise<string> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const candidate = this.randomJoinCode();
+      const existing = await this.prisma.club.findUnique({
+        where: { joinCode: candidate },
+        select: { id: true },
+      });
+      if (!existing) return candidate;
+    }
+    throw new Error('Could not generate a unique club join code');
+  }
+
+  /** 8 characters from an alphabet with the easily-confused ones (0/O, 1/I/L)
+   * removed — this gets read aloud and typed by hand. */
+  private randomJoinCode(): string {
+    let out = '';
+    for (let i = 0; i < 8; i++) {
+      out += this.joinCodeAlphabet[Math.floor(Math.random() * this.joinCodeAlphabet.length)];
+    }
+    return out;
   }
 }
 

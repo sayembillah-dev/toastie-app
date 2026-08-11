@@ -351,6 +351,29 @@ export const toastlyApi = createApi({
       ],
     }),
 
+    /* Backed by `@Public()` on the server, but fetched with the normal authed
+     * baseQuery rather than the `/public/*` one — the caller here is always
+     * a signed-in, clubless user browsing from the onboarding screen, so
+     * there's a token to attach and no reason to duplicate `publicFetch`. */
+    getPublicClubDirectory: build.query<PublicClub[], void>({
+      query: () => ({ url: '/clubs/directory', method: 'GET' }),
+    }),
+
+    /* Club Admin's own dashboard reading its club's standing join code —
+     * needs an active club context (`X-Toastly-Context`), which the normal
+     * authed baseQuery already attaches. */
+    getClubJoinCode: build.query<{ code: string }, void>({
+      query: () => ({ url: '/clubs/join-code', method: 'GET' }),
+    }),
+
+    /* Clubless-onboarding counterpart to `acceptInvite` — same "no club
+     * context yet" reasoning, keyed by the standing code instead of a
+     * single-use token. */
+    joinClubByCode: build.mutation<JoinedClub, string>({
+      query: (code) => ({ url: '/clubs/join-by-code', method: 'POST', body: { code } }),
+      invalidatesTags: [{ type: 'Member', id: 'LIST' }],
+    }),
+
     getMember: build.query<Member, string>({
       query: (memberId) => ({ url: `/members/${memberId}`, method: 'GET' }),
       providesTags: (_member, _error, memberId) => [{ type: 'Member', id: memberId }],
@@ -2261,6 +2284,26 @@ export interface AcceptedInvite {
   clubName: string;
 }
 
+/** Wire shape from `GET /clubs/directory` — the public browse list a
+ * clubless user picks through on the onboarding screen. Lineage fields are
+ * absent for a still-unplaced, self-registered club. */
+export interface PublicClub {
+  id: string;
+  slug: string;
+  name: string;
+  clubNumber?: string;
+  areaName?: string;
+  divisionName?: string;
+  districtName?: string;
+}
+
+/** Response from `POST /clubs/join-by-code` — mirrors `AcceptedInvite`, same
+ * "enough to switch context and redirect" shape. */
+export interface JoinedClub {
+  clubId: string;
+  clubName: string;
+}
+
 /** The Super Admin user-detail panel's edit form — every field optional,
  * a save only sends what changed. */
 export interface UpdatePlatformUserProfileInput {
@@ -2427,6 +2470,9 @@ export const {
   useRevokeInviteMutation,
   useGetPublicInvitePreviewQuery,
   useAcceptInviteMutation,
+  useGetPublicClubDirectoryQuery,
+  useGetClubJoinCodeQuery,
+  useJoinClubByCodeMutation,
   useAuthLoginMutation,
   useAuthRegisterMutation,
   useAuthLogoutMutation,

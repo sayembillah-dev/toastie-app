@@ -1,7 +1,7 @@
 'use client';
 
 import type { ActiveContextKey, SessionResponse } from '@toastly/access';
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 
 import {
   clearAuthStorage,
@@ -53,6 +53,40 @@ async function fetchLiveSession(): Promise<SessionResponse | null> {
   return (await res.json()) as SessionResponse;
 }
 
+/** Applies a freshly-fetched session payload the same way on every call
+ * site: validate any stored context against it, persist the resolved
+ * context, and dispatch `sessionLoaded`. */
+function applySessionPayload(
+  dispatch: ReturnType<typeof useAppDispatch>,
+  payload: SessionResponse,
+): void {
+  const stored = readStoredContext();
+  const valid = stored && isContextKeyValid(stored, payload) ? stored : null;
+  const contextKey = (valid ?? payload.defaultContextKey) as ActiveContextKey | null;
+  if (contextKey && contextKey !== stored) writeStoredContext(contextKey);
+  dispatch(sessionLoaded({ payload, contextKey }));
+}
+
+/** Re-fetches `/auth/session` and re-dispatches it — the same hydration
+ * `SessionProvider` runs on mount. Exposed so a client action that changes
+ * membership state in-place (e.g. joining a club by code from the
+ * onboarding screen) can pull the fresh session without a route change:
+ * `SessionProvider` is mounted once by `(app)/layout.tsx` and won't re-run
+ * its own mount effect on a same-layout navigation. */
+export function useSessionRefresh(): () => Promise<void> {
+  const dispatch = useAppDispatch();
+
+  return useCallback(async () => {
+    const payload = await fetchLiveSession();
+    if (!payload) {
+      clearAuthStorage();
+      dispatch(sessionUnauthenticated());
+      return;
+    }
+    applySessionPayload(dispatch, payload);
+  }, [dispatch]);
+}
+
 /** Loads the session on mount, validates any stored context against the
  * returned memberships/assignments, and dispatches `sessionLoaded`.
  *
@@ -73,12 +107,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         dispatch(sessionUnauthenticated());
         return;
       }
-
-      const stored = readStoredContext();
-      const valid = stored && isContextKeyValid(stored, payload) ? stored : null;
-      const contextKey = (valid ?? payload.defaultContextKey) as ActiveContextKey | null;
-      if (contextKey && contextKey !== stored) writeStoredContext(contextKey);
-      dispatch(sessionLoaded({ payload, contextKey }));
+      applySessionPayload(dispatch, payload);
     }
 
     void hydrate();
