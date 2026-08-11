@@ -19,6 +19,7 @@ import {
   shortNameRules,
 } from '@/lib/validation/rules';
 import { useAuthRegisterMutation } from '@/store/api';
+import { getFieldErrors } from '@/store/api-error';
 import { useAppDispatch } from '@/store/hooks';
 import { isContextKeyValid, sessionLoaded } from '@/store/session-slice';
 
@@ -40,6 +41,7 @@ function RegisterPageContent() {
   const dispatch = useAppDispatch();
   const [register, { isLoading }] = useAuthRegisterMutation();
   const [error, setError] = useState<string | null>(null);
+  const [form] = Form.useForm<FormValues>();
 
   async function onSubmit(values: FormValues) {
     setError(null);
@@ -65,6 +67,16 @@ function RegisterPageContent() {
       const next = safeNextPath(searchParams.get('next'));
       router.replace(next ?? '/');
     } catch (err) {
+      const fieldErrors = getFieldErrors(err);
+      if (fieldErrors) {
+        form.setFields(
+          Object.entries(fieldErrors).map(([name, errors]) => ({
+            name: name as keyof FormValues,
+            errors,
+          })),
+        );
+        return;
+      }
       const code = extractErrorCode(err);
       setError(messageForCode(code));
     }
@@ -84,7 +96,7 @@ function RegisterPageContent() {
       >
         {error ? <Alert type="error" showIcon className="mb-4" message={error} /> : null}
 
-        <Form<FormValues> layout="vertical" onFinish={onSubmit} disabled={isLoading}>
+        <Form<FormValues> form={form} layout="vertical" onFinish={onSubmit} disabled={isLoading}>
           <div className="flex gap-3">
             <Form.Item
               label="First name"

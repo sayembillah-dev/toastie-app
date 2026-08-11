@@ -31,7 +31,7 @@ import {
   useListDivisionsQuery,
   useListOrgClubsQuery,
 } from '@/store/api';
-import { getApiErrorMessage } from '@/store/api-error';
+import { getApiErrorMessage, getFieldErrors } from '@/store/api-error';
 
 const ROLE_OPTIONS = OFFICER_ROLES.map((role) => ({ value: role, label: role }));
 const MEMBER_TYPE_LABELS: Record<MemberType, string> = {
@@ -253,6 +253,21 @@ function ModalBody({ onClose }: { onClose: () => void }) {
             name: 'email',
             errors: ['That email is already linked to another account.'],
           },
+        ]);
+        return;
+      }
+      const fieldErrors = getFieldErrors(err);
+      if (fieldErrors) {
+        // The form has one `fullName` input for the DTO's separate
+        // `firstName`/`lastName` — route either back onto it.
+        const { firstName, lastName, ...rest } = fieldErrors;
+        const nameErrors = [...(firstName ?? []), ...(lastName ?? [])];
+        form.setFields([
+          ...(nameErrors.length > 0 ? [{ name: 'fullName' as const, errors: nameErrors }] : []),
+          ...Object.entries(rest).map(([name, errors]) => ({
+            name: name as keyof FormValues,
+            errors,
+          })),
         ]);
         return;
       }

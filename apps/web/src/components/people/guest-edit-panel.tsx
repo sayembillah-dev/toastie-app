@@ -9,7 +9,7 @@ import type { Guest, GuestSocial, SocialPlatform } from '@/lib/people/guests';
 import { getGuestInitials, getGuestSwatch, SOCIAL_PLATFORMS } from '@/lib/people/guests';
 import { emailRules, normalizePhone, phoneRules, shortNameRules } from '@/lib/validation/rules';
 import { useUpdateGuestMutation } from '@/store/api';
-import { getApiErrorMessage } from '@/store/api-error';
+import { getApiErrorMessage, getFieldErrors } from '@/store/api-error';
 
 interface GuestEditPanelProps {
   guest: Guest;
@@ -206,6 +206,16 @@ export function GuestEditPanel({ guest, open, onClose }: GuestEditPanelProps) {
       message.success('Guest details saved');
       onClose();
     } catch (err) {
+      const fieldErrors = getFieldErrors(err);
+      if (fieldErrors) {
+        form.setFields(
+          Object.entries(fieldErrors).map(([name, errors]) => ({
+            name: name as keyof FormValues,
+            errors,
+          })),
+        );
+        return;
+      }
       message.error(getApiErrorMessage(err));
     }
   }

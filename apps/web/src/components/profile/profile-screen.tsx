@@ -24,7 +24,7 @@ import {
 } from '@/lib/profile/profile';
 import { emailRules, normalizePhone, phoneRules, shortNameRules } from '@/lib/validation/rules';
 import { useGetMyProfileQuery, useUpdateMyProfileMutation } from '@/store/api';
-import { getApiErrorMessage } from '@/store/api-error';
+import { getApiErrorMessage, getFieldErrors } from '@/store/api-error';
 import { useAppDispatch } from '@/store/hooks';
 import { profileUpdated } from '@/store/session-slice';
 
@@ -269,6 +269,16 @@ function ProfileForm({ profile }: { profile: Profile }) {
       }
       if (code === 'PHONE_TAKEN') {
         form.setFields([{ name: 'phone', errors: ['That phone number is already in use'] }]);
+        return;
+      }
+      const fieldErrors = getFieldErrors(err);
+      if (fieldErrors) {
+        form.setFields(
+          Object.entries(fieldErrors).map(([name, errors]) => ({
+            name: name as keyof FormValues,
+            errors,
+          })),
+        );
         return;
       }
       message.error(getApiErrorMessage(err));

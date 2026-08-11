@@ -46,7 +46,7 @@ import {
   useUpdatePlatformUserMembershipMutation,
   useUpdatePlatformUserProfileMutation,
 } from '@/store/api';
-import { getApiErrorMessage } from '@/store/api-error';
+import { getApiErrorMessage, getFieldErrors } from '@/store/api-error';
 import { useAppSelector } from '@/store/hooks';
 import { selectSessionUser } from '@/store/session-slice';
 
@@ -229,6 +229,16 @@ function ProfileSection({
       }
       if (code === 'EMAIL_TAKEN') {
         form.setFields([{ name: 'email', errors: ['That email is already in use.'] }]);
+        return;
+      }
+      const fieldErrors = getFieldErrors(err);
+      if (fieldErrors) {
+        form.setFields(
+          Object.entries(fieldErrors).map(([name, errors]) => ({
+            name: name as keyof ProfileValues,
+            errors,
+          })),
+        );
         return;
       }
       message.error(getApiErrorMessage(err, "Couldn't save these changes. Please try again."));

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 
 import { emailRules, normalizePhone, phoneRules, shortNameRules } from '@/lib/validation/rules';
 import { useCreateGuestMutation } from '@/store/api';
-import { getApiErrorMessage } from '@/store/api-error';
+import { getApiErrorMessage, getFieldErrors } from '@/store/api-error';
 
 interface AddGuestDrawerProps {
   open: boolean;
@@ -57,6 +57,16 @@ export function AddGuestDrawer({ open, onClose }: AddGuestDrawerProps) {
       onClose();
       router.push(`/people/${guest.id}`);
     } catch (err) {
+      const fieldErrors = getFieldErrors(err);
+      if (fieldErrors) {
+        form.setFields(
+          Object.entries(fieldErrors).map(([name, errors]) => ({
+            name: name as keyof FormValues,
+            errors,
+          })),
+        );
+        return;
+      }
       message.error(getApiErrorMessage(err));
     }
   }

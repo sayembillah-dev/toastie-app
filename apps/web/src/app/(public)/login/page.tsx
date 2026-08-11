@@ -13,6 +13,7 @@ import { safeNextPath } from '@/lib/auth/next-path';
 import { writeAccessToken, writeRefreshToken, writeStoredContext } from '@/lib/auth/token-storage';
 import { normalizePhone, phoneRules } from '@/lib/validation/rules';
 import { useAuthLoginMutation } from '@/store/api';
+import { getFieldErrors } from '@/store/api-error';
 import { useAppDispatch } from '@/store/hooks';
 import { defaultRouteForContext, isContextKeyValid, sessionLoaded } from '@/store/session-slice';
 
@@ -36,6 +37,7 @@ function LoginPageContent() {
   const dispatch = useAppDispatch();
   const [login, { isLoading }] = useAuthLoginMutation();
   const [error, setError] = useState<string | null>(null);
+  const [form] = Form.useForm<FormValues>();
 
   async function onSubmit(values: FormValues) {
     setError(null);
@@ -68,6 +70,16 @@ function LoginPageContent() {
           : destination,
       );
     } catch (err) {
+      const fieldErrors = getFieldErrors(err);
+      if (fieldErrors) {
+        form.setFields(
+          Object.entries(fieldErrors).map(([name, errors]) => ({
+            name: name as keyof FormValues,
+            errors,
+          })),
+        );
+        return;
+      }
       const code = extractErrorCode(err);
       setError(messageForCode(code));
     }
@@ -88,6 +100,7 @@ function LoginPageContent() {
         {error ? <Alert type="error" showIcon className="mb-4" message={error} /> : null}
 
         <Form<FormValues>
+          form={form}
           layout="vertical"
           onFinish={onSubmit}
           autoComplete="on"
