@@ -219,15 +219,15 @@ export function PublicAgendaPage({ meetingId }: PublicAgendaPageProps) {
             </span>
           </div>
           {agenda.clubContactPhone || agenda.clubVenueMapUrl ? (
-            <div className="mt-5 flex flex-wrap gap-2">
+            <div className="mt-5 flex flex-wrap gap-2.5">
               {agenda.clubContactPhone ? (
                 <a
                   href={`https://wa.me/${toWhatsappNumber(agenda.clubContactPhone)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-white/20"
+                  className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-xs font-semibold text-slate-800 shadow-lg shadow-black/20 ring-1 ring-white/60 transition-all hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0"
                 >
-                  <WhatsappLogo size={15} weight="fill" />
+                  <WhatsappLogo size={16} weight="fill" className="text-emerald-600" />
                   Contact Club
                 </a>
               ) : null}
@@ -236,9 +236,9 @@ export function PublicAgendaPage({ meetingId }: PublicAgendaPageProps) {
                   href={agenda.clubVenueMapUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-white/20"
+                  className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-xs font-semibold text-slate-800 shadow-lg shadow-black/20 ring-1 ring-white/60 transition-all hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0"
                 >
-                  <MapPin size={15} weight="fill" />
+                  <MapPin size={16} weight="fill" className="text-rose-600" />
                   View Location
                 </a>
               ) : null}
