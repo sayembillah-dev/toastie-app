@@ -4,7 +4,7 @@ import { CloudArrowUp, Image as ImageIcon, X } from '@phosphor-icons/react/dist/
 import type { UploadProps } from 'antd';
 import { App, Button, Input, Modal, Popconfirm, Upload } from 'antd';
 import NextImage from 'next/image';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { InventoryImageMimeType, InventoryItem } from '@/lib/inventory/inventory-items';
 import {
@@ -14,6 +14,7 @@ import {
   INVENTORY_TITLE_MAX,
   isInventoryImageMimeType,
 } from '@/lib/inventory/inventory-items';
+import { uploadFile } from '@/lib/uploads';
 import {
   useCreateInventoryItemMutation,
   useDeleteInventoryItemMutation,
@@ -29,15 +30,6 @@ interface InventoryItemModalProps {
 }
 
 const ACCEPT = INVENTORY_IMAGE_MIME_TYPES.join(',');
-
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error('Could not read the file'));
-    reader.onload = () => resolve(String(reader.result));
-    reader.readAsDataURL(file);
-  });
-}
 
 /** Add / edit dialog. Handles the create and update flow off a single form so
  * the two paths stay in sync — the parent decides which one by passing an
@@ -68,11 +60,25 @@ function ModalBody({ item, onDone, onCancel }: ModalBodyProps) {
   const { message } = App.useApp();
   const [title, setTitle] = useState(item?.title ?? '');
   const [description, setDescription] = useState(item?.description ?? '');
-  const [imageUrl, setImageUrl] = useState<string | undefined>(item?.imageUrl);
-  const [imageMimeType, setImageMimeType] = useState<InventoryImageMimeType | undefined>(
-    item?.imageMimeType,
-  );
+  /* The photo is held as a `File` until save. What the API returns for an
+   * existing item is a short-lived signed URL, and what it accepts is an
+   * object key, so the value on screen and the value on the wire are
+   * different strings — `pending`/`cleared` keep them apart. Leaving both
+   * unset means "untouched", and the PATCH omits the image entirely. */
+  const [pendingImage, setPendingImage] = useState<{
+    file: File;
+    previewUrl: string;
+    mimeType: InventoryImageMimeType;
+  } | null>(null);
+  const [imageCleared, setImageCleared] = useState(false);
   const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    if (!pendingImage) return;
+    return () => URL.revokeObjectURL(pendingImage.previewUrl);
+  }, [pendingImage]);
+
+  const shownImage = pendingImage?.previewUrl ?? (imageCleared ? undefined : item?.imageUrl);
 
   const [createItem, { isLoading: isCreating }] = useCreateInventoryItemMutation();
   const [updateItem, { isLoading: isUpdating }] = useUpdateInventoryItemMutation();
@@ -88,16 +94,12 @@ function ModalBody({ item, onDone, onCancel }: ModalBodyProps) {
       message.error(`Please choose an image under ${mb} MB`);
       return Upload.LIST_IGNORE;
     }
-    setUploading(true);
-    try {
-      const dataUrl = await fileToDataUrl(file);
-      setImageUrl(dataUrl);
-      setImageMimeType(file.type as InventoryImageMimeType);
-    } catch (err) {
-      message.error(getApiErrorMessage(err, 'Could not read the image'));
-    } finally {
-      setUploading(false);
-    }
+    setPendingImage({
+      file,
+      previewUrl: URL.createObjectURL(file),
+      mimeType: file.type as InventoryImageMimeType,
+    });
+    setImageCleared(false);
     return false;
   };
 
@@ -107,26 +109,47 @@ function ModalBody({ item, onDone, onCancel }: ModalBodyProps) {
 
   const handleSave = async () => {
     if (!canSave) return;
-    const payload = {
-      title: trimmedTitle,
-      description: description.trim() === '' ? undefined : description.trim(),
-      imageUrl,
-      imageMimeType,
-    };
+
+    /* Upload before the row write so a rejected photo fails loudly instead of
+     * saving an item that points at nothing. `null` clears the image; leaving
+     * both fields off the payload means "don't touch it". */
+    let image: { imageUrl: string | null; imageMimeType: InventoryImageMimeType | null } | null =
+      null;
+    setUploading(true);
+    try {
+      if (pendingImage) {
+        image = {
+          imageUrl: await uploadFile(pendingImage.file, 'inventory'),
+          imageMimeType: pendingImage.mimeType,
+        };
+      } else if (imageCleared) {
+        image = { imageUrl: null, imageMimeType: null };
+      }
+    } catch (err) {
+      message.error(getApiErrorMessage(err, 'Could not upload the image'));
+      return;
+    } finally {
+      setUploading(false);
+    }
+
+    const description_ = description.trim();
     try {
       if (item) {
-        /* Only send what changed — the parent already knows the current shape,
-         * and PATCH lets us clear the image by explicitly sending null. */
         await updateItem({
           itemId: item.id,
-          title: payload.title,
-          description: payload.description ?? '',
-          imageUrl: payload.imageUrl ?? null,
-          imageMimeType: payload.imageMimeType ?? null,
+          title: trimmedTitle,
+          description: description_,
+          ...(image ?? {}),
         }).unwrap();
         message.success('Inventory item updated');
       } else {
-        await createItem(payload).unwrap();
+        await createItem({
+          title: trimmedTitle,
+          description: description_ === '' ? undefined : description_,
+          ...(image?.imageUrl
+            ? { imageUrl: image.imageUrl, imageMimeType: image.imageMimeType ?? undefined }
+            : {}),
+        }).unwrap();
         message.success('Inventory item added');
       }
       onDone();
@@ -148,11 +171,11 @@ function ModalBody({ item, onDone, onCancel }: ModalBodyProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      {imageUrl ? (
+      {shownImage ? (
         <div className="relative overflow-hidden rounded-lg border border-line bg-fill">
           <div className="relative w-full" style={{ paddingTop: '56%' }}>
             <NextImage
-              src={imageUrl}
+              src={shownImage}
               alt=""
               fill
               unoptimized
@@ -165,8 +188,8 @@ function ModalBody({ item, onDone, onCancel }: ModalBodyProps) {
             size="small"
             aria-label="Remove image"
             onClick={() => {
-              setImageUrl(undefined);
-              setImageMimeType(undefined);
+              setPendingImage(null);
+              setImageCleared(true);
             }}
             icon={<X size={14} />}
             className="!absolute top-2 right-2 !bg-canvas/90"

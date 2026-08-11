@@ -9,11 +9,11 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 import { App, Button, Dropdown, Input, Segmented, Skeleton, Tag } from 'antd';
 import { useMemo, useState } from 'react';
-
 import { ConvertGuestModal } from '@/components/club-admin/convert-guest-modal';
 import { InvitePanel } from '@/components/club-admin/invite-panel';
 import { MemberFormModal } from '@/components/club-admin/member-form-modal';
 import { StaggerItem, StaggerList } from '@/components/motion/stagger-list';
+import { PersonAvatar } from '@/components/ui/person-avatar';
 import type { Member } from '@/lib/education/members';
 import { formatRoles, getInitials } from '@/lib/education/members';
 import { useCan } from '@/lib/permissions/use-can';
@@ -167,12 +167,7 @@ export function MembersTab() {
                 className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-canvas p-3"
               >
                 <div className="flex min-w-0 items-center gap-3">
-                  <span
-                    aria-hidden
-                    className="flex size-9 shrink-0 items-center justify-center rounded-full bg-fill text-xs font-semibold text-ink-soft"
-                  >
-                    {getInitials(member)}
-                  </span>
+                  <PersonAvatar src={member.avatarUrl} initials={getInitials(member)} />
                   <div className="min-w-0">
                     <p className="flex items-center gap-1.5 truncate text-sm font-medium text-ink">
                       {member.firstName} {member.lastName}

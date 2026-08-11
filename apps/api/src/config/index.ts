@@ -1,1 +1,1 @@
-export { AppEnv, validateEnv } from './env.validation';
+export { AppEnv, FileStorageProvider, validateEnv } from './env.validation';

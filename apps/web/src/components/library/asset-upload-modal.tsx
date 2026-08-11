@@ -4,7 +4,7 @@ import { CloudArrowUp, Image as ImageIcon, X } from '@phosphor-icons/react/dist/
 import type { UploadFile, UploadProps } from 'antd';
 import { App, Button, Input, Modal, Upload } from 'antd';
 import NextImage from 'next/image';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import {
   ASSET_FILE_MAX_BYTES,
@@ -13,6 +13,7 @@ import {
   type AssetMimeType,
   isAssetMimeType,
 } from '@/lib/library/assets';
+import { uploadFile } from '@/lib/uploads';
 import { useCreateAssetMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -21,12 +22,19 @@ interface AssetUploadModalProps {
   onClose: () => void;
 }
 
-/** Local upload draft — the image is decoded to a data-URL up front so the
- * preview can render before the user commits, and the natural width/height
- * are captured so the server-side metadata matches the pixels. */
+/** Local upload draft.
+ *
+ * Holds the `File` rather than its bytes: nothing is sent anywhere until the
+ * user commits, and then `uploadFile` streams it straight to S3. `previewUrl`
+ * is a local `blob:` URL purely for the on-screen preview — it never reaches
+ * the server and is revoked when the draft is replaced or the modal closes.
+ *
+ * Width/height are measured client-side because S3 does not report image
+ * dimensions back, and the `Asset` row wants them. */
 interface Draft {
   title: string;
-  imageUrl: string;
+  file: File;
+  previewUrl: string;
   mimeType: AssetMimeType;
   width: number;
   height: number;
@@ -38,23 +46,14 @@ interface Draft {
  * server so the same set holds on both ends of the wire. */
 const ACCEPT = ASSET_MIME_TYPES.join(',');
 
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error('Could not read the file'));
-    reader.onload = () => resolve(String(reader.result));
-    reader.readAsDataURL(file);
-  });
-}
-
-/** Reads the natural pixel dimensions off a data-URL. Kept out of the render
- * path so an oversized image can't stretch the modal before it lands. */
-function measureImage(dataUrl: string): Promise<{ width: number; height: number }> {
+/** Reads the natural pixel dimensions off a local object URL. Kept out of the
+ * render path so an oversized image can't stretch the modal before it lands. */
+function measureImage(objectUrl: string): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
     const img = new window.Image();
     img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
     img.onerror = () => reject(new Error('Could not decode the image'));
-    img.src = dataUrl;
+    img.src = objectUrl;
   });
 }
 
@@ -80,6 +79,15 @@ function UploadBody({ onDone, onCancel }: UploadBodyProps) {
   const [busy, setBusy] = useState(false);
   const [createAsset, { isLoading: isSaving }] = useCreateAssetMutation();
 
+  /* Frees the previous preview when the draft is replaced, and the current
+   * one when the dialog closes (`destroyOnHidden` unmounts this body). Done
+   * in an effect rather than inside the `setDraft` updater so the updater
+   * stays pure — StrictMode calls it twice. */
+  useEffect(() => {
+    if (!draft) return;
+    return () => URL.revokeObjectURL(draft.previewUrl);
+  }, [draft]);
+
   const handleBeforeUpload: NonNullable<UploadProps['beforeUpload']> = async (file) => {
     if (!isAssetMimeType(file.type)) {
       message.error('Please choose a PNG, JPEG, WEBP or GIF image');
@@ -91,12 +99,13 @@ function UploadBody({ onDone, onCancel }: UploadBodyProps) {
       return Upload.LIST_IGNORE;
     }
     setBusy(true);
+    const previewUrl = URL.createObjectURL(file);
     try {
-      const imageUrl = await fileToDataUrl(file);
-      const { width, height } = await measureImage(imageUrl);
+      const { width, height } = await measureImage(previewUrl);
       setDraft((prev) => ({
         title: prev?.title ?? file.name.replace(/\.[^.]+$/, ''),
-        imageUrl,
+        file,
+        previewUrl,
         mimeType: file.type as AssetMimeType,
         width,
         height,
@@ -104,6 +113,7 @@ function UploadBody({ onDone, onCancel }: UploadBodyProps) {
         fileName: file.name,
       }));
     } catch (error) {
+      URL.revokeObjectURL(previewUrl);
       message.error(getApiErrorMessage(error, 'Could not read the image'));
     } finally {
       setBusy(false);
@@ -126,12 +136,18 @@ function UploadBody({ onDone, onCancel }: UploadBodyProps) {
   const trimmedTitle = draft?.title.trim() ?? '';
   const canSave = draft !== null && trimmedTitle.length > 0 && !isSaving && !busy;
 
+  /* Bytes move on save, not on pick. Uploading eagerly would give a livelier
+   * preview, but every cancelled dialog would leave an object in the bucket
+   * that nothing references and nothing can safely sweep — the row is the
+   * only record that a key is still in use. */
   const handleSave = async () => {
     if (!draft || !canSave) return;
+    setBusy(true);
     try {
+      const imageUrl = await uploadFile(draft.file, 'asset');
       await createAsset({
         title: trimmedTitle,
-        imageUrl: draft.imageUrl,
+        imageUrl,
         mimeType: draft.mimeType,
         width: draft.width,
         height: draft.height,
@@ -141,6 +157,8 @@ function UploadBody({ onDone, onCancel }: UploadBodyProps) {
       onDone();
     } catch (error) {
       message.error(getApiErrorMessage(error, 'Could not upload the image'));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -153,7 +171,7 @@ function UploadBody({ onDone, onCancel }: UploadBodyProps) {
             style={{ paddingTop: `${Math.min(75, (draft.height / draft.width) * 100)}%` }}
           >
             <NextImage
-              src={draft.imageUrl}
+              src={draft.previewUrl}
               alt=""
               fill
               unoptimized
@@ -210,7 +228,7 @@ function UploadBody({ onDone, onCancel }: UploadBodyProps) {
 
       <div className="flex justify-end gap-2">
         <Button onClick={onCancel}>Cancel</Button>
-        <Button type="primary" disabled={!canSave} loading={isSaving} onClick={handleSave}>
+        <Button type="primary" disabled={!canSave} loading={isSaving || busy} onClick={handleSave}>
           Upload
         </Button>
       </div>

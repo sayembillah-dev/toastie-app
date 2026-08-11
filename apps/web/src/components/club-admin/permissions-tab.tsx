@@ -11,6 +11,7 @@ import { ACTIONS, can as canDecide, overrideKey, RESOURCE_KEYS } from '@toastly/
 import { App, Button, Checkbox, Input, Select, Skeleton } from 'antd';
 import { useMemo, useState } from 'react';
 
+import { PersonAvatar } from '@/components/ui/person-avatar';
 import type { Member } from '@/lib/education/members';
 import { formatRoles, getInitials } from '@/lib/education/members';
 import { otherMemberToSubject } from '@/lib/permissions/subject';
@@ -282,12 +283,7 @@ function MemberHeader({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-3 border-b border-line p-3 sm:p-4">
-      <span
-        aria-hidden
-        className="flex size-9 shrink-0 items-center justify-center rounded-full bg-fill text-xs font-semibold text-ink-soft"
-      >
-        {getInitials(member)}
-      </span>
+      <PersonAvatar src={member.avatarUrl} initials={getInitials(member)} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-ink">
           {member.firstName} {member.lastName}

@@ -12,9 +12,9 @@ import {
 import type { UploadFile } from 'antd';
 import { App, Button, Form, Input, Select, Space, Upload } from 'antd';
 import Link from 'next/link';
-import { useEffect, useMemo } from 'react';
-
+import { useEffect, useMemo, useState } from 'react';
 import { PushNotificationToggle } from '@/components/push/push-notification-toggle';
+import { PersonAvatar } from '@/components/ui/person-avatar';
 import {
   getProfileInitials,
   PROFILE_SOCIAL_PLATFORMS,
@@ -22,6 +22,7 @@ import {
   type ProfileSocial,
   type ProfileSocialPlatform,
 } from '@/lib/profile/profile';
+import { uploadFile } from '@/lib/uploads';
 import { emailRules, normalizePhone, phoneRules, shortNameRules } from '@/lib/validation/rules';
 import { useGetMyProfileQuery, useUpdateMyProfileMutation } from '@/store/api';
 import { getApiErrorMessage, getFieldErrors } from '@/store/api-error';
@@ -33,7 +34,9 @@ interface FormValues {
   lastName: string;
   email?: string;
   phone: string;
-  avatarUrl?: string;
+  // Deliberately not a form field: the photo is a `File` held in component
+  // state until save, because what the API returns is a signed URL and what
+  // it accepts is an object key — the two are not the same string.
   bio?: string;
   socials: ProfileSocial[];
   currentPassword?: string;
@@ -45,20 +48,14 @@ function deserialize(profile: Profile): FormValues {
     lastName: profile.lastName,
     email: profile.email ?? '',
     phone: profile.phone,
-    avatarUrl: profile.avatarUrl ?? undefined,
     bio: profile.bio ?? '',
     socials: profile.socials.map((social) => ({ ...social })),
   };
 }
 
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error('Could not read the file'));
-    reader.onload = () => resolve(String(reader.result));
-    reader.readAsDataURL(file);
-  });
-}
+/** Matches the `avatar` surface cap in
+ * `apps/api/src/storage/storage.types.ts`. */
+const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
 
 const AVATAR_PALETTE = [
   { bg: '#FFE4E6', fg: '#881337' },
@@ -83,55 +80,47 @@ function hashString(input: string): number {
 
 interface AvatarFieldProps {
   profile: Profile;
+  /** What to show: a `blob:` preview of a freshly picked file, the signed URL
+   * the API returned, or nothing. Display only — never submitted. */
   value?: string;
-  onChange: (next: string | undefined) => void;
+  /** `File` when the user picks one, `null` when they clear the photo. */
+  onChange: (next: File | null) => void;
   onError: (message: string) => void;
 }
 
-/** Same convention as `GuestEditPanel`'s `AvatarField` — no upload service
- * exists anywhere in this codebase, so the file is decoded to a base64 data
- * URL client-side and pushed straight into the form value. */
+/** Same convention as `GuestEditPanel`'s `AvatarField`. The picked file is
+ * held, not read: it is uploaded to S3 on save, and what lands on the row is
+ * an object key. `value` is strictly for display — the URL the API hands back
+ * is a short-lived signed one, so submitting it back would be meaningless. */
 function AvatarField({ profile, value, onChange, onError }: AvatarFieldProps) {
   const swatch = AVATAR_PALETTE[hashString(profile.id) % AVATAR_PALETTE.length];
   const initials = getProfileInitials(profile);
 
   return (
     <div className="flex items-center gap-4">
-      {value ? (
-        // biome-ignore lint/performance/noImgElement: local base64 data URL — next/image would need a custom loader.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={value}
-          alt=""
-          aria-hidden
-          className="size-16 shrink-0 rounded-full object-cover ring-2 ring-line"
-        />
-      ) : (
-        <div
-          aria-hidden
-          className="flex size-16 shrink-0 items-center justify-center rounded-full ring-2 ring-line"
-          style={{ backgroundColor: swatch.bg, color: swatch.fg }}
-        >
-          <span className="text-lg font-semibold tracking-wide">{initials}</span>
-        </div>
-      )}
+      {/* `value` is a local blob: preview while a new photo is pending, and
+       * the signed URL from the API otherwise — PersonAvatar takes either. */}
+      <PersonAvatar
+        src={value}
+        initials={initials}
+        swatch={swatch}
+        sizeClass="size-16"
+        textClass="text-lg tracking-wide"
+        className="ring-2 ring-line"
+      />
 
       <div className="flex flex-wrap gap-2">
         <Upload
           accept="image/*"
           showUploadList={false}
           maxCount={1}
-          beforeUpload={async (file: UploadFile & File) => {
-            if (file.size && file.size > 2 * 1024 * 1024) {
-              onError('Please choose an image smaller than 2 MB.');
+          beforeUpload={(file: UploadFile & File) => {
+            if (file.size && file.size > AVATAR_MAX_BYTES) {
+              const mb = (AVATAR_MAX_BYTES / (1024 * 1024)).toFixed(0);
+              onError(`Please choose an image smaller than ${mb} MB.`);
               return Upload.LIST_IGNORE;
             }
-            try {
-              const dataUrl = await fileToDataUrl(file);
-              onChange(dataUrl);
-            } catch (err) {
-              onError(err instanceof Error ? err.message : 'Could not read the file');
-            }
+            onChange(file);
             return false;
           }}
         >
@@ -143,7 +132,7 @@ function AvatarField({ profile, value, onChange, onError }: AvatarFieldProps) {
           <Button
             type="text"
             size="middle"
-            onClick={() => onChange(undefined)}
+            onClick={() => onChange(null)}
             icon={<XCircle size={14} weight="bold" />}
             className="!text-ink-soft"
           >
@@ -212,7 +201,23 @@ function ProfileForm({ profile }: { profile: Profile }) {
     form.setFieldsValue(initialValues);
   }, [form, initialValues]);
 
-  const avatarUrl = Form.useWatch('avatarUrl', form);
+  /* The photo lives outside the form. `pending` is a file the user picked but
+   * has not saved (shown from a local `blob:` URL); `cleared` records that
+   * they hit Remove. With neither set the field is untouched, and save omits
+   * `avatarUrl` entirely so the server leaves the existing object alone —
+   * sending back the signed URL it gave us would be rejected as a key. */
+  const [avatarPending, setAvatarPending] = useState<{ file: File; previewUrl: string } | null>(
+    null,
+  );
+  const [avatarCleared, setAvatarCleared] = useState(false);
+
+  useEffect(() => {
+    if (!avatarPending) return;
+    return () => URL.revokeObjectURL(avatarPending.previewUrl);
+  }, [avatarPending]);
+
+  const shownAvatar = avatarPending?.previewUrl ?? (avatarCleared ? undefined : profile.avatarUrl);
+
   const email = Form.useWatch('email', form);
   const phone = Form.useWatch('phone', form);
 
@@ -235,12 +240,23 @@ function ProfileForm({ profile }: { profile: Profile }) {
         url: entry.url.trim(),
       }));
 
+    // Upload first: if S3 rejects the photo we stop here rather than saving a
+    // profile that points at nothing.
+    let avatarUrl: string | undefined;
+    try {
+      if (avatarPending) avatarUrl = await uploadFile(avatarPending.file, 'avatar');
+      else if (avatarCleared) avatarUrl = '';
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : 'Could not upload the photo');
+      return;
+    }
+
     try {
       const result = await updateProfile({
         firstName: values.firstName.trim(),
         lastName: values.lastName.trim(),
         bio: values.bio?.trim() || undefined,
-        avatarUrl: values.avatarUrl,
+        ...(avatarUrl !== undefined ? { avatarUrl } : {}),
         socials: cleanedSocials,
         ...(emailChanged ? { email: values.email?.trim() || '' } : {}),
         ...(phoneChanged ? { phone: normalizePhone(values.phone) } : {}),
@@ -256,6 +272,10 @@ function ProfileForm({ profile }: { profile: Profile }) {
         }),
       );
       form.setFieldValue('currentPassword', undefined);
+      // The saved photo now comes back down through `profile`, so drop the
+      // local draft rather than keep showing the stale blob preview.
+      setAvatarPending(null);
+      setAvatarCleared(false);
       message.success('Profile saved');
     } catch (err) {
       const code = extractErrorCode(err);
@@ -305,11 +325,19 @@ function ProfileForm({ profile }: { profile: Profile }) {
         disabled={isLoading}
       >
         <div className="rounded-xl border border-line bg-canvas p-5">
-          <Form.Item label="Photo" name="avatarUrl" valuePropName="value" className="!mb-0">
+          <Form.Item label="Photo" className="!mb-0">
             <AvatarField
               profile={profile}
-              value={avatarUrl}
-              onChange={(next) => form.setFieldValue('avatarUrl', next)}
+              value={shownAvatar ?? undefined}
+              onChange={(next) => {
+                if (next) {
+                  setAvatarPending({ file: next, previewUrl: URL.createObjectURL(next) });
+                  setAvatarCleared(false);
+                } else {
+                  setAvatarPending(null);
+                  setAvatarCleared(true);
+                }
+              }}
               onError={(msg) => message.error(msg)}
             />
           </Form.Item>

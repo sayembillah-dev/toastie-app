@@ -20,13 +20,19 @@ export type DocumentMimeType = (typeof DOCUMENT_MIME_TYPES)[number];
 export const ASSET_TITLE_MAX = 120;
 export const DOCUMENT_TITLE_MAX = 120;
 export const DOCUMENT_FILE_NAME_MAX = 200;
-/** Data-URL payload ceiling — 4 MB × 4/3 base64 blowup. Client already
- * enforces the raw-byte cap; this is a coarse belt-and-braces limit. */
+/** Upper bound on the `imageUrl`/`fileUrl` field.
+ *
+ * On the `s3` backend the value is a short object key and this is enormously
+ * generous. It stays this size for the `local-db` backend and for rows the
+ * backfill has not reached yet, where the field still carries a whole base64
+ * data-URL — 4 MB of file × the 4/3 base64 blowup. Shrink it to key-sized
+ * once `local-db` is retired and the backfill reports zero. */
 export const DATA_URL_MAX = 6 * 1024 * 1024;
 
-/** Body for `POST /assets`. Bytes ride inline as a data-URL; when an
- * object-store backend arrives this flips to a signed-upload flow but the
- * wire stays. */
+/** Body for `POST /assets`. `imageUrl` is an S3 object key obtained from
+ * `POST /uploads/sign` — or, on the `local-db` backend, an inline data-URL.
+ * The service pins the key to the caller's club before storing it (see
+ * `StorageService.assertOwnedKey`). */
 export class CreateAssetDto {
   @IsString()
   @MinLength(1)

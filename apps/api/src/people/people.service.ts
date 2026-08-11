@@ -9,6 +9,7 @@ import type { Prisma, ClubRole as PrismaClubRole, Prospect } from '@prisma/clien
 import { can, type PermissionSubject } from '@toastly/access';
 import { InvitesService } from '@/invites';
 import {
+  MEMBERSHIP_AVATAR_INCLUDE,
   MembershipsService,
   type MemberWire,
   type OfficerRole,
@@ -16,6 +17,7 @@ import {
   toMemberWire,
 } from '@/memberships';
 import { PrismaService } from '@/prisma';
+import { StorageService } from '@/storage';
 
 import type { ConvertGuestDto, CreateGuestDto, UpdateGuestDto } from './dto/guests.dto';
 import type {
@@ -31,6 +33,7 @@ import {
   type GuestWire,
   toContactLogWire,
   toGuestWire,
+  toGuestWires,
   toVisitLogWire,
   type VisitLogWire,
 } from './serializers';
@@ -53,6 +56,7 @@ export class PeopleService {
     private readonly prisma: PrismaService,
     private readonly memberships: MembershipsService,
     private readonly invites: InvitesService,
+    private readonly storage: StorageService,
   ) {}
 
   /** ------------------------------------------------------------ guests -- */
@@ -70,13 +74,13 @@ export class PeopleService {
       where: { clubId },
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
     });
-    return rows.map(toGuestWire);
+    return toGuestWires(rows, this.storage);
   }
 
   async getGuest(subject: PermissionSubject, guestId: string): Promise<GuestWire> {
     const row = await this.loadGuest(guestId);
     this.assertGuest(subject, row, 'read');
-    return toGuestWire(row);
+    return toGuestWire(row, this.storage);
   }
 
   /** The only place a guest is created — meeting attendance and meeting-role
@@ -94,6 +98,7 @@ export class PeopleService {
         reason: 'You do not manage this club',
       });
     }
+    if (dto.avatarUrl) this.storage.assertOwnedKey(dto.avatarUrl, 'guestAvatar', clubId);
     const row = await this.prisma.prospect.create({
       data: {
         clubId,
@@ -110,7 +115,7 @@ export class PeopleService {
         stage: 'new',
       },
     });
-    return toGuestWire(row);
+    return toGuestWire(row, this.storage);
   }
 
   async updateGuest(
@@ -127,7 +132,12 @@ export class PeopleService {
     if (dto.email !== undefined) data.email = dto.email.trim() || null;
     if (dto.phone !== undefined) data.phone = dto.phone;
     if (dto.whatsapp !== undefined) data.whatsapp = dto.whatsapp;
-    if (dto.avatarUrl !== undefined) data.avatarUrl = dto.avatarUrl || null;
+    if (dto.avatarUrl !== undefined) {
+      if (dto.avatarUrl) {
+        this.storage.assertOwnedKey(dto.avatarUrl, 'guestAvatar', existing.clubId);
+      }
+      data.avatarUrl = dto.avatarUrl || null;
+    }
     if (dto.socials !== undefined) data.socials = dto.socials as unknown as Prisma.InputJsonValue;
     if (dto.bio !== undefined) data.bio = dto.bio.trim() || null;
     if (dto.notes !== undefined) data.notes = dto.notes.trim() || null;
@@ -135,7 +145,10 @@ export class PeopleService {
     if (dto.stage !== undefined) data.stage = dto.stage;
 
     const row = await this.prisma.prospect.update({ where: { id: guestId }, data });
-    return toGuestWire(row);
+    if (dto.avatarUrl !== undefined && existing.avatarUrl && existing.avatarUrl !== row.avatarUrl) {
+      await this.storage.remove(existing.avatarUrl);
+    }
+    return toGuestWire(row, this.storage);
   }
 
   /** Hard delete. Contact/visit logs cascade via the DB FK (matches the
@@ -144,6 +157,7 @@ export class PeopleService {
     const existing = await this.loadGuest(guestId);
     this.assertGuest(subject, existing, 'delete');
     await this.prisma.prospect.delete({ where: { id: guestId } });
+    await this.storage.remove(existing.avatarUrl);
     return null;
   }
 
@@ -221,11 +235,12 @@ export class PeopleService {
           status: 'active',
           grantOverrides: {},
         },
+        include: MEMBERSHIP_AVATAR_INCLUDE,
       }),
     ]);
 
     if (match.status === 'existing-user') {
-      return { membership: toMemberWire(membership), outcome: 'claimed' };
+      return { membership: await toMemberWire(membership, this.storage), outcome: 'claimed' };
     }
 
     // No match — the roster row above is unclaimed. Auto-generate an invite
@@ -238,7 +253,11 @@ export class PeopleService {
       membershipId: membership.id,
     });
 
-    return { membership: toMemberWire(membership), outcome: 'unclaimed', invite };
+    return {
+      membership: await toMemberWire(membership, this.storage),
+      outcome: 'unclaimed',
+      invite,
+    };
   }
 
   private async resolveGuestMatch(guest: Prospect): Promise<GuestMatch> {

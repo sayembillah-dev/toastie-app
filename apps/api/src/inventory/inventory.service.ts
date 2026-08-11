@@ -4,6 +4,7 @@ import { can, type PermissionSubject } from '@toastly/access';
 
 import { ActivityService } from '@/activity';
 import { PrismaService } from '@/prisma';
+import { StorageService } from '@/storage';
 
 import type {
   CreateChecklistItemDto,
@@ -16,6 +17,7 @@ import {
   type InventoryItemWire,
   toChecklistItemWire,
   toInventoryItemWire,
+  toInventoryItemWires,
 } from './serializers';
 
 /** The default checklist items an SAA never lands on a blank list — mirrors
@@ -37,6 +39,7 @@ export class InventoryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activity: ActivityService,
+    private readonly storage: StorageService,
   ) {}
 
   /** -------------------------------------------------- inventory items -- */
@@ -47,14 +50,14 @@ export class InventoryService {
       where: { clubId },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
-    return rows.map(toInventoryItemWire);
+    return toInventoryItemWires(rows, this.storage);
   }
 
   async getItem(subject: PermissionSubject, itemId: string): Promise<InventoryItemWire> {
     const row = await this.prisma.inventoryItem.findUnique({ where: { id: itemId } });
     if (!row) throw new NotFoundException(`No inventory item with id "${itemId}"`);
     this.assertInventory(subject, row.clubId, 'read');
-    return toInventoryItemWire(row);
+    return toInventoryItemWire(row, this.storage);
   }
 
   async createItem(
@@ -64,6 +67,7 @@ export class InventoryService {
     dto: CreateInventoryItemDto,
   ): Promise<InventoryItemWire> {
     this.assertInventory(subject, clubId, 'create');
+    if (dto.imageUrl) this.storage.assertOwnedKey(dto.imageUrl, 'inventory', clubId);
     const row = await this.prisma.$transaction(async (tx) => {
       const item = await tx.inventoryItem.create({
         data: {
@@ -88,7 +92,7 @@ export class InventoryService {
       );
       return item;
     });
-    return toInventoryItemWire(row);
+    return toInventoryItemWire(row, this.storage);
   }
 
   async updateItem(
@@ -110,6 +114,7 @@ export class InventoryService {
     // undefined `imageUrl` leaves both alone. Setting one without the other
     // is a validation error handled by the DTO.
     if (dto.imageUrl !== undefined) {
+      if (dto.imageUrl) this.storage.assertOwnedKey(dto.imageUrl, 'inventory', existing.clubId);
       data.imageUrl = dto.imageUrl ?? null;
       data.imageMimeType = dto.imageUrl === null ? null : (dto.imageMimeType ?? null);
     }
@@ -130,7 +135,10 @@ export class InventoryService {
       );
       return item;
     });
-    return toInventoryItemWire(row);
+    if (dto.imageUrl !== undefined && existing.imageUrl && existing.imageUrl !== row.imageUrl) {
+      await this.storage.remove(existing.imageUrl);
+    }
+    return toInventoryItemWire(row, this.storage);
   }
 
   async deleteItem(
@@ -157,6 +165,7 @@ export class InventoryService {
         tx,
       );
     });
+    await this.storage.remove(existing.imageUrl);
     return null;
   }
 

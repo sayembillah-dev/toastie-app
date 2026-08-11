@@ -3,8 +3,8 @@
 import { HandCoins, MagnifyingGlass, WarningCircle } from '@phosphor-icons/react/dist/ssr';
 import { App, Button, Dropdown, Input, Segmented, Skeleton, Tag } from 'antd';
 import { useMemo, useState } from 'react';
-
 import { DuesPaymentModal } from '@/components/finance/dues-payment-modal';
+import { PersonAvatar } from '@/components/ui/person-avatar';
 import { formatRoles, getInitials } from '@/lib/education/members';
 import type { DuesRecord, DuesStatus } from '@/lib/finance/dues';
 import {
@@ -172,12 +172,10 @@ export function DuesTab() {
                 className="flex items-center justify-between gap-3 rounded-xl border border-line bg-canvas p-3"
               >
                 <div className="flex min-w-0 items-center gap-3">
-                  <span
-                    aria-hidden
-                    className="flex size-9 shrink-0 items-center justify-center rounded-full bg-fill text-xs font-semibold text-ink-soft"
-                  >
-                    {member ? getInitials(member) : '?'}
-                  </span>
+                  <PersonAvatar
+                    src={member?.avatarUrl}
+                    initials={member ? getInitials(member) : '?'}
+                  />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-ink">
                       {member ? `${member.firstName} ${member.lastName}` : record.memberId}

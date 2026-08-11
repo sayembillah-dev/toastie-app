@@ -3,6 +3,7 @@
 import { DotsThree, Heartbeat, Microphone, WarningCircle } from '@phosphor-icons/react/dist/ssr';
 import Link from 'next/link';
 
+import { PersonAvatar } from '@/components/ui/person-avatar';
 import { computeEngagement } from '@/lib/education/engagement';
 import type { Member } from '@/lib/education/members';
 import { formatRoles, getInitials } from '@/lib/education/members';
@@ -156,13 +157,14 @@ export function MemberCard({ member, variant = 'education' }: MemberCardProps) {
 
       {/* Avatar overlaps the banner/body seam. ring-4 with the canvas colour
        * cuts a clean gap so the circle sits above both surfaces. */}
-      <div
-        aria-hidden
-        className="absolute left-1/2 top-10 flex size-12 -translate-x-1/2 items-center justify-center rounded-full ring-4 ring-canvas transition-transform duration-300 ease-out group-hover:scale-110"
-        style={{ backgroundColor: swatch.bg, color: swatch.fg }}
-      >
-        <span className="text-sm font-semibold tracking-wide">{initials}</span>
-      </div>
+      <PersonAvatar
+        src={member.avatarUrl}
+        initials={initials}
+        swatch={swatch}
+        sizeClass="size-12"
+        textClass="text-sm tracking-wide"
+        className="absolute left-1/2 top-10 -translate-x-1/2 ring-4 ring-canvas transition-transform duration-300 ease-out group-hover:scale-110"
+      />
 
       <div className="px-3.5 pb-4 pt-8">
         {variant === 'engagement' ? (

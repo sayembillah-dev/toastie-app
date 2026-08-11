@@ -1,5 +1,6 @@
 import { UsersThree } from '@phosphor-icons/react/dist/ssr';
 import Link from 'next/link';
+import { PersonAvatar } from '@/components/ui/person-avatar';
 import type { Member } from '@/lib/education/members';
 import type { Meeting } from '@/lib/meetings/meetings';
 import type { RoleAssignment } from '@/lib/meetings/role-assignments';
@@ -72,14 +73,13 @@ export function LineupCard({
               key={role.key}
               className={`flex items-center gap-2.5 rounded-lg p-2 ${isMe ? 'bg-emerald-50' : 'bg-fill/60'}`}
             >
-              <span
-                aria-hidden
-                className={`flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
-                  name ? 'bg-slate-700 text-white' : 'bg-fill text-ink-muted'
-                }`}
-              >
-                {name ? initialsOf(name) : '—'}
-              </span>
+              <PersonAvatar
+                src={member?.avatarUrl ?? guest?.avatarUrl}
+                initials={name ? initialsOf(name) : '—'}
+                sizeClass="size-7"
+                textClass="text-[10px]"
+                fallbackClass={name ? 'bg-slate-700 text-white' : 'bg-fill text-ink-muted'}
+              />
               <span className="min-w-0 flex-1 truncate text-xs text-ink-soft">{role.label}</span>
               <span
                 className={`shrink-0 text-xs ${

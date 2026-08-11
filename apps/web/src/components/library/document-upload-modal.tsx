@@ -14,6 +14,7 @@ import {
   documentTypeLabel,
   isDocumentMimeType,
 } from '@/lib/library/documents';
+import { uploadFile } from '@/lib/uploads';
 import { useCreateDocumentMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -22,13 +23,15 @@ interface DocumentUploadModalProps {
   onClose: () => void;
 }
 
-/** Local upload draft — the file is decoded to a data-URL up front so the
- * preview card can render before the user commits, and the natural filename
- * is captured so the server metadata matches what came off disk. */
+/** Local upload draft.
+ *
+ * Holds the `File` itself: the preview card is an icon plus a filename, so
+ * unlike an image there is nothing to decode up front. The bytes go to S3
+ * on save via `uploadFile`, never through this app. */
 interface Draft {
   title: string;
   fileName: string;
-  fileUrl: string;
+  file: File;
   mimeType: DocumentMimeType;
   sizeBytes: number;
 }
@@ -36,15 +39,6 @@ interface Draft {
 /** MIME-type filter for the file picker. Matches `DOCUMENT_MIME_TYPES` on the
  * server so the same set holds on both ends of the wire. */
 const ACCEPT = DOCUMENT_MIME_TYPES.join(',');
-
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error('Could not read the file'));
-    reader.onload = () => resolve(String(reader.result));
-    reader.readAsDataURL(file);
-  });
-}
 
 function formatBytes(size: number): string {
   if (size < 1024) return `${size} B`;
@@ -84,21 +78,13 @@ function UploadBody({ onDone, onCancel }: UploadBodyProps) {
       message.error(`Please choose a file under ${mb} MB`);
       return Upload.LIST_IGNORE;
     }
-    setBusy(true);
-    try {
-      const fileUrl = await fileToDataUrl(file);
-      setDraft((prev) => ({
-        title: prev?.title ?? file.name.replace(/\.[^.]+$/, ''),
-        fileName: file.name,
-        fileUrl,
-        mimeType: file.type as DocumentMimeType,
-        sizeBytes: file.size,
-      }));
-    } catch (error) {
-      message.error(getApiErrorMessage(error, 'Could not read the file'));
-    } finally {
-      setBusy(false);
-    }
+    setDraft((prev) => ({
+      title: prev?.title ?? file.name.replace(/\.[^.]+$/, ''),
+      fileName: file.name,
+      file,
+      mimeType: file.type as DocumentMimeType,
+      sizeBytes: file.size,
+    }));
     /* Returning false keeps antd from posting anywhere — the file is already
      * captured into `draft` and will be sent by our mutation. */
     return false;
@@ -117,13 +103,17 @@ function UploadBody({ onDone, onCancel }: UploadBodyProps) {
   const trimmedTitle = draft?.title.trim() ?? '';
   const canSave = draft !== null && trimmedTitle.length > 0 && !isSaving && !busy;
 
+  /* Bytes move on save, not on pick — see the matching note in
+   * `asset-upload-modal.tsx` for why. */
   const handleSave = async () => {
     if (!draft || !canSave) return;
+    setBusy(true);
     try {
+      const fileUrl = await uploadFile(draft.file, 'document');
       await createDocument({
         title: trimmedTitle,
         fileName: draft.fileName,
-        fileUrl: draft.fileUrl,
+        fileUrl,
         mimeType: draft.mimeType,
         sizeBytes: draft.sizeBytes,
       }).unwrap();
@@ -131,6 +121,8 @@ function UploadBody({ onDone, onCancel }: UploadBodyProps) {
       onDone();
     } catch (error) {
       message.error(getApiErrorMessage(error, 'Could not upload the document'));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -198,7 +190,7 @@ function UploadBody({ onDone, onCancel }: UploadBodyProps) {
 
       <div className="flex justify-end gap-2">
         <Button onClick={onCancel}>Cancel</Button>
-        <Button type="primary" disabled={!canSave} loading={isSaving} onClick={handleSave}>
+        <Button type="primary" disabled={!canSave} loading={isSaving || busy} onClick={handleSave}>
           Upload
         </Button>
       </div>

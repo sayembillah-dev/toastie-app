@@ -8,7 +8,11 @@ export const ASSET_TITLE_MAX = 120;
 
 /** Cap on the uploaded file size. Data-URLs sit inline in localStorage and
  * anything much bigger risks pushing past the 5 MB per-origin budget. */
-export const ASSET_FILE_MAX_BYTES = 4 * 1024 * 1024;
+/** Matches the `asset` surface cap in `apps/api/src/storage/storage.types.ts`.
+ * The old 4 MB limit existed because the bytes became a base64 column value;
+ * they now go straight to S3, so the ceiling is about sane input, not about
+ * what Postgres will tolerate. */
+export const ASSET_FILE_MAX_BYTES = 15 * 1024 * 1024;
 
 /** MIME types the upload form accepts. PNG / JPEG / WEBP / GIF covers every
  * flyer and photo we've seen in the wild without letting SVG through — SVG

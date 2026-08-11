@@ -6,8 +6,9 @@ import {
 } from '@nestjs/common';
 import type { Membership } from '@prisma/client';
 import { can, type PermissionSubject } from '@toastly/access';
-import { type MemberWire, toMemberWire } from '@/memberships';
+import { MEMBERSHIP_AVATAR_INCLUDE, type MemberWire, toMemberWire } from '@/memberships';
 import { PrismaService } from '@/prisma';
+import { StorageService } from '@/storage';
 
 import type { CreateSpeechSlotRequestDto, StartPathwayDto } from './dto/education.dto';
 import {
@@ -31,7 +32,10 @@ import {
  * own `clubId`, matching the two-phase pattern in `MembershipsService`. */
 @Injectable()
 export class EducationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   /** ---------------------------------------------------------- history -- */
 
@@ -89,6 +93,7 @@ export class EducationService {
           startedProject: dto.project,
           pathwayStartedAt: today,
         },
+        include: MEMBERSHIP_AVATAR_INCLUDE,
       }),
       this.prisma.historyEvent.create({
         data: {
@@ -103,7 +108,7 @@ export class EducationService {
       }),
     ]);
 
-    return toMemberWire(updated);
+    return toMemberWire(updated, this.storage);
   }
 
   /** ---------------------------------------------------- speech reports -- */

@@ -22,6 +22,7 @@ import {
 } from 'antd';
 import { useMemo, useState } from 'react';
 
+import { PersonAvatar } from '@/components/ui/person-avatar';
 import { OFFICER_ROLES, type OfficerRole } from '@/lib/education/members';
 import { generatePassword } from '@/lib/org/password';
 import { emailRules, normalizePhone, phoneRules, shortNameRules } from '@/lib/validation/rules';
@@ -122,12 +123,7 @@ function DrawerBody({
       size="min(560px, 100vw)"
       title={
         <div className="flex items-center gap-3">
-          <span
-            aria-hidden
-            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-fill text-xs font-semibold text-ink-soft"
-          >
-            {getInitials(liveUser)}
-          </span>
+          <PersonAvatar src={liveUser.avatarUrl} initials={getInitials(liveUser)} />
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="truncate text-base font-semibold text-ink">

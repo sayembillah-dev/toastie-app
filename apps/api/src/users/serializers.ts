@@ -1,6 +1,7 @@
 import type { User } from '@prisma/client';
 
 import type { MemberType, OfficerRole } from '@/memberships';
+import type { StorageService } from '@/storage';
 
 /** Wire shape returned by `/users` — the Super Admin's cross-tenant view.
  * Never returned by any other endpoint (which would leak cross-club data).
@@ -13,6 +14,9 @@ export interface UserWire {
   firstName: string;
   lastName: string;
   tiMemberNumber: string | null;
+  /** Signed, time-limited URL for the account's profile photo, when set.
+   * Read-only — minted per response and expires, so it is never sent back. */
+  avatarUrl?: string;
   status: 'active' | 'suspended';
   isSuperAdmin: boolean;
   membershipCount: number;
@@ -26,12 +30,15 @@ export interface UsersPageWire {
   hasMore: boolean;
 }
 
-export function toUserWire(
+export async function toUserWire(
   row: User,
   membershipCount: number,
   orgAssignmentCount: number,
-): UserWire {
+  storage: StorageService,
+): Promise<UserWire> {
+  const avatarUrl = await storage.resolveOptional(row.avatarUrl);
   return {
+    ...(avatarUrl ? { avatarUrl } : {}),
     id: row.id,
     phone: row.phone,
     email: row.email,
@@ -84,7 +91,13 @@ export interface ProfileWire {
   memberships: ProfileMembershipWire[];
 }
 
-export function toProfileWire(row: User, memberships: ProfileMembershipWire[]): ProfileWire {
+/** Async because `avatarUrl` holds an S3 key that has to be signed for the
+ * browser — see the note atop `library/serializers.ts`. */
+export async function toProfileWire(
+  row: User,
+  memberships: ProfileMembershipWire[],
+  storage: StorageService,
+): Promise<ProfileWire> {
   return {
     id: row.id,
     phone: row.phone,
@@ -92,7 +105,7 @@ export function toProfileWire(row: User, memberships: ProfileMembershipWire[]): 
     firstName: row.firstName,
     lastName: row.lastName,
     bio: row.bio,
-    avatarUrl: row.avatarUrl,
+    avatarUrl: await storage.resolveOptional(row.avatarUrl),
     socials: parseSocials(row.socials),
     createdAt: row.createdAt.toISOString(),
     memberships,

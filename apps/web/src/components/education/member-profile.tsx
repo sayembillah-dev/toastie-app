@@ -6,12 +6,12 @@ import { Button, Tabs } from 'antd';
 import Link from 'next/link';
 import { notFound, useParams } from 'next/navigation';
 import { useState } from 'react';
-
 import { HistoryTab } from '@/components/education/history-tab';
 import { ProgressTab } from '@/components/education/progress-tab';
 import { StartPathwayModal } from '@/components/education/start-pathway-modal';
 import { PageBreadcrumb } from '@/components/page-breadcrumb';
 import { AccessGate } from '@/components/permissions/access-gate';
+import { PersonAvatar } from '@/components/ui/person-avatar';
 import type { Member } from '@/lib/education/members';
 import { formatRoles, getInitials } from '@/lib/education/members';
 import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
@@ -52,13 +52,14 @@ function ProfileHeader({ member, onStartPathway }: { member: Member; onStartPath
     <header className="relative overflow-hidden rounded-2xl border border-line bg-canvas">
       <div aria-hidden className="h-24 bg-slate-700" />
       <div className="relative px-6 pb-5">
-        <div
-          aria-hidden
-          className="absolute -top-10 left-6 flex size-20 items-center justify-center rounded-full ring-4 ring-canvas"
-          style={{ backgroundColor: swatch.bg, color: swatch.fg }}
-        >
-          <span className="text-2xl font-semibold tracking-wide">{initials}</span>
-        </div>
+        <PersonAvatar
+          src={member.avatarUrl}
+          initials={initials}
+          swatch={swatch}
+          sizeClass="size-20"
+          textClass="text-2xl tracking-wide"
+          className="absolute -top-10 left-6 ring-4 ring-canvas"
+        />
         <div className="flex flex-wrap items-end justify-between gap-4 pt-12">
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold text-ink">{fullName}</h1>

@@ -54,6 +54,14 @@ export interface Member {
   /** `removed` is a soft delete — the record and its history stay put, the
    * member just drops out of the active roster. */
   status: 'active' | 'removed';
+  /** Signed, time-limited URL for this person's profile photo, when the
+   * roster row is claimed by an account that has one. Absent for unclaimed
+   * rows and for members who never uploaded one — render `getInitials`
+   * instead. `PersonAvatar` handles both cases.
+   *
+   * Read-only: it is minted per response and expires, so it is never sent
+   * back on a member update. The photo is owned by the profile screen. */
+  avatarUrl?: string;
   /** Per-`resource:action` overrides on top of the role-based grants in
    * `@toastly/access`. Keys look like `"transaction:update"` and the value is
    * either `'allow'` or `'deny'`; only entries a Club Admin has explicitly

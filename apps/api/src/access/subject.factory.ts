@@ -10,6 +10,10 @@ import type {
 } from '@toastly/access';
 
 import { PrismaService } from '@/prisma';
+// Imported from the concrete file, not the `@/storage` barrel: the barrel
+// pulls in StorageModule → UploadsController → `@/access`, closing a cycle
+// that leaves the decorators undefined at module-init time.
+import { StorageService } from '@/storage/storage.service';
 
 /** Loads a `SessionResponse` and a matching `PermissionSubject` for a
  * given user in one pass so `/auth/session` and the guards read from the
@@ -23,7 +27,10 @@ import { PrismaService } from '@/prisma';
  */
 @Injectable()
 export class SubjectFactory {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   async loadSession(userId: string, now: number): Promise<SessionResponse | null> {
     const user = await this.prisma.user.findUnique({
@@ -140,7 +147,10 @@ export class SubjectFactory {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
-        avatarUrl: user.avatarUrl,
+        // Signed here too: the session payload is what renders the avatar in
+        // the app shell, so a raw S3 key would surface as a broken image on
+        // every page even though `/profile` resolved correctly.
+        avatarUrl: await this.storage.resolveOptional(user.avatarUrl),
         isSuperAdmin: user.isSuperAdmin,
         mustChangePassword: user.mustChangePassword,
       },

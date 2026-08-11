@@ -6,6 +6,7 @@ import type {
 
 import type { InviteWire } from '@/invites';
 import type { MemberWire } from '@/memberships';
+import type { StorageService } from '@/storage';
 
 /** Wire shape matches the web `lib/people/guests.ts` `Guest` interface.
  * The DB model is named `Prospect` (to sidestep the `ClubRole.Guest` enum
@@ -29,7 +30,7 @@ export interface GuestWire {
   stage: string;
 }
 
-export function toGuestWire(row: Prospect): GuestWire {
+export async function toGuestWire(row: Prospect, storage: StorageService): Promise<GuestWire> {
   const wire: GuestWire = {
     id: row.id,
     clubId: row.clubId,
@@ -43,13 +44,17 @@ export function toGuestWire(row: Prospect): GuestWire {
   if (row.email) wire.email = row.email;
   if (row.phone) wire.phone = row.phone;
   if (row.whatsapp) wire.whatsapp = row.whatsapp;
-  if (row.avatarUrl) wire.avatarUrl = row.avatarUrl;
+  if (row.avatarUrl) wire.avatarUrl = await storage.resolveUrl(row.avatarUrl);
   if (row.bio) wire.bio = row.bio;
   if (row.notes) wire.notes = row.notes;
   if (row.invitedBy) wire.invitedBy = row.invitedBy;
   const socials = parseSocials(row.socials);
   if (socials.length > 0) wire.socials = socials;
   return wire;
+}
+
+export function toGuestWires(rows: Prospect[], storage: StorageService): Promise<GuestWire[]> {
+  return Promise.all(rows.map((row) => toGuestWire(row, storage)));
 }
 
 /** Result of `GET /guests/:guestId/match` — a read-only preview of what

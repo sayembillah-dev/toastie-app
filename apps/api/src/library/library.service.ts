@@ -4,6 +4,7 @@ import { can, type PermissionSubject } from '@toastly/access';
 
 import { ActivityService } from '@/activity';
 import { PrismaService } from '@/prisma';
+import { StorageService } from '@/storage';
 
 import type {
   CreateAssetDto,
@@ -18,9 +19,13 @@ import {
   type DocumentsPageWire,
   type DocumentWire,
   type PlannerIdeaWire,
+  parsePlannerAttachments,
   toAssetWire,
+  toAssetWires,
   toDocumentWire,
+  toDocumentWires,
   toPlannerIdeaWire,
+  toPlannerIdeaWires,
 } from './serializers';
 
 const ASSETS_PAGE_SIZE = 12;
@@ -40,6 +45,7 @@ export class LibraryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activity: ActivityService,
+    private readonly storage: StorageService,
   ) {}
 
   /** ----------------------------------------------------------- assets -- */
@@ -68,7 +74,7 @@ export class LibraryService {
       }),
       this.prisma.asset.count({ where }),
     ]);
-    const items = rows.map(toAssetWire);
+    const items = await toAssetWires(rows, this.storage);
     const nextOffset = offset + items.length < total ? offset + items.length : null;
     return { items, total, nextOffset };
   }
@@ -77,7 +83,7 @@ export class LibraryService {
     const row = await this.prisma.asset.findUnique({ where: { id: assetId } });
     if (!row) throw new NotFoundException(`No asset with id "${assetId}"`);
     this.assertLibrary(subject, row.clubId, 'read');
-    return toAssetWire(row);
+    return toAssetWire(row, this.storage);
   }
 
   async createAsset(
@@ -87,6 +93,7 @@ export class LibraryService {
     dto: CreateAssetDto,
   ): Promise<AssetWire> {
     this.assertLibrary(subject, clubId, 'create');
+    this.storage.assertOwnedKey(dto.imageUrl, 'asset', clubId);
     const row = await this.prisma.$transaction(async (tx) => {
       const asset = await tx.asset.create({
         data: {
@@ -113,7 +120,7 @@ export class LibraryService {
       );
       return asset;
     });
-    return toAssetWire(row);
+    return toAssetWire(row, this.storage);
   }
 
   async updateAsset(
@@ -148,7 +155,7 @@ export class LibraryService {
       );
       return asset;
     });
-    return toAssetWire(row);
+    return toAssetWire(row, this.storage);
   }
 
   async deleteAsset(
@@ -175,6 +182,10 @@ export class LibraryService {
         tx,
       );
     });
+    // After the transaction, never inside it: an S3 call cannot participate in
+    // a DB transaction, so doing it first would orphan the object if the
+    // delete then rolled back. `remove` is best-effort by design.
+    await this.storage.remove(existing.imageUrl);
     return null;
   }
 
@@ -208,7 +219,7 @@ export class LibraryService {
       }),
       this.prisma.libraryDocument.count({ where }),
     ]);
-    const items = rows.map(toDocumentWire);
+    const items = await toDocumentWires(rows, this.storage);
     const nextOffset = offset + items.length < total ? offset + items.length : null;
     return { items, total, nextOffset };
   }
@@ -217,7 +228,7 @@ export class LibraryService {
     const row = await this.prisma.libraryDocument.findUnique({ where: { id: documentId } });
     if (!row) throw new NotFoundException(`No document with id "${documentId}"`);
     this.assertLibrary(subject, row.clubId, 'read');
-    return toDocumentWire(row);
+    return toDocumentWire(row, this.storage);
   }
 
   async createDocument(
@@ -227,6 +238,7 @@ export class LibraryService {
     dto: CreateDocumentDto,
   ): Promise<DocumentWire> {
     this.assertLibrary(subject, clubId, 'create');
+    this.storage.assertOwnedKey(dto.fileUrl, 'document', clubId);
     const row = await this.prisma.$transaction(async (tx) => {
       const doc = await tx.libraryDocument.create({
         data: {
@@ -252,7 +264,7 @@ export class LibraryService {
       );
       return doc;
     });
-    return toDocumentWire(row);
+    return toDocumentWire(row, this.storage);
   }
 
   async updateDocument(
@@ -287,7 +299,7 @@ export class LibraryService {
       );
       return doc;
     });
-    return toDocumentWire(row);
+    return toDocumentWire(row, this.storage);
   }
 
   async deleteDocument(
@@ -314,6 +326,7 @@ export class LibraryService {
         tx,
       );
     });
+    await this.storage.remove(existing.fileUrl);
     return null;
   }
 
@@ -337,7 +350,7 @@ export class LibraryService {
       // before the refresh.
       orderBy: [{ day: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
     });
-    return rows.map(toPlannerIdeaWire);
+    return toPlannerIdeaWires(rows, this.storage);
   }
 
   async createIdea(
@@ -347,6 +360,7 @@ export class LibraryService {
     dto: CreatePlannerIdeaDto,
   ): Promise<PlannerIdeaWire> {
     this.assertLibrary(subject, clubId, 'create');
+    this.assertAttachmentKeys(dto.attachments, clubId);
     const row = await this.prisma.$transaction(async (tx) => {
       const idea = await tx.plannerIdea.create({
         data: {
@@ -371,7 +385,7 @@ export class LibraryService {
       );
       return idea;
     });
-    return toPlannerIdeaWire(row);
+    return toPlannerIdeaWire(row, this.storage);
   }
 
   async updateIdea(
@@ -383,6 +397,7 @@ export class LibraryService {
     const existing = await this.prisma.plannerIdea.findUnique({ where: { id: ideaId } });
     if (!existing) throw new NotFoundException(`No planner idea with id "${ideaId}"`);
     this.assertLibrary(subject, existing.clubId, 'update');
+    this.assertAttachmentKeys(dto.attachments, existing.clubId);
 
     const row = await this.prisma.$transaction(async (tx) => {
       const idea = await tx.plannerIdea.update({
@@ -417,7 +432,14 @@ export class LibraryService {
       );
       return idea;
     });
-    return toPlannerIdeaWire(row);
+    // Files dropped from the list are no longer reachable from anywhere.
+    if (dto.attachments !== undefined) {
+      const kept = new Set(dto.attachments.flatMap((a) => (a.key ? [a.key] : [])));
+      for (const stale of parsePlannerAttachments(existing.attachments)) {
+        if (stale.key && !kept.has(stale.key)) await this.storage.remove(stale.key);
+      }
+    }
+    return toPlannerIdeaWire(row, this.storage);
   }
 
   async deleteIdea(
@@ -444,10 +466,21 @@ export class LibraryService {
         tx,
       );
     });
+    for (const attachment of parsePlannerAttachments(existing.attachments)) {
+      await this.storage.remove(attachment.key);
+    }
     return null;
   }
 
   /** ---------------------------------------------------------- helpers -- */
+
+  /** Planner attachments carry their own keys, so each one is pinned to the
+   * idea's club exactly as a single-file column would be. */
+  private assertAttachmentKeys(attachments: { key?: string }[] | undefined, clubId: string): void {
+    for (const attachment of attachments ?? []) {
+      if (attachment.key) this.storage.assertOwnedKey(attachment.key, 'planner', clubId);
+    }
+  }
 
   private assertLibrary(
     subject: PermissionSubject,

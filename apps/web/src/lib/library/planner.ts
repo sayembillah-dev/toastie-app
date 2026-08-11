@@ -14,11 +14,22 @@ export type IdeaStatus = 'created' | 'drafted' | 'published';
  * → shipped. */
 export const IDEA_STATUS_ORDER: IdeaStatus[] = ['created', 'drafted', 'published'];
 
-/** Attachments are filenames only. The idea form holds files client-side and
- * never uploads the bytes, so this is all there is to persist. */
+/** One file pinned to an idea.
+ *
+ * Read and write shapes differ, which is why both fields are optional. The
+ * API returns `url` — a signed, time-limited download link — and accepts
+ * `key`, the S3 object it was minted from. Ideas saved before attachments
+ * carried real bytes have neither: they recorded a filename and dropped the
+ * file, so they render as plain text rather than a link. */
 export interface IdeaAttachment {
   uid: string;
   name: string;
+  /** Present on responses. Never sent back — it expires. */
+  url?: string;
+  /** Present on requests. Comes from `uploadFile`. */
+  key?: string;
+  mimeType?: string;
+  sizeBytes?: number;
 }
 
 export interface PlannerIdea {

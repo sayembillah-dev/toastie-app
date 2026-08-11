@@ -15,7 +15,9 @@ import {
 import { App, Button, DatePicker, InputNumber, Modal, Progress, TimePicker } from 'antd';
 import { useMemo, useState } from 'react';
 
+import { PersonAvatar } from '@/components/ui/person-avatar';
 import dayjs, { type Dayjs } from '@/lib/dayjs';
+import type { Member } from '@/lib/education/members';
 import { buildAgenda, holderName } from '@/lib/meetings/agenda';
 import type { DraftSpeaker, MeetingDraft } from '@/lib/meetings/draft';
 import type { Meeting, MeetingStatus } from '@/lib/meetings/meetings';
@@ -26,7 +28,7 @@ import { getApiErrorMessage } from '@/store/api-error';
 import { useAppSelector } from '@/store/hooks';
 import { selectMeetingDraft } from '@/store/meeting-draft-slice';
 
-import { useNameOf } from './use-name-of';
+import { useMemberOf, useNameOf } from './use-name-of';
 
 /** Two prepared speeches is the club's normal slate — the readiness meter reads
  * anything at or above it as a full house. */
@@ -438,10 +440,12 @@ function RolesCard({
   meeting,
   draft,
   nameOf,
+  memberOf,
 }: {
   meeting: Meeting;
   draft: MeetingDraft;
   nameOf: (memberId: string | undefined) => string;
+  memberOf: (memberId: string | undefined) => Member | undefined;
 }) {
   const roles = buildRoles(meeting);
   const filled = roles.filter((role) => draft.roles[role.key]).length;
@@ -458,17 +462,20 @@ function RolesCard({
     >
       <ul className="flex flex-col gap-2">
         {roles.map((role) => {
-          const name = holderName(nameOf, draft.roles[role.key]);
+          const holder = draft.roles[role.key];
+          const name = holderName(nameOf, holder);
+          // A role can be filled by a free-text name (a visiting guest), which
+          // has no member behind it and so no photo — initials as before.
+          const member = memberOf(holder?.memberId);
           return (
             <li key={role.key} className="flex items-center gap-2.5">
-              <span
-                aria-hidden
-                className={`flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
-                  name ? 'bg-slate-700 text-white' : 'bg-fill text-ink-muted'
-                }`}
-              >
-                {name ? initialsOf(name) : '—'}
-              </span>
+              <PersonAvatar
+                src={member?.avatarUrl}
+                initials={name ? initialsOf(name) : '—'}
+                sizeClass="size-7"
+                textClass="text-[10px]"
+                fallbackClass={name ? 'bg-slate-700 text-white' : 'bg-fill text-ink-muted'}
+              />
               <span className="min-w-0 flex-1 truncate text-xs text-ink-soft">{role.label}</span>
               <span
                 className={`shrink-0 text-xs ${name ? 'font-medium text-ink' : 'text-ink-muted'}`}
@@ -593,6 +600,7 @@ interface AtAGlanceProps {
 export function AtAGlance({ meeting }: AtAGlanceProps) {
   const draft = useAppSelector((state) => selectMeetingDraft(state, meeting.id));
   const nameOf = useNameOf();
+  const memberOf = useMemberOf();
 
   /* Reuses the agenda builder rather than re-deriving timings: the run-of-show
    * is the only thing that knows how long the meeting actually takes. */
@@ -624,7 +632,7 @@ export function AtAGlance({ meeting }: AtAGlanceProps) {
       {/* Roles is the tallest card, so it takes the left column and the two
        * shorter cards stack beside it on wide screens. */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <RolesCard meeting={meeting} draft={draft} nameOf={nameOf} />
+        <RolesCard meeting={meeting} draft={draft} nameOf={nameOf} memberOf={memberOf} />
         <div className="flex flex-col gap-4">
           <SpeakersCard draft={draft} nameOf={nameOf} />
           <WordCard draft={draft} />

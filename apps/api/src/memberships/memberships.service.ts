@@ -9,6 +9,7 @@ import { Prisma, type ClubRole as PrismaClubRole } from '@prisma/client';
 import { can, type PermissionSubject } from '@toastly/access';
 
 import { PrismaService } from '@/prisma';
+import { StorageService } from '@/storage/storage.service';
 
 import type {
   CreateMemberDto,
@@ -19,9 +20,11 @@ import type {
 import type { MemberType, OfficerRole } from './role-mapping';
 import { toClubRoles } from './role-mapping';
 import {
+  MEMBERSHIP_AVATAR_INCLUDE,
   type MemberWire,
   type PlatformUserMembershipWire,
   toMemberWire,
+  toMemberWires,
   toPlatformUserMembershipWire,
 } from './serializers';
 
@@ -36,7 +39,10 @@ const OVERRIDE_KEY = /^[a-zA-Z]+:[a-zA-Z]+$/;
  * membership in a club they don't hold. */
 @Injectable()
 export class MembershipsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   async list(
     subject: PermissionSubject,
@@ -57,8 +63,9 @@ export class MembershipsService {
         ...(includeRemoved ? {} : { status: 'active' }),
       },
       orderBy: [{ status: 'asc' }, { firstName: 'asc' }, { lastName: 'asc' }],
+      include: MEMBERSHIP_AVATAR_INCLUDE,
     });
-    return rows.map(toMemberWire);
+    return toMemberWires(rows, this.storage);
   }
 
   /** Phone-based account lookup — used by the guest-conversion and
@@ -81,12 +88,16 @@ export class MembershipsService {
   async findExistingMembership(clubId: string, userId: string): Promise<MemberWire | null> {
     const row = await this.prisma.membership.findUnique({
       where: { clubId_userId: { clubId, userId } },
+      include: MEMBERSHIP_AVATAR_INCLUDE,
     });
-    return row ? toMemberWire(row) : null;
+    return row ? toMemberWire(row, this.storage) : null;
   }
 
   async get(subject: PermissionSubject, memberId: string): Promise<MemberWire> {
-    const row = await this.prisma.membership.findUnique({ where: { id: memberId } });
+    const row = await this.prisma.membership.findUnique({
+      where: { id: memberId },
+      include: MEMBERSHIP_AVATAR_INCLUDE,
+    });
     if (!row) throw new NotFoundException(`No member with id "${memberId}"`);
     if (!can(subject, 'read', 'member', { clubId: row.clubId })) {
       throw new ForbiddenException({
@@ -96,7 +107,7 @@ export class MembershipsService {
         reason: 'You do not manage this club',
       });
     }
-    return toMemberWire(row);
+    return toMemberWire(row, this.storage);
   }
 
   async create(
@@ -123,8 +134,9 @@ export class MembershipsService {
         status: 'active',
         grantOverrides: {},
       },
+      include: MEMBERSHIP_AVATAR_INCLUDE,
     });
-    return toMemberWire(row);
+    return toMemberWire(row, this.storage);
   }
 
   /** Super Admin's "add this existing user to another club" action —
@@ -175,8 +187,9 @@ export class MembershipsService {
           status: 'active',
           grantOverrides: {},
         },
+        include: MEMBERSHIP_AVATAR_INCLUDE,
       });
-      return toMemberWire(row);
+      return toMemberWire(row, this.storage);
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         throw new ConflictException({ code: 'ALREADY_MEMBER' });
@@ -194,10 +207,12 @@ export class MembershipsService {
   async listForUser(userId: string): Promise<PlatformUserMembershipWire[]> {
     const rows = await this.prisma.membership.findMany({
       where: { userId },
-      include: { club: { select: { name: true } } },
+      include: { club: { select: { name: true } }, ...MEMBERSHIP_AVATAR_INCLUDE },
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
     });
-    return rows.map((row) => toPlatformUserMembershipWire(row, row.club.name));
+    return Promise.all(
+      rows.map((row) => toPlatformUserMembershipWire(row, row.club.name, this.storage)),
+    );
   }
 
   async update(
@@ -219,8 +234,12 @@ export class MembershipsService {
       data.roles = preserveAdmin ? [...mapped, 'ClubAdmin' as PrismaClubRole] : mapped;
     }
 
-    const updated = await this.prisma.membership.update({ where: { id: memberId }, data });
-    return toMemberWire(updated);
+    const updated = await this.prisma.membership.update({
+      where: { id: memberId },
+      data,
+      include: MEMBERSHIP_AVATAR_INCLUDE,
+    });
+    return toMemberWire(updated, this.storage);
   }
 
   async setStatus(
@@ -241,8 +260,9 @@ export class MembershipsService {
     const updated = await this.prisma.membership.update({
       where: { id: memberId },
       data: { status: dto.status },
+      include: MEMBERSHIP_AVATAR_INCLUDE,
     });
-    return toMemberWire(updated);
+    return toMemberWire(updated, this.storage);
   }
 
   async setAdmin(
@@ -272,8 +292,9 @@ export class MembershipsService {
     const updated = await this.prisma.membership.update({
       where: { id: memberId },
       data: { isClubAdmin: dto.isClubAdmin, roles: nextRoles },
+      include: MEMBERSHIP_AVATAR_INCLUDE,
     });
-    return toMemberWire(updated);
+    return toMemberWire(updated, this.storage);
   }
 
   async setPermissions(
@@ -296,14 +317,18 @@ export class MembershipsService {
     const updated = await this.prisma.membership.update({
       where: { id: memberId },
       data: { grantOverrides: next },
+      include: MEMBERSHIP_AVATAR_INCLUDE,
     });
-    return toMemberWire(updated);
+    return toMemberWire(updated, this.storage);
   }
 
   /** Loads a membership by id or throws a 404. Kept private because every
    * mutation flow needs the row before its fine permission check. */
   private async load(memberId: string) {
-    const row = await this.prisma.membership.findUnique({ where: { id: memberId } });
+    const row = await this.prisma.membership.findUnique({
+      where: { id: memberId },
+      include: MEMBERSHIP_AVATAR_INCLUDE,
+    });
     if (!row) throw new NotFoundException(`No member with id "${memberId}"`);
     return row;
   }

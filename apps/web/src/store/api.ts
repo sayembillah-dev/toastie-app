@@ -2245,6 +2245,9 @@ export interface PlatformUser {
   firstName: string;
   lastName: string;
   tiMemberNumber: string | null;
+  /** Signed, time-limited photo URL when the account has one. Read-only —
+   * it expires, so it is never sent back on an update. */
+  avatarUrl?: string;
   status: 'active' | 'suspended';
   isSuperAdmin: boolean;
   membershipCount: number;

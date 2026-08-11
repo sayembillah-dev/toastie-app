@@ -2,9 +2,8 @@
 
 import { Paperclip, Plus, Trash } from '@phosphor-icons/react/dist/ssr';
 import type { UploadFile } from 'antd';
-import { Button, Input, Popconfirm, Select, Skeleton, Typography, Upload } from 'antd';
+import { App, Button, Input, Popconfirm, Select, Skeleton, Typography, Upload } from 'antd';
 import { useState } from 'react';
-
 import type { CreatePlannerIdeaInput, IdeaStatus, PlannerIdea } from '@/lib/library/planner';
 import {
   IDEA_STATUS_ORDER,
@@ -12,6 +11,7 @@ import {
   PLANNER_IDEA_BODY_MAX,
   PLANNER_IDEA_TITLE_MAX,
 } from '@/lib/library/planner';
+import { uploadFile } from '@/lib/uploads';
 
 const { TextArea } = Input;
 const { Paragraph } = Typography;
@@ -107,10 +107,11 @@ interface IdeaFormProps {
   onCancel: () => void;
 }
 
-/** Inline card form. Attachments are captured locally — `beforeUpload`
- * returns `false` so antd never posts them anywhere; only the file names are
- * persisted with the idea. */
+/** Inline card form. `beforeUpload` returns `false` so antd never posts
+ * anything itself — the files are held until save, then uploaded to S3 by
+ * `uploadFile` and persisted as object keys alongside their names. */
 function IdeaForm({ onSave, onCancel }: IdeaFormProps) {
+  const { message } = App.useApp();
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [fileList, setFileList] = useState<UploadFile[]>([]);
@@ -123,11 +124,25 @@ function IdeaForm({ onSave, onCancel }: IdeaFormProps) {
     if (!canSave) return;
     setSaving(true);
     try {
-      await onSave({
-        title: trimmedTitle,
-        body: body.trim(),
-        attachments: fileList.map((file) => ({ uid: file.uid, name: file.name })),
-      });
+      /* Uploaded in parallel — a handful of small files is the norm, and
+       * serialising them would make attaching four documents feel four times
+       * slower than attaching one. A failure aborts the save entirely rather
+       * than persisting an idea with some of its files missing. */
+      const attachments = await Promise.all(
+        fileList.map(async (file) => {
+          const raw = file.originFileObj ?? (file as unknown as File);
+          return {
+            uid: file.uid,
+            name: file.name,
+            key: await uploadFile(raw, 'planner'),
+            mimeType: raw.type,
+            sizeBytes: raw.size,
+          };
+        }),
+      );
+      await onSave({ title: trimmedTitle, body: body.trim(), attachments });
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : 'Could not upload the attachments');
     } finally {
       setSaving(false);
     }
@@ -256,7 +271,20 @@ function IdeasList({ ideas, loading, canMutate, onRemove, onStatusChange }: Idea
                     className="inline-flex items-center gap-1 rounded-md bg-fill px-2 py-0.5 text-xs text-ink-soft"
                   >
                     <Paperclip size={12} />
-                    {attachment.name}
+                    {/* Ideas saved before attachments carried bytes have no
+                     * URL to point at — those stay plain text. */}
+                    {attachment.url ? (
+                      <a
+                        href={attachment.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline underline-offset-2 hover:text-ink"
+                      >
+                        {attachment.name}
+                      </a>
+                    ) : (
+                      attachment.name
+                    )}
                   </li>
                 ))}
               </ul>

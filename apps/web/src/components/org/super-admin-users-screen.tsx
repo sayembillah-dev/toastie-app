@@ -9,8 +9,8 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 import { App, Button, Checkbox, Dropdown, Input, Pagination, Skeleton, Tag } from 'antd';
 import { useMemo, useState } from 'react';
-
 import { PageBreadcrumb } from '@/components/page-breadcrumb';
+import { PersonAvatar } from '@/components/ui/person-avatar';
 import {
   PLATFORM_USERS_PAGE_SIZE_OPTIONS,
   type PlatformUser,
@@ -272,12 +272,7 @@ export function SuperAdminUsersScreen() {
                         onClick={() => setDetailUser(user)}
                         className="flex min-w-0 flex-1 items-center gap-3 rounded-lg py-1 pr-2 text-left transition-colors hover:bg-fill/60"
                       >
-                        <span
-                          aria-hidden
-                          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-fill text-xs font-semibold text-ink-soft"
-                        >
-                          {getInitials(user)}
-                        </span>
+                        <PersonAvatar src={user.avatarUrl} initials={getInitials(user)} />
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <p className="truncate text-sm font-medium text-ink">

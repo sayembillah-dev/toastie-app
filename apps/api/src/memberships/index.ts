@@ -10,8 +10,11 @@ export {
   toOfficerRoles,
 } from './role-mapping';
 export {
+  MEMBERSHIP_AVATAR_INCLUDE,
+  type MembershipWithUser,
   type MemberWire,
   type PlatformUserMembershipWire,
   toMemberWire,
+  toMemberWires,
   toPlatformUserMembershipWire,
 } from './serializers';

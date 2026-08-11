@@ -3,10 +3,12 @@ import {
   ArrayMaxSize,
   IsArray,
   IsIn,
+  IsInt,
   IsOptional,
   IsString,
   Matches,
   MaxLength,
+  Min,
   MinLength,
   ValidateNested,
 } from 'class-validator';
@@ -16,8 +18,9 @@ export type PlannerIdeaStatusValue = (typeof PLANNER_IDEA_STATUSES)[number];
 
 export const PLANNER_IDEA_TITLE_MAX = 200;
 export const PLANNER_IDEA_BODY_MAX = 5000;
-/** Attachments are filenames only, so the ceiling is about keeping a rogue
- * paste out of the Json column rather than about payload size. */
+/** The name is metadata beside the object key, so this ceiling is about
+ * keeping a rogue paste out of the Json column rather than about payload
+ * size — the bytes live in S3. */
 export const PLANNER_IDEA_ATTACHMENTS_MAX = 20;
 export const PLANNER_ATTACHMENT_NAME_MAX = 260;
 
@@ -26,6 +29,12 @@ export const PLANNER_ATTACHMENT_NAME_MAX = 260;
  * ordering — `2026-9-1` would silently sort wrong. */
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
+/** One file pinned to a planner idea.
+ *
+ * `key` is an S3 object obtained from `POST /uploads/sign`, and is optional
+ * only so ideas saved before attachments carried real bytes still validate —
+ * those recorded a name and nothing else. New attachments always carry one;
+ * the service pins it to the caller's club before storing. */
 export class PlannerAttachmentDto {
   @IsString()
   @MinLength(1)
@@ -36,6 +45,21 @@ export class PlannerAttachmentDto {
   @MinLength(1)
   @MaxLength(PLANNER_ATTACHMENT_NAME_MAX)
   name!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(400)
+  key?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  mimeType?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  sizeBytes?: number;
 }
 
 /** Body for `POST /planner/ideas`. `status` is not accepted — a new idea

@@ -7,8 +7,9 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { can, type PermissionSubject } from '@toastly/access';
-import { type MemberWire, toMemberWire } from '@/memberships';
+import { MEMBERSHIP_AVATAR_INCLUDE, type MemberWire, toMemberWire } from '@/memberships';
 import { PrismaService } from '@/prisma';
+import { StorageService } from '@/storage';
 
 import type { CreateJoinRequestDto } from './dto/join-requests.dto';
 import { type JoinRequestWire, toJoinRequestWire } from './serializers';
@@ -26,7 +27,10 @@ import { type JoinRequestWire, toJoinRequestWire } from './serializers';
  */
 @Injectable()
 export class JoinRequestsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   async createFromUser(userId: string, dto: CreateJoinRequestDto): Promise<JoinRequestWire> {
     const club = await this.prisma.club.findUnique({
@@ -163,10 +167,11 @@ export class JoinRequestsService {
           status: 'active',
           grantOverrides: {},
         },
+        include: MEMBERSHIP_AVATAR_INCLUDE,
       }),
     ]);
 
-    return toMemberWire(membership);
+    return toMemberWire(membership, this.storage);
   }
 
   async decline(subject: PermissionSubject, requestId: string): Promise<JoinRequestWire> {

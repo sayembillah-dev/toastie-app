@@ -3,6 +3,8 @@ import type {
   InventoryItem as InventoryItemRow,
 } from '@prisma/client';
 
+import type { StorageService } from '@/storage';
+
 /** Wire shape matches the web `lib/inventory/inventory-items.ts`
  * `InventoryItem` interface. */
 export interface InventoryItemWire {
@@ -16,7 +18,10 @@ export interface InventoryItemWire {
   updatedAt?: string;
 }
 
-export function toInventoryItemWire(row: InventoryItemRow): InventoryItemWire {
+export async function toInventoryItemWire(
+  row: InventoryItemRow,
+  storage: StorageService,
+): Promise<InventoryItemWire> {
   const wire: InventoryItemWire = {
     id: row.id,
     clubId: row.clubId,
@@ -24,10 +29,17 @@ export function toInventoryItemWire(row: InventoryItemRow): InventoryItemWire {
     createdAt: row.createdAt.toISOString(),
   };
   if (row.description) wire.description = row.description;
-  if (row.imageUrl) wire.imageUrl = row.imageUrl;
+  if (row.imageUrl) wire.imageUrl = await storage.resolveUrl(row.imageUrl);
   if (row.imageMimeType) wire.imageMimeType = row.imageMimeType;
   if (row.updatedAt) wire.updatedAt = row.updatedAt.toISOString();
   return wire;
+}
+
+export function toInventoryItemWires(
+  rows: InventoryItemRow[],
+  storage: StorageService,
+): Promise<InventoryItemWire[]> {
+  return Promise.all(rows.map((row) => toInventoryItemWire(row, storage)));
 }
 
 /** Wire shape matches the web `lib/inventory/checklist.ts` `ChecklistItem`

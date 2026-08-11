@@ -1,6 +1,7 @@
 import { ArrowSquareOut, Microphone } from '@phosphor-icons/react/dist/ssr';
 import { Button } from 'antd';
 import Link from 'next/link';
+import { PersonAvatar } from '@/components/ui/person-avatar';
 import type { Member } from '@/lib/education/members';
 import { formatRoles, getInitials } from '@/lib/education/members';
 
@@ -63,13 +64,14 @@ export function ProfileHero({
         className="h-24 bg-gradient-to-br from-slate-700 via-slate-800 to-slate-900 sm:h-28"
       />
       <div className="relative px-5 pb-5 sm:px-6">
-        <div
-          aria-hidden
-          className="absolute -top-11 left-5 flex size-22 items-center justify-center rounded-full ring-4 ring-canvas sm:left-6"
-          style={{ backgroundColor: swatch.bg, color: swatch.fg }}
-        >
-          <span className="text-2xl font-semibold tracking-wide">{initials}</span>
-        </div>
+        <PersonAvatar
+          src={member.avatarUrl}
+          initials={initials}
+          swatch={swatch}
+          sizeClass="size-22"
+          textClass="text-2xl tracking-wide"
+          className="absolute -top-11 left-5 ring-4 ring-canvas sm:left-6"
+        />
 
         <div className="flex flex-col gap-4 pt-13 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
           <div className="min-w-0">

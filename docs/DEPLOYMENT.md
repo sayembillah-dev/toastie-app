@@ -75,21 +75,33 @@ sudo systemctl reload caddy
 
 Create an environment named **`production`** (Settings → Environments), then add:
 
-| Secret                | Notes                                                                                                                                                                                                          |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SSH_PRIVATE_KEY`     | Private half of a dedicated deploy keypair — don't reuse a personal key; generate one with `ssh-keygen`, append the `.pub` half to the deploy user's `authorized_keys`, and only the private half goes in here |
-| `SSH_HOST`            | VPS hostname or IP                                                                                                                                                                                             |
-| `SSH_USER`            | Whatever user owns `/srv/toastly` (e.g. `nifty`)                                                                                                                                                               |
-| `DATABASE_URL`        | Managed Postgres, pooled endpoint. Set `connection_limit` deliberately — see below                                                                                                                             |
-| `DIRECT_DATABASE_URL` | Same database, unpooled endpoint — Neon: the same host with `-pooler` removed. Used only by `prisma migrate deploy` in CI; see below                                                                           |
-| `JWT_ACCESS_SECRET`   | ≥16 chars. Boot fails if it is still the `.env.example` placeholder                                                                                                                                            |
-| `REDIS_URL`           | Only once Redis is live                                                                                                                                                                                        |
+| Secret                  | Notes                                                                                                                                                                                                          |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SSH_PRIVATE_KEY`       | Private half of a dedicated deploy keypair — don't reuse a personal key; generate one with `ssh-keygen`, append the `.pub` half to the deploy user's `authorized_keys`, and only the private half goes in here |
+| `SSH_HOST`              | VPS hostname or IP                                                                                                                                                                                             |
+| `SSH_USER`              | Whatever user owns `/srv/toastly` (e.g. `nifty`)                                                                                                                                                               |
+| `DATABASE_URL`          | Managed Postgres, pooled endpoint. Set `connection_limit` deliberately — see below                                                                                                                             |
+| `DIRECT_DATABASE_URL`   | Same database, unpooled endpoint — Neon: the same host with `-pooler` removed. Used only by `prisma migrate deploy` in CI; see below                                                                           |
+| `JWT_ACCESS_SECRET`     | ≥16 chars. Boot fails if it is still the `.env.example` placeholder                                                                                                                                            |
+| `REDIS_URL`             | Only once Redis is live                                                                                                                                                                                        |
+| `AWS_ACCESS_KEY_ID`     | Only when `FILE_STORAGE_PROVIDER=s3`. Scope the IAM user to `s3:PutObject`/`GetObject`/`DeleteObject` on `arn:aws:s3:::<bucket>/*` and nothing else                                                            |
+| `AWS_SECRET_ACCESS_KEY` | Secret half of the pair above                                                                                                                                                                                  |
 
-| Variable          | Value                       |
-| ----------------- | --------------------------- |
-| `CORS_ORIGINS`    | `https://your-domain`       |
-| `JWT_ACCESS_TTL`  | optional, defaults to `15m` |
-| `JWT_REFRESH_TTL` | optional, defaults to `30d` |
+| Variable                | Value                                       |
+| ----------------------- | ------------------------------------------- |
+| `CORS_ORIGINS`          | `https://your-domain`                       |
+| `JWT_ACCESS_TTL`        | optional, defaults to `15m`                 |
+| `JWT_REFRESH_TTL`       | optional, defaults to `30d`                 |
+| `FILE_STORAGE_PROVIDER` | `s3` or `local-db` — defaults to `local-db` |
+| `AWS_REGION`            | e.g. `ap-southeast-1`. Required when `s3`   |
+| `AWS_S3_BUCKET`         | Bucket name. Required when `s3`             |
+
+The bucket and region are plain configuration, so they are repo _variables_;
+only the IAM pair are secrets. Setting `FILE_STORAGE_PROVIDER=s3` makes all
+four AWS values mandatory — the API refuses to boot with a half-configured
+bucket, so a missing one fails the deploy's smoke test rather than surfacing
+as a broken upload later. See `apps/api/src/storage` and the file-storage
+block in `.env.example` for the bucket's CORS and public-access settings.
 
 `API_URL` is not configurable per environment: it is fixed to
 `http://127.0.0.1:4000` at build time (see below).

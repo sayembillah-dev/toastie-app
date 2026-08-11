@@ -16,6 +16,7 @@ import { useMemo, useSyncExternalStore } from 'react';
 import { ClubCodePanel } from '@/components/club-admin/club-code-panel';
 import { StatTile } from '@/components/finance/stat-tile';
 import { ORG_GRID_CLASSES, OrgCard } from '@/components/org/org-card';
+import { PersonAvatar } from '@/components/ui/person-avatar';
 import { getInitials, getPrimaryRole } from '@/lib/education/members';
 import { CURRENT_DUES_PERIOD_ID, getDuesPeriod, summariseDues } from '@/lib/finance/dues';
 import { formatMoney } from '@/lib/finance/money';
@@ -270,12 +271,13 @@ export function OverviewTab() {
                 const actor = membersById.get(log.actorMemberId);
                 return (
                   <li key={log.id} className="flex items-start gap-2.5 text-sm">
-                    <span
-                      aria-hidden
-                      className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-fill text-[10px] font-medium text-ink-soft"
-                    >
-                      {actor ? getInitials(actor) : '?'}
-                    </span>
+                    <PersonAvatar
+                      src={actor?.avatarUrl}
+                      initials={actor ? getInitials(actor) : '?'}
+                      sizeClass="size-6"
+                      textClass="text-[10px]"
+                      className="mt-0.5"
+                    />
                     <div className="min-w-0">
                       <p className="truncate text-ink">{log.summary}</p>
                       <p className="text-xs text-ink-muted">

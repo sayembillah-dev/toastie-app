@@ -6,7 +6,7 @@
     "seed": "dotenv -e ../../.env -- ts-node --transpile-only prisma/seed.ts"
   },
   "scripts": {
-    "//postinstall": "No dotenv wrapper: `prisma generate` only reads the schema, never connects, so it needs no DATABASE_URL. Keeping it dependency-free is what lets `pnpm deploy --prod` work — dotenv-cli is a devDependency and would be absent from a production bundle.",
+    "//postinstall": "No dotenv wrapper: `prisma generate` only reads the schema, never connects, so it needs no DATABASE_URL. Keeping it dependency-free is what lets `pnpm deploy --prod` work \u2014 dotenv-cli is a devDependency and would be absent from a production bundle.",
     "postinstall": "prisma generate",
     "dev": "dotenv -e ../../.env -- prisma generate && nest start --watch",
     "build": "nest build",
@@ -15,9 +15,12 @@
     "prisma:generate": "dotenv -e ../../.env -- prisma generate",
     "prisma:migrate": "dotenv -e ../../.env -- prisma migrate dev",
     "prisma:studio": "dotenv -e ../../.env -- prisma studio",
-    "prisma:seed": "dotenv -e ../../.env -- prisma db seed"
+    "prisma:seed": "dotenv -e ../../.env -- prisma db seed",
+    "backfill:storage": "dotenv -e ../../.env -- ts-node --transpile-only prisma/backfill-storage.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1106.0",
+    "@aws-sdk/s3-request-presigner": "^3.1106.0",
     "@nestjs/common": "11.1.28",
     "@nestjs/config": "4.0.4",
     "@nestjs/core": "11.1.28",

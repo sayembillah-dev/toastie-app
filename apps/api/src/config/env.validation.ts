@@ -22,6 +22,16 @@ export enum AppEnv {
   Production = 'production',
 }
 
+/** Where uploaded bytes live. `local-db` inlines them as base64 data-URLs in
+ * the owning row's `Text` column — the original backend, kept because it needs
+ * no infrastructure at all and so keeps `pnpm dev` working on a fresh clone
+ * with nothing but Postgres. `s3` stores an object per file and keeps only the
+ * key in the column. See `src/storage`. */
+export enum FileStorageProvider {
+  LocalDb = 'local-db',
+  S3 = 's3',
+}
+
 /** Placeholder values shipped in `.env.example`. Booting production with one of
  * these still "works" — which is exactly why it has to be a hard failure. */
 const PLACEHOLDER_SECRETS = new Set(['change-me-in-.env', 'change-me-in-.env-too']);
@@ -91,6 +101,51 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   VAPID_SUBJECT?: string;
+
+  // Object storage (see src/storage). Defaults to `local-db` so a fresh clone
+  // boots with no AWS account in sight; the four AWS_* vars below are demanded
+  // only once someone opts into `s3`. Half-configured S3 is the dangerous
+  // state — a bucket with no credentials fails at the first upload, i.e. in
+  // front of a user, rather than at boot — so they are all-or-nothing.
+  @IsOptional()
+  @IsEnum(FileStorageProvider, {
+    message: 'FILE_STORAGE_PROVIDER must be either "local-db" or "s3"',
+  })
+  FILE_STORAGE_PROVIDER: FileStorageProvider = FileStorageProvider.LocalDb;
+
+  @ValidateIf((env: EnvironmentVariables) => env.FILE_STORAGE_PROVIDER === FileStorageProvider.S3)
+  @IsString()
+  @IsNotEmpty({ message: 'AWS_REGION is required when FILE_STORAGE_PROVIDER=s3' })
+  AWS_REGION?: string;
+
+  @ValidateIf((env: EnvironmentVariables) => env.FILE_STORAGE_PROVIDER === FileStorageProvider.S3)
+  @IsString()
+  @IsNotEmpty({ message: 'AWS_S3_BUCKET is required when FILE_STORAGE_PROVIDER=s3' })
+  AWS_S3_BUCKET?: string;
+
+  @ValidateIf((env: EnvironmentVariables) => env.FILE_STORAGE_PROVIDER === FileStorageProvider.S3)
+  @IsString()
+  @IsNotEmpty({ message: 'AWS_ACCESS_KEY_ID is required when FILE_STORAGE_PROVIDER=s3' })
+  AWS_ACCESS_KEY_ID?: string;
+
+  @ValidateIf((env: EnvironmentVariables) => env.FILE_STORAGE_PROVIDER === FileStorageProvider.S3)
+  @IsString()
+  @IsNotEmpty({ message: 'AWS_SECRET_ACCESS_KEY is required when FILE_STORAGE_PROVIDER=s3' })
+  AWS_SECRET_ACCESS_KEY?: string;
+
+  // How long a minted GET signature stays valid. Read URLs are embedded in API
+  // responses, so this is really "how stale may a page be before its images
+  // 403" — long enough to outlive a page session, short enough that a leaked
+  // response body stops being useful quickly.
+  @IsOptional()
+  @IsString()
+  S3_SIGNED_GET_TTL_SECONDS?: string;
+
+  // Upload signatures are handed out one per file and consumed immediately,
+  // so this stays short.
+  @IsOptional()
+  @IsString()
+  S3_SIGNED_PUT_TTL_SECONDS?: string;
 }
 
 /** Wired into `ConfigModule.forRoot({ validate })`, so it runs once at boot and

@@ -1,6 +1,7 @@
 import { EnvelopeSimple, UserPlus } from '@phosphor-icons/react/dist/ssr';
 import Link from 'next/link';
 
+import { PersonAvatar } from '@/components/ui/person-avatar';
 import type { Guest } from '@/lib/people/guests';
 import { getGuestInitials, getGuestStage, getGuestSwatch } from '@/lib/people/guests';
 
@@ -39,13 +40,14 @@ export function GuestCard({ guest }: GuestCardProps) {
         </div>
       </div>
 
-      <div
-        aria-hidden
-        className="absolute left-1/2 top-10 flex size-12 -translate-x-1/2 items-center justify-center rounded-full ring-4 ring-canvas transition-transform duration-300 ease-out group-hover:scale-110"
-        style={{ backgroundColor: swatch.bg, color: swatch.fg }}
-      >
-        <span className="text-sm font-semibold tracking-wide">{initials}</span>
-      </div>
+      <PersonAvatar
+        src={guest.avatarUrl}
+        initials={initials}
+        swatch={swatch}
+        sizeClass="size-12"
+        textClass="text-sm tracking-wide"
+        className="absolute left-1/2 top-10 -translate-x-1/2 ring-4 ring-canvas transition-transform duration-300 ease-out group-hover:scale-110"
+      />
 
       <div className="px-3.5 pb-4 pt-8">
         <div className="text-center">

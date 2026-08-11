@@ -9,7 +9,10 @@ export const DOCUMENT_TITLE_MAX = 120;
 
 /** Cap on the uploaded file size. Data-URLs sit inline in localStorage and
  * anything much bigger risks pushing past the 5 MB per-origin budget. */
-export const DOCUMENT_FILE_MAX_BYTES = 4 * 1024 * 1024;
+/** Matches the `document` surface cap in
+ * `apps/api/src/storage/storage.types.ts` — see the note on
+ * `ASSET_FILE_MAX_BYTES` for why this is no longer 4 MB. */
+export const DOCUMENT_FILE_MAX_BYTES = 25 * 1024 * 1024;
 
 /** MIME types the upload form accepts. Covers the common office trio, PDF,
  * plain text/CSV and zipped bundles — enough for meeting packs, minutes and

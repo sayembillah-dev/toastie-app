@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 
+import { PersonAvatar } from '@/components/ui/person-avatar';
 import type { Guest, GuestStage } from '@/lib/people/guests';
 import {
   GUEST_STAGE_IDS,
@@ -46,17 +47,14 @@ interface GuestAvatarProps {
 }
 
 function GuestAvatar({ guest, size }: GuestAvatarProps) {
-  const swatch = getGuestSwatch(guest.id);
   return (
-    <span
-      aria-hidden
-      className={`flex shrink-0 items-center justify-center rounded-full font-semibold ${
-        size === 'sm' ? 'size-6 text-[10px]' : 'size-8 text-xs'
-      }`}
-      style={{ backgroundColor: swatch.bg, color: swatch.fg }}
-    >
-      {getGuestInitials(guest)}
-    </span>
+    <PersonAvatar
+      src={guest.avatarUrl}
+      initials={getGuestInitials(guest)}
+      swatch={getGuestSwatch(guest.id)}
+      sizeClass={size === 'sm' ? 'size-6' : 'size-8'}
+      textClass={size === 'sm' ? 'text-[10px]' : 'text-xs'}
+    />
   );
 }
 

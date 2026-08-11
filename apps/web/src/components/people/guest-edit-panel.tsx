@@ -3,10 +3,11 @@
 import { CameraPlus, Plus, Trash, XCircle } from '@phosphor-icons/react/dist/ssr';
 import type { UploadFile } from 'antd';
 import { App, Button, Checkbox, Drawer, Form, Input, Select, Space, Upload } from 'antd';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import type { Guest, GuestSocial, SocialPlatform } from '@/lib/people/guests';
 import { getGuestInitials, getGuestSwatch, SOCIAL_PLATFORMS } from '@/lib/people/guests';
+import { uploadFile } from '@/lib/uploads';
 import { emailRules, normalizePhone, phoneRules, shortNameRules } from '@/lib/validation/rules';
 import { useUpdateGuestMutation } from '@/store/api';
 import { getApiErrorMessage, getFieldErrors } from '@/store/api-error';
@@ -24,7 +25,6 @@ interface FormValues {
   phone?: string;
   whatsappSameAsPhone: boolean;
   whatsapp?: string;
-  avatarUrl?: string;
   socials: GuestSocial[];
   bio?: string;
   notes?: string;
@@ -42,7 +42,6 @@ function deserialize(guest: Guest): FormValues {
     phone: guest.phone ?? '',
     whatsappSameAsPhone: !guest.whatsapp,
     whatsapp: guest.whatsapp ?? '',
-    avatarUrl: guest.avatarUrl,
     socials: guest.socials?.map((social) => ({ ...social })) ?? [],
     bio: guest.bio ?? '',
     notes: guest.notes ?? '',
@@ -50,30 +49,28 @@ function deserialize(guest: Guest): FormValues {
   };
 }
 
-/** Wraps the FileReader into an awaitable so `beforeUpload` can hold onto a
- * promise. Rejections propagate; the caller shows an antd message. */
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error('Could not read the file'));
-    reader.onload = () => resolve(String(reader.result));
-    reader.readAsDataURL(file);
-  });
-}
+/** Matches the `guestAvatar` surface cap in
+ * `apps/api/src/storage/storage.types.ts`. */
+const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
 
 interface AvatarFieldProps {
   firstName: string;
   lastName: string;
   guestId: string;
+  /** Display only: a `blob:` preview of a freshly picked file, or the signed
+   * URL the API returned. Never submitted — see `onChange`. */
   value?: string;
-  onChange: (next: string | undefined) => void;
+  /** `File` when the user picks one, `null` when they clear the photo. The
+   * file is uploaded on save and the row stores the resulting object key, so
+   * there is no string here that could round-trip back to the server. */
+  onChange: (next: File | null) => void;
   onError: (message: string) => void;
 }
 
 /** Custom form field for the avatar so the preview lives in-line with the
  * upload / clear controls. antd's Upload is used with `beforeUpload` returning
- * false — there is no HTTP endpoint to hit, the file is decoded to a data URL
- * client-side and pushed into the form value. */
+ * false — the bytes go straight to S3 from `handleSave`, never through antd
+ * and never through our API. */
 function AvatarField({ firstName, lastName, guestId, value, onChange, onError }: AvatarFieldProps) {
   const swatch = getGuestSwatch(guestId);
   const initials = getGuestInitials({
@@ -84,7 +81,7 @@ function AvatarField({ firstName, lastName, guestId, value, onChange, onError }:
   return (
     <div className="flex items-center gap-4">
       {value ? (
-        // biome-ignore lint/performance/noImgElement: local base64 data URL — next/image would need a custom loader.
+        // biome-ignore lint/performance/noImgElement: blob: preview or a presigned S3 URL whose query string rotates per response — next/image would re-optimise on every render and needs a remote-pattern allowlist.
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={value}
@@ -107,19 +104,13 @@ function AvatarField({ firstName, lastName, guestId, value, onChange, onError }:
           accept="image/*"
           showUploadList={false}
           maxCount={1}
-          beforeUpload={async (file: UploadFile & File) => {
-            /* 2 MB is a sensible cap — the base64 data URL is a third larger
-             * and localStorage tops out around 5 MB per origin. */
-            if (file.size && file.size > 2 * 1024 * 1024) {
-              onError('Please choose an image smaller than 2 MB.');
+          beforeUpload={(file: UploadFile & File) => {
+            if (file.size && file.size > AVATAR_MAX_BYTES) {
+              const mb = (AVATAR_MAX_BYTES / (1024 * 1024)).toFixed(0);
+              onError(`Please choose an image smaller than ${mb} MB.`);
               return Upload.LIST_IGNORE;
             }
-            try {
-              const dataUrl = await fileToDataUrl(file);
-              onChange(dataUrl);
-            } catch (err) {
-              onError(err instanceof Error ? err.message : 'Could not read the file');
-            }
+            onChange(file);
             return false;
           }}
         >
@@ -131,7 +122,7 @@ function AvatarField({ firstName, lastName, guestId, value, onChange, onError }:
           <Button
             type="text"
             size="middle"
-            onClick={() => onChange(undefined)}
+            onClick={() => onChange(null)}
             icon={<XCircle size={14} weight="bold" />}
             className="!text-ink-soft"
           >
@@ -165,7 +156,36 @@ export function GuestEditPanel({ guest, open, onClose }: GuestEditPanelProps) {
     if (open) form.setFieldsValue(initialValues);
   }, [open, form, initialValues]);
 
-  const avatarUrl = Form.useWatch('avatarUrl', form);
+  /* The photo sits outside the form for the same reason as on the profile
+   * screen: the API hands back a short-lived signed URL and accepts an object
+   * key, so there is no single string that can serve as a form value. With
+   * neither `pending` nor `cleared` set, save omits `avatarUrl` and the
+   * server leaves the existing object alone. */
+  const [avatarPending, setAvatarPending] = useState<{ file: File; previewUrl: string } | null>(
+    null,
+  );
+  const [avatarCleared, setAvatarCleared] = useState(false);
+
+  useEffect(() => {
+    if (!avatarPending) return;
+    return () => URL.revokeObjectURL(avatarPending.previewUrl);
+  }, [avatarPending]);
+
+  /* Discard any unsaved photo when the drawer re-opens, so a fresh guest never
+   * inherits the previous one's draft. Adjusted during render rather than in
+   * an effect — this is state derived from a prop change, and doing it here
+   * avoids the extra render pass an effect would cost.
+   * https://react.dev/reference/react/useState#storing-information-from-previous-renders */
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    if (open) {
+      setAvatarPending(null);
+      setAvatarCleared(false);
+    }
+  }
+
+  const shownAvatar = avatarPending?.previewUrl ?? (avatarCleared ? undefined : guest.avatarUrl);
   const sameAsPhone = Form.useWatch('whatsappSameAsPhone', form);
 
   const fullName = `${guest.firstName} ${guest.lastName}`;
@@ -185,6 +205,15 @@ export function GuestEditPanel({ guest, open, onClose }: GuestEditPanelProps) {
       .filter((entry) => entry?.url?.trim())
       .map((entry) => ({ platform: entry.platform, url: entry.url.trim() }));
 
+    let avatarUrl: string | undefined;
+    try {
+      if (avatarPending) avatarUrl = await uploadFile(avatarPending.file, 'guestAvatar');
+      else if (avatarCleared) avatarUrl = '';
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : 'Could not upload the photo');
+      return;
+    }
+
     try {
       await updateGuest({
         guestId: guest.id,
@@ -197,7 +226,7 @@ export function GuestEditPanel({ guest, open, onClose }: GuestEditPanelProps) {
           : values.whatsapp
             ? normalizePhone(values.whatsapp)
             : undefined,
-        avatarUrl: values.avatarUrl,
+        ...(avatarUrl !== undefined ? { avatarUrl } : {}),
         socials: cleanedSocials,
         bio: values.bio?.trim() || undefined,
         notes: values.notes?.trim() || undefined,
@@ -263,19 +292,21 @@ export function GuestEditPanel({ guest, open, onClose }: GuestEditPanelProps) {
         requiredMark="optional"
         disabled={isLoading}
       >
-        <Form.Item
-          label="Avatar"
-          name="avatarUrl"
-          /* Hidden control paired with the custom preview above — the value
-           * lives in the form, the UI writes into it via `onChange`. */
-          valuePropName="value"
-        >
+        <Form.Item label="Avatar">
           <AvatarField
             firstName={guest.firstName}
             lastName={guest.lastName}
             guestId={guest.id}
-            value={avatarUrl}
-            onChange={(next) => form.setFieldValue('avatarUrl', next)}
+            value={shownAvatar ?? undefined}
+            onChange={(next) => {
+              if (next) {
+                setAvatarPending({ file: next, previewUrl: URL.createObjectURL(next) });
+                setAvatarCleared(false);
+              } else {
+                setAvatarPending(null);
+                setAvatarCleared(true);
+              }
+            }}
             onError={(msg) => message.error(msg)}
           />
         </Form.Item>

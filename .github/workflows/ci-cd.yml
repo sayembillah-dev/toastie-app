@@ -252,6 +252,15 @@ jobs:
           JWT_ACCESS_TTL: ${{ vars.JWT_ACCESS_TTL || '15m' }}
           JWT_REFRESH_TTL: ${{ vars.JWT_REFRESH_TTL || '30d' }}
           REDIS_URL: ${{ secrets.REDIS_URL }}
+          # Bucket name and region are configuration, not secrets, so they live
+          # in repo variables alongside CORS_ORIGINS. The IAM pair are secrets.
+          # FILE_STORAGE_PROVIDER defaults to local-db so a repo that has not
+          # set any of this up still deploys — files just stay inline.
+          FILE_STORAGE_PROVIDER: ${{ vars.FILE_STORAGE_PROVIDER || 'local-db' }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           set -euo pipefail
           # Secrets go over stdin, never as argv: process arguments are visible
@@ -270,6 +279,17 @@ jobs:
             # last command in the group makes the whole group exit non-zero, so
             # the step would fail for everyone who has not set up Redis yet.
             if [ -n "${REDIS_URL:-}" ]; then echo "REDIS_URL=$REDIS_URL"; fi
+            echo "FILE_STORAGE_PROVIDER=$FILE_STORAGE_PROVIDER"
+            # Emitted only when set. The API hard-fails at boot if the provider
+            # is s3 and any of these are missing (see env.validation.ts), which
+            # is the intended outcome — a half-configured bucket should stop the
+            # deploy, not surface as a broken upload in front of a user.
+            if [ -n "${AWS_REGION:-}" ]; then echo "AWS_REGION=$AWS_REGION"; fi
+            if [ -n "${AWS_S3_BUCKET:-}" ]; then echo "AWS_S3_BUCKET=$AWS_S3_BUCKET"; fi
+            if [ -n "${AWS_ACCESS_KEY_ID:-}" ]; then echo "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID"; fi
+            if [ -n "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+              echo "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY"
+            fi
           } | ssh deploy-target '
             set -euo pipefail
             umask 077

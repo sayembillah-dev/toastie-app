@@ -28,6 +28,7 @@ import { PeopleModule } from './people';
 import { PrismaModule } from './prisma';
 import { PushModule } from './push';
 import { QueueModule } from './queue';
+import { StorageModule } from './storage';
 import { TasksModule } from './tasks';
 import { UsersModule } from './users';
 
@@ -55,6 +56,9 @@ import { UsersModule } from './users';
     // no-op, based on APP_ENV. Registered before feature modules so any of them
     // can inject QueueService.
     QueueModule.forRoot(),
+    // Global: every module owning a file column injects StorageService in its
+    // serializers, so it is registered ahead of the feature modules.
+    StorageModule,
     AccessModule,
     ActivityModule,
     AuthModule,

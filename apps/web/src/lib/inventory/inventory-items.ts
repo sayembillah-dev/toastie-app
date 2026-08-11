@@ -7,7 +7,9 @@ export const INVENTORY_DESCRIPTION_MAX = 600;
 
 /** Cap on the uploaded image size — same budget as library assets so the data
  * URL fits comfortably inside the 5 MB per-origin localStorage quota. */
-export const INVENTORY_IMAGE_MAX_BYTES = 4 * 1024 * 1024;
+/** Matches the `inventory` surface cap in
+ * `apps/api/src/storage/storage.types.ts`. */
+export const INVENTORY_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 
 export const INVENTORY_IMAGE_MIME_TYPES = [
   'image/png',

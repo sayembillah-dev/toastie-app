@@ -13,6 +13,7 @@ import { can, type PermissionSubject } from '@toastly/access';
 import { TokenService } from '@/auth';
 import { type OfficerRole, toClubRoles } from '@/memberships';
 import { PrismaService } from '@/prisma';
+import { StorageService } from '@/storage';
 
 import type { UpdateProfileDto } from './dto/profile.dto';
 import type { CreateUserDto, SetUserPasswordDto, UpdateUserDto } from './dto/users.dto';
@@ -36,6 +37,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tokens: TokenService,
+    private readonly storage: StorageService,
   ) {}
 
   async list(
@@ -77,8 +79,10 @@ export class UsersService {
     ]);
     const hasMore = rows.length > pageSize;
     const trimmed = hasMore ? rows.slice(0, pageSize) : rows;
-    const items = trimmed.map((row) =>
-      toUserWire(row, row._count.memberships, row._count.orgAssignments),
+    const items = await Promise.all(
+      trimmed.map((row) =>
+        toUserWire(row, row._count.memberships, row._count.orgAssignments, this.storage),
+      ),
     );
     return { items, total, hasMore };
   }
@@ -107,7 +111,12 @@ export class UsersService {
       data: { status },
       include: { _count: { select: { memberships: true, orgAssignments: true } } },
     });
-    return toUserWire(updated, updated._count.memberships, updated._count.orgAssignments);
+    return toUserWire(
+      updated,
+      updated._count.memberships,
+      updated._count.orgAssignments,
+      this.storage,
+    );
   }
 
   async setAdmin(
@@ -142,7 +151,12 @@ export class UsersService {
       data: { isSuperAdmin },
       include: { _count: { select: { memberships: true, orgAssignments: true } } },
     });
-    return toUserWire(updated, updated._count.memberships, updated._count.orgAssignments);
+    return toUserWire(
+      updated,
+      updated._count.memberships,
+      updated._count.orgAssignments,
+      this.storage,
+    );
   }
 
   /** Super Admin's direct-provision flow: creates the `User` row and,
@@ -232,7 +246,7 @@ export class UsersService {
       });
 
       return {
-        ...toUserWire(user, club ? 1 : 0, 0),
+        ...(await toUserWire(user, club ? 1 : 0, 0, this.storage)),
         clubId: club?.id ?? null,
         clubName: club?.name ?? null,
         roles: club ? roles : [],
@@ -270,7 +284,12 @@ export class UsersService {
         data,
         include: { _count: { select: { memberships: true, orgAssignments: true } } },
       });
-      return toUserWire(updated, updated._count.memberships, updated._count.orgAssignments);
+      return toUserWire(
+        updated,
+        updated._count.memberships,
+        updated._count.orgAssignments,
+        this.storage,
+      );
     } catch (err) {
       throw this.mapUniqueConflict(err);
     }
@@ -375,7 +394,7 @@ export class UsersService {
   async getProfile(userId: string): Promise<ProfileWire> {
     const row = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!row) throw new NotFoundException(`No user with id "${userId}"`);
-    return toProfileWire(row, await this.loadProfileMemberships(userId));
+    return toProfileWire(row, await this.loadProfileMemberships(userId), this.storage);
   }
 
   /** Self-service edit — same trust boundary as `AuthService.changePassword`:
@@ -404,14 +423,25 @@ export class UsersService {
     if (dto.email !== undefined) data.email = dto.email.trim().toLowerCase() || null;
     if (dto.phone !== undefined) data.phone = dto.phone;
     if (dto.bio !== undefined) data.bio = dto.bio.trim() || null;
-    if (dto.avatarUrl !== undefined) data.avatarUrl = dto.avatarUrl || null;
+    if (dto.avatarUrl !== undefined) {
+      // Avatars are user-scoped: the key must sit under this caller's own
+      // `users/<id>/avatar/` prefix, so one member cannot point their row at
+      // another member's object and have the API sign it for them.
+      if (dto.avatarUrl) this.storage.assertOwnedKey(dto.avatarUrl, 'avatar', userId);
+      data.avatarUrl = dto.avatarUrl || null;
+      // Replacing an avatar orphans the old object; drop it once the write
+      // below succeeds (see after the update).
+    }
     if (dto.socials !== undefined) {
       data.socials = dto.socials.map((s) => ({ platform: s.platform, url: s.url.trim() }));
     }
 
     try {
       const updated = await this.prisma.user.update({ where: { id: userId }, data });
-      return toProfileWire(updated, await this.loadProfileMemberships(userId));
+      if (dto.avatarUrl !== undefined && user.avatarUrl && user.avatarUrl !== updated.avatarUrl) {
+        await this.storage.remove(user.avatarUrl);
+      }
+      return toProfileWire(updated, await this.loadProfileMemberships(userId), this.storage);
     } catch (err) {
       throw this.mapUniqueConflict(err);
     }

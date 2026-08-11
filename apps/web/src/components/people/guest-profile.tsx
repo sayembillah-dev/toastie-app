@@ -11,11 +11,11 @@ import { skipToken } from '@reduxjs/toolkit/query';
 import { Button } from 'antd';
 import Link from 'next/link';
 import { notFound, useParams } from 'next/navigation';
-
 import { PageBreadcrumb } from '@/components/page-breadcrumb';
 import { GuestActions } from '@/components/people/guest-actions';
 import { GuestInfo } from '@/components/people/guest-info';
 import { AccessGate } from '@/components/permissions/access-gate';
+import { PersonAvatar } from '@/components/ui/person-avatar';
 import type { Guest } from '@/lib/people/guests';
 import { getGuestInitials, getGuestStage, getGuestSwatch } from '@/lib/people/guests';
 import { useGetGuestQuery } from '@/store/api';
@@ -113,24 +113,14 @@ function ProfileHeader({ guest }: { guest: Guest }) {
         {/* Avatar overlaps the cover/body seam. ring-4 with the canvas colour
          * cuts a clean gap so the circle floats above both surfaces. When the
          * guest has an uploaded photo it stands in for the initials swatch. */}
-        {guest.avatarUrl ? (
-          // biome-ignore lint/performance/noImgElement: base64 data-URLs are the source of truth locally; next/image can't optimise those without a loader.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={guest.avatarUrl}
-            alt=""
-            aria-hidden
-            className="absolute -top-10 left-4 size-20 rounded-full object-cover ring-4 ring-canvas sm:-top-12 sm:left-6 sm:size-24"
-          />
-        ) : (
-          <div
-            aria-hidden
-            className="absolute -top-10 left-4 flex size-20 items-center justify-center rounded-full ring-4 ring-canvas sm:-top-12 sm:left-6 sm:size-24"
-            style={{ backgroundColor: swatch.bg, color: swatch.fg }}
-          >
-            <span className="text-xl font-semibold tracking-wide sm:text-2xl">{initials}</span>
-          </div>
-        )}
+        <PersonAvatar
+          src={guest.avatarUrl}
+          initials={initials}
+          swatch={swatch}
+          sizeClass="size-20 sm:size-24"
+          textClass="text-xl tracking-wide sm:text-2xl"
+          className="absolute -top-10 left-4 ring-4 ring-canvas sm:-top-12 sm:left-6"
+        />
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
