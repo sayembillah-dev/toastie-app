@@ -61,6 +61,30 @@ export class MembershipsService {
     return rows.map(toMemberWire);
   }
 
+  /** Phone-based account lookup — used by the guest-conversion and
+   * invite-accept flows to detect whether a person already has a `User`
+   * account before deciding whether a roster row should be claimed
+   * immediately or left unclaimed pending an invite. No permission check:
+   * every caller is already inside a permission-checked flow of its own. */
+  async findMatchingUser(
+    phone: string,
+  ): Promise<{ id: string; firstName: string; lastName: string; phone: string } | null> {
+    return this.prisma.user.findUnique({
+      where: { phone },
+      select: { id: true, firstName: true, lastName: true, phone: true },
+    });
+  }
+
+  /** Existing roster row for a user in a specific club, if any — used to
+   * avoid creating a second `Membership` for someone who's already on the
+   * roster there. */
+  async findExistingMembership(clubId: string, userId: string): Promise<MemberWire | null> {
+    const row = await this.prisma.membership.findUnique({
+      where: { clubId_userId: { clubId, userId } },
+    });
+    return row ? toMemberWire(row) : null;
+  }
+
   async get(subject: PermissionSubject, memberId: string): Promise<MemberWire> {
     const row = await this.prisma.membership.findUnique({ where: { id: memberId } });
     if (!row) throw new NotFoundException(`No member with id "${memberId}"`);

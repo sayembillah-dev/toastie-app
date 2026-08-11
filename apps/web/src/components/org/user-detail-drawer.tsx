@@ -24,7 +24,7 @@ import { useMemo, useState } from 'react';
 
 import { OFFICER_ROLES, type OfficerRole } from '@/lib/education/members';
 import { generatePassword } from '@/lib/org/password';
-import { emailRules, phoneRules, shortNameRules } from '@/lib/validation/rules';
+import { emailRules, normalizePhone, phoneRules, shortNameRules } from '@/lib/validation/rules';
 import {
   MEMBER_TYPES,
   type MemberType,
@@ -216,7 +216,7 @@ function ProfileSection({
         firstName: values.firstName.trim(),
         lastName: values.lastName.trim(),
         email: values.email.trim() || undefined,
-        phone: values.phone.trim(),
+        phone: normalizePhone(values.phone),
         tiMemberNumber: values.tiMemberNumber.trim() || undefined,
       }).unwrap();
       onSaved(updated);

@@ -7,7 +7,7 @@ import { useEffect, useMemo } from 'react';
 
 import type { Guest, GuestSocial, SocialPlatform } from '@/lib/people/guests';
 import { getGuestInitials, getGuestSwatch, SOCIAL_PLATFORMS } from '@/lib/people/guests';
-import { emailRules, phoneRules, shortNameRules } from '@/lib/validation/rules';
+import { emailRules, normalizePhone, phoneRules, shortNameRules } from '@/lib/validation/rules';
 import { useUpdateGuestMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -191,8 +191,12 @@ export function GuestEditPanel({ guest, open, onClose }: GuestEditPanelProps) {
         firstName: values.firstName.trim(),
         lastName: values.lastName.trim(),
         email: values.email?.trim() || undefined,
-        phone: values.phone?.trim() || undefined,
-        whatsapp: values.whatsappSameAsPhone ? undefined : values.whatsapp?.trim() || undefined,
+        phone: values.phone ? normalizePhone(values.phone) : undefined,
+        whatsapp: values.whatsappSameAsPhone
+          ? undefined
+          : values.whatsapp
+            ? normalizePhone(values.whatsapp)
+            : undefined,
         avatarUrl: values.avatarUrl,
         socials: cleanedSocials,
         bio: values.bio?.trim() || undefined,
@@ -280,7 +284,7 @@ export function GuestEditPanel({ guest, open, onClose }: GuestEditPanelProps) {
         </Form.Item>
 
         <Form.Item label="Phone" name="phone" rules={phoneRules({ required: false })}>
-          <Input placeholder="+44 7700 900000" type="tel" inputMode="tel" />
+          <Input placeholder="01568286512" type="tel" inputMode="tel" />
         </Form.Item>
 
         <Form.Item name="whatsappSameAsPhone" valuePropName="checked" className="!mb-2">
@@ -293,7 +297,7 @@ export function GuestEditPanel({ guest, open, onClose }: GuestEditPanelProps) {
             name="whatsapp"
             rules={phoneRules({ required: false })}
           >
-            <Input placeholder="+44 7700 900000" type="tel" inputMode="tel" />
+            <Input placeholder="01568286512" type="tel" inputMode="tel" />
           </Form.Item>
         ) : null}
 

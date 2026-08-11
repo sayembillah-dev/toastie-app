@@ -24,7 +24,7 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResult> {
-    const phone = normalisePhone(dto.phone);
+    const phone = dto.phone;
     const email = dto.email ? dto.email.trim().toLowerCase() : null;
     const passwordHash = await this.tokens.hashPassword(dto.password);
 
@@ -68,7 +68,7 @@ export class AuthService {
   }
 
   async login(dto: LoginDto): Promise<AuthResult> {
-    const phone = normalisePhone(dto.phone);
+    const phone = dto.phone;
     const user = await this.prisma.user.findUnique({
       where: { phone },
       select: { id: true, passwordHash: true, status: true },
@@ -145,12 +145,4 @@ export class AuthService {
     if (!session) throw new UnauthorizedException({ code: 'SESSION_INVALID' });
     return session;
   }
-}
-
-/** Strip user-friendly whitespace and dashes from the phone before hitting
- * the DB. Keeps the leading `+` (E.164 marker). Callers that display the
- * phone back to the user should render this canonical form; the register
- * form's placeholder tells them what to type, so no round-trip surprise. */
-function normalisePhone(raw: string): string {
-  return raw.trim().replace(/[\s-]/g, '');
 }

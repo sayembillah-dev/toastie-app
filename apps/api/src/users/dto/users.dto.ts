@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -16,6 +16,7 @@ import {
   MinLength,
 } from 'class-validator';
 
+import { normalizePhone, PHONE_REGEX } from '@/common';
 import { MEMBER_TYPES, type MemberType, OFFICER_ROLES, type OfficerRole } from '@/memberships';
 
 const USER_STATUSES = ['active', 'suspended'] as const;
@@ -83,10 +84,10 @@ export class UpdateUserDto {
 
   @IsOptional()
   @IsString()
-  @Matches(/^\+?[0-9\s-]{8,20}$/, {
-    message: 'Enter a valid phone number (8–20 digits, optional leading +)',
+  @Transform(({ value }) => (value === undefined ? value : normalizePhone(value)))
+  @Matches(PHONE_REGEX, {
+    message: 'Phone must be exactly 11 digits',
   })
-  @MaxLength(20)
   phone?: string;
 
   @IsOptional()
@@ -112,10 +113,10 @@ export class SetUserPasswordDto {
  * success), never emailed or stored in plaintext past this request. */
 export class CreateUserDto {
   @IsString()
-  @Matches(/^\+?[0-9\s-]{8,20}$/, {
-    message: 'Enter a valid phone number (8–20 digits, optional leading +)',
+  @Transform(({ value }) => normalizePhone(value))
+  @Matches(PHONE_REGEX, {
+    message: 'Phone must be exactly 11 digits',
   })
-  @MaxLength(20)
   phone!: string;
 
   @IsString()

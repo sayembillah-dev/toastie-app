@@ -160,7 +160,7 @@ export class UsersService {
       });
     }
 
-    const phone = normalisePhone(dto.phone);
+    const phone = dto.phone;
     const email = dto.email?.trim().toLowerCase() || null;
     const passwordHash = await this.tokens.hashPassword(dto.password);
     const firstName = dto.firstName.trim();
@@ -261,7 +261,7 @@ export class UsersService {
     if (dto.firstName !== undefined) data.firstName = dto.firstName.trim();
     if (dto.lastName !== undefined) data.lastName = dto.lastName.trim();
     if (dto.email !== undefined) data.email = dto.email.trim().toLowerCase() || null;
-    if (dto.phone !== undefined) data.phone = normalisePhone(dto.phone);
+    if (dto.phone !== undefined) data.phone = dto.phone;
     if (dto.tiMemberNumber !== undefined) data.tiMemberNumber = dto.tiMemberNumber.trim() || null;
 
     try {
@@ -402,7 +402,7 @@ export class UsersService {
     if (dto.firstName !== undefined) data.firstName = dto.firstName.trim();
     if (dto.lastName !== undefined) data.lastName = dto.lastName.trim();
     if (dto.email !== undefined) data.email = dto.email.trim().toLowerCase() || null;
-    if (dto.phone !== undefined) data.phone = normalisePhone(dto.phone);
+    if (dto.phone !== undefined) data.phone = dto.phone;
     if (dto.bio !== undefined) data.bio = dto.bio.trim() || null;
     if (dto.avatarUrl !== undefined) data.avatarUrl = dto.avatarUrl || null;
     if (dto.socials !== undefined) {
@@ -457,12 +457,4 @@ export class UsersService {
     }
     return err instanceof Error ? err : new Error(String(err));
   }
-}
-
-/** Strip user-friendly whitespace and dashes before hitting the DB. Keeps
- * the leading `+` (E.164 marker). Mirrors `AuthService`'s normalisation
- * so a phone typed here and one typed at self-registration end up in the
- * same canonical shape. */
-function normalisePhone(raw: string): string {
-  return raw.trim().replace(/[\s-]/g, '');
 }

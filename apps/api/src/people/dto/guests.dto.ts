@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
@@ -6,11 +6,13 @@ import {
   IsIn,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   MinLength,
   ValidateNested,
 } from 'class-validator';
 
+import { normalizePhone, PHONE_REGEX } from '@/common';
 import { OFFICER_ROLES, type OfficerRole } from '@/memberships';
 
 export const GUEST_STAGES = [
@@ -62,15 +64,31 @@ export class UpdateGuestDto {
   @IsEmail()
   email?: string;
 
+  // Empty string clears the field (Prospect.phone is nullable) — normalized
+  // to `null` so `@IsOptional()` skips the digit-count check for a clear.
   @IsOptional()
   @IsString()
-  @MaxLength(40)
-  phone?: string;
+  @Transform(({ value }) => {
+    if (value === undefined) return value;
+    const normalized = normalizePhone(value);
+    return normalized === '' ? null : normalized;
+  })
+  @Matches(PHONE_REGEX, {
+    message: 'Phone must be exactly 11 digits',
+  })
+  phone?: string | null;
 
   @IsOptional()
   @IsString()
-  @MaxLength(40)
-  whatsapp?: string;
+  @Transform(({ value }) => {
+    if (value === undefined) return value;
+    const normalized = normalizePhone(value);
+    return normalized === '' ? null : normalized;
+  })
+  @Matches(PHONE_REGEX, {
+    message: 'WhatsApp number must be exactly 11 digits',
+  })
+  whatsapp?: string | null;
 
   @IsOptional()
   @IsString()
@@ -124,12 +142,18 @@ export class CreateGuestDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(40)
+  @Transform(({ value }) => (value === undefined ? value : normalizePhone(value)))
+  @Matches(PHONE_REGEX, {
+    message: 'Phone must be exactly 11 digits',
+  })
   phone?: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(40)
+  @Transform(({ value }) => (value === undefined ? value : normalizePhone(value)))
+  @Matches(PHONE_REGEX, {
+    message: 'WhatsApp number must be exactly 11 digits',
+  })
   whatsapp?: string;
 
   @IsOptional()

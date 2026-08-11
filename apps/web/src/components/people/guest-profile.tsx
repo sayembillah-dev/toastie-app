@@ -31,10 +31,11 @@ function formatVisitDate(iso: string): string {
   return iso ? VISIT_DATE_FMT.format(new Date(iso)) : 'No visits yet';
 }
 
-/** WhatsApp deeplinks want digits only — the stored number carries a leading
- * `+` and may pick up spaces or dashes if a user pastes one in later. */
+/** WhatsApp deeplinks need the full international number — storage is the
+ * local 11-digit form (`0XXXXXXXXXX`), so drop the leading `0` and prepend
+ * the BD country code. Also strips any stray non-digit that slipped in. */
 function toWhatsappNumber(phone: string): string {
-  return phone.replace(/\D/g, '');
+  return `880${phone.replace(/\D/g, '').replace(/^0/, '')}`;
 }
 
 interface ActionButtonProps {

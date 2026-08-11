@@ -4,6 +4,9 @@ import type {
   VisitLog as VisitLogRow,
 } from '@prisma/client';
 
+import type { InviteWire } from '@/invites';
+import type { MemberWire } from '@/memberships';
+
 /** Wire shape matches the web `lib/people/guests.ts` `Guest` interface.
  * The DB model is named `Prospect` (to sidestep the `ClubRole.Guest` enum
  * collision), but every wire field and URL keeps saying "guest". */
@@ -47,6 +50,25 @@ export function toGuestWire(row: Prospect): GuestWire {
   const socials = parseSocials(row.socials);
   if (socials.length > 0) wire.socials = socials;
   return wire;
+}
+
+/** Result of `GET /guests/:guestId/match` — a read-only preview of what
+ * converting this guest would do, so the frontend can show a confirmation
+ * step before the admin commits. */
+export type GuestMatchWire =
+  | { status: 'no-match' }
+  | { status: 'already-member'; membership: MemberWire }
+  | { status: 'existing-user'; user: { firstName: string; lastName: string; phoneMasked: string } };
+
+/** Result of `POST /guests/:guestId/convert-to-member`. `outcome` tells the
+ * frontend which of the three branches ran: `claimed` (matched an existing
+ * account, portal access is immediate), `unclaimed` (no match — `invite`
+ * carries the link to hand the guest). `already-member` never reaches here;
+ * it's rejected before any write. */
+export interface ConvertGuestResultWire {
+  membership: MemberWire;
+  outcome: 'claimed' | 'unclaimed';
+  invite?: InviteWire;
 }
 
 export interface ContactLogWire {

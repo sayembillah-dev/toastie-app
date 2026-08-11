@@ -30,4 +30,12 @@ export class CreateInviteDto {
   @ArrayNotEmpty()
   @IsEnum(OFFICER_ROLES, { each: true })
   roles!: OfficerRole[];
+
+  /** Targets this invite at a specific pre-created, unclaimed `Membership`
+   * (e.g. one made by guest conversion) so accepting it claims that exact
+   * roster row instead of creating a second one. Omitted for the plain
+   * role-scoped link invites the modal has always made. */
+  @IsOptional()
+  @IsString()
+  membershipId?: string;
 }

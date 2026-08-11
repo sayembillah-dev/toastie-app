@@ -1,3 +1,6 @@
+import type { Invite } from '@/lib/club-admin/invites';
+import type { Member } from '@/lib/education/members';
+
 /** The pipeline a guest moves along, from a name on a list to a paid-up member.
  * Ordered — the Kanban board renders the columns in exactly this sequence, and
  * `not-interested` sits last as the parking bay rather than a final step. */
@@ -99,6 +102,25 @@ export interface Guest {
   invitedBy?: string;
   /** Where they sit in the follow-up pipeline; the Kanban column they land in. */
   stage: GuestStage;
+}
+
+/** Result of `GET /guests/:guestId/match` — what converting this guest
+ * would do, shown as a confirmation step before the admin commits. */
+export type GuestMatch =
+  | { status: 'no-match' }
+  | { status: 'already-member'; membership: Member }
+  | {
+      status: 'existing-user';
+      user: { firstName: string; lastName: string; phoneMasked: string };
+    };
+
+/** Result of `POST /guests/:guestId/convert-to-member`. `claimed` means the
+ * guest's phone matched an existing account and they can log in right away;
+ * `unclaimed` means a fresh invite (`invite`) was generated for them. */
+export interface ConvertGuestResult {
+  membership: Member;
+  outcome: 'claimed' | 'unclaimed';
+  invite?: Invite;
 }
 
 /** Fields the edit panel can write. Excludes the immutable id and derived

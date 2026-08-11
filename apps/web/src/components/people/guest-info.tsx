@@ -18,6 +18,13 @@ interface GuestInfoProps {
   guest: Guest;
 }
 
+/** WhatsApp deeplinks need the full international number — storage is the
+ * local 11-digit form (`0XXXXXXXXXX`), so drop the leading `0` and prepend
+ * the BD country code. */
+function toWhatsappNumber(phone: string): string {
+  return `880${phone.replace(/\D/g, '').replace(/^0/, '')}`;
+}
+
 interface ContactRow {
   label: string;
   value: string;
@@ -43,7 +50,7 @@ function buildContactRows(guest: Guest): ContactRow[] {
     rows.push({
       label: 'WhatsApp',
       value: guest.whatsapp,
-      href: `https://wa.me/${guest.whatsapp.replace(/\D/g, '')}`,
+      href: `https://wa.me/${toWhatsappNumber(guest.whatsapp)}`,
       icon: <WhatsappLogo size={16} weight="fill" />,
       external: true,
     });

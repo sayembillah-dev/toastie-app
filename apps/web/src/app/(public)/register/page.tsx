@@ -11,7 +11,13 @@ import { AuthShell } from '@/components/auth/auth-shell';
 import { RouteFallback } from '@/components/route-fallback';
 import { safeNextPath } from '@/lib/auth/next-path';
 import { writeAccessToken, writeRefreshToken, writeStoredContext } from '@/lib/auth/token-storage';
-import { emailRules, passwordRules, phoneRules, shortNameRules } from '@/lib/validation/rules';
+import {
+  emailRules,
+  normalizePhone,
+  passwordRules,
+  phoneRules,
+  shortNameRules,
+} from '@/lib/validation/rules';
 import { useAuthRegisterMutation } from '@/store/api';
 import { useAppDispatch } from '@/store/hooks';
 import { isContextKeyValid, sessionLoaded } from '@/store/session-slice';
@@ -40,7 +46,7 @@ function RegisterPageContent() {
     try {
       const trimmedEmail = values.email?.trim();
       const res = await register({
-        phone: values.phone.trim(),
+        phone: normalizePhone(values.phone),
         password: values.password,
         firstName: values.firstName.trim(),
         lastName: values.lastName.trim(),
@@ -108,7 +114,7 @@ function RegisterPageContent() {
               autoComplete="tel"
               inputMode="tel"
               size="large"
-              placeholder="+1 555 000 0000"
+              placeholder="01568286512"
               prefix={<Phone size={16} className="text-ink-muted" />}
             />
           </Form.Item>

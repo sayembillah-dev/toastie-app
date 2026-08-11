@@ -66,6 +66,22 @@ export class InvitesService {
     const token = randomBytes(32).toString('base64url');
     const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 86_400_000);
 
+    if (dto.membershipId) {
+      const membership = await this.prisma.membership.findUnique({
+        where: { id: dto.membershipId },
+        select: { clubId: true, userId: true },
+      });
+      if (!membership || membership.clubId !== clubId) {
+        throw new NotFoundException(`No member with id "${dto.membershipId}"`);
+      }
+      if (membership.userId) {
+        throw new BadRequestException({
+          code: 'MEMBERSHIP_ALREADY_CLAIMED',
+          message: 'This member has already claimed portal access',
+        });
+      }
+    }
+
     try {
       const row = await this.prisma.invite.create({
         data: {
@@ -77,15 +93,26 @@ export class InvitesService {
           token,
           invitedByUserId: userId,
           expiresAt,
+          membershipId: dto.membershipId,
         },
       });
       const invitedByMembershipId = await this.membershipIdFor(clubId, userId);
       return toInviteWire(row, invitedByMembershipId ?? '');
     } catch (err) {
-      // The partial index `invite_one_pending_per_club_email` collapses
-      // double-clicks for the legacy email-addressed path — surface it as a
-      // 409 rather than a 500. Link invites (no email) never hit this.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const target = err.meta?.target;
+        const onMembership = Array.isArray(target)
+          ? target.includes('membershipId')
+          : target === 'membershipId';
+        if (onMembership) {
+          throw new ConflictException({
+            code: 'MEMBERSHIP_ALREADY_INVITED',
+            message: 'An invite already exists for this member',
+          });
+        }
+        // The partial index `invite_one_pending_per_club_email` collapses
+        // double-clicks for the legacy email-addressed path — surface it as
+        // a 409 rather than a 500. Link invites (no email) never hit this.
         throw new ConflictException({
           code: 'INVITE_ALREADY_PENDING',
           message: 'There is already a pending invite for this email in this club',
@@ -188,25 +215,58 @@ export class InvitesService {
     });
     if (!user) throw new NotFoundException(`No user with id "${userId}"`);
 
+    // Targeted invites (from e.g. guest conversion) claim the pre-created
+    // membership instead of creating a second roster row for the same
+    // person. Generic role-link invites (`membershipId` null) keep making a
+    // fresh one, as they always have.
+    let targetMembership: { id: string; userId: string | null } | null = null;
+    if (row.membershipId) {
+      targetMembership = await this.prisma.membership.findUnique({
+        where: { id: row.membershipId },
+        select: { id: true, userId: true },
+      });
+      if (!targetMembership) {
+        throw new NotFoundException('The member record this invite targets no longer exists');
+      }
+      if (targetMembership.userId) {
+        throw new ConflictException({
+          code: 'ALREADY_MEMBER',
+          message: 'This member has already claimed portal access',
+        });
+      }
+    }
+
     const now = new Date();
     await this.prisma.$transaction([
       this.prisma.invite.update({
         where: { id: row.id },
         data: { status: 'accepted', acceptedAt: now },
       }),
-      this.prisma.membership.create({
-        data: {
-          clubId: row.clubId,
-          userId,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          email: user.email,
-          roles: row.roles,
-          isClubAdmin: false,
-          status: 'active',
-          grantOverrides: {},
-        },
-      }),
+      targetMembership
+        ? this.prisma.membership.update({
+            where: { id: targetMembership.id },
+            data: {
+              userId,
+              firstName: user.firstName,
+              lastName: user.lastName,
+              email: user.email,
+              roles: row.roles,
+              status: 'active',
+            },
+          })
+        : this.prisma.membership.create({
+            data: {
+              clubId: row.clubId,
+              userId,
+              firstName: user.firstName,
+              lastName: user.lastName,
+              email: user.email,
+              roles: row.roles,
+              isClubAdmin: false,
+              status: 'active',
+              grantOverrides: {},
+            },
+          }),
     ]);
 
     return { clubId: row.clubId, clubName: row.club.name };

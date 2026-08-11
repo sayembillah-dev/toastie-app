@@ -95,7 +95,13 @@ import type {
   CreateContactLogInput,
   UpdateContactLogInput,
 } from '@/lib/people/contact-logs';
-import type { CreateGuestInput, Guest, UpdateGuestInput } from '@/lib/people/guests';
+import type {
+  ConvertGuestResult,
+  CreateGuestInput,
+  Guest,
+  GuestMatch,
+  UpdateGuestInput,
+} from '@/lib/people/guests';
 import type { CreateVisitLogInput, UpdateVisitLogInput, VisitLog } from '@/lib/people/visit-logs';
 import type { Profile, UpdateProfileInput } from '@/lib/profile/profile';
 import type { PushSubscriptionInput } from '@/lib/push/push-notifications';
@@ -293,7 +299,10 @@ export const toastlyApi = createApi({
       ],
     }),
 
-    convertGuestToMember: build.mutation<Member, { guestId: string; roles?: Member['roles'] }>({
+    convertGuestToMember: build.mutation<
+      ConvertGuestResult,
+      { guestId: string; roles?: Member['roles'] }
+    >({
       query: ({ guestId, roles }) => ({
         url: `/guests/${guestId}/convert-to-member`,
         method: 'POST',
@@ -574,6 +583,14 @@ export const toastlyApi = createApi({
         { type: 'Guest', id: 'LIST' },
         { type: 'ActivityLog', id: 'LIST' },
       ],
+    }),
+
+    /* Read-only preview for the convert-to-member dialog — tells it whether
+     * the guest's phone matches an existing account before the admin
+     * commits to anything. */
+    checkGuestMatch: build.query<GuestMatch, string>({
+      query: (guestId) => ({ url: `/guests/${guestId}/match`, method: 'GET' }),
+      providesTags: (_match, _error, guestId) => [{ type: 'Guest', id: guestId }],
     }),
 
     /* Backs both the kanban stage drop and the edit panel — same PATCH, the
@@ -2379,6 +2396,7 @@ export const {
   useGetGuestsQuery,
   useGetGuestQuery,
   useCreateGuestMutation,
+  useCheckGuestMatchQuery,
   useUpdateGuestMutation,
   useDeleteGuestMutation,
   useConvertGuestToMemberMutation,

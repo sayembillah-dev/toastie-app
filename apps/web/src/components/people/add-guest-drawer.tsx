@@ -3,7 +3,7 @@
 import { App, Button, Drawer, Form, Input } from 'antd';
 import { useRouter } from 'next/navigation';
 
-import { emailRules, phoneRules, shortNameRules } from '@/lib/validation/rules';
+import { emailRules, normalizePhone, phoneRules, shortNameRules } from '@/lib/validation/rules';
 import { useCreateGuestMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -48,8 +48,8 @@ export function AddGuestDrawer({ open, onClose }: AddGuestDrawerProps) {
         firstName: values.firstName.trim(),
         lastName: values.lastName.trim(),
         email: values.email?.trim() || undefined,
-        phone: values.phone?.trim() || undefined,
-        whatsapp: values.whatsapp?.trim() || undefined,
+        phone: values.phone ? normalizePhone(values.phone) : undefined,
+        whatsapp: values.whatsapp ? normalizePhone(values.whatsapp) : undefined,
         invitedBy: values.invitedBy?.trim() || undefined,
       }).unwrap();
       message.success(`${guest.firstName} ${guest.lastName} added to the guest list`);
@@ -105,7 +105,7 @@ export function AddGuestDrawer({ open, onClose }: AddGuestDrawerProps) {
         </Form.Item>
 
         <Form.Item label="Phone" name="phone" rules={phoneRules({ required: false })}>
-          <Input placeholder="+44 7700 900000" type="tel" inputMode="tel" />
+          <Input placeholder="01568286512" type="tel" inputMode="tel" />
         </Form.Item>
 
         <Form.Item label="WhatsApp number" name="whatsapp" rules={phoneRules({ required: false })}>

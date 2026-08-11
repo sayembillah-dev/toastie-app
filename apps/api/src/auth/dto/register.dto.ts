@@ -1,16 +1,17 @@
+import { Transform } from 'class-transformer';
 import { IsOptional, IsString, Length, Matches, MaxLength, MinLength } from 'class-validator';
 
+import { normalizePhone, PHONE_REGEX } from '@/common';
+
 /** Phone-based registration DTO. Phone is the login credential; email
- * is optional contact info. Phone format is deliberately permissive —
- * 8–20 chars, digits with an optional leading `+` and inline `-`/space
- * separators. If we ever need E.164 canonicalisation, add it once at
- * the API boundary rather than trusting client-side normalisation. */
+ * is optional contact info. Local Bangladeshi format only — exactly 11
+ * digits after stripping spaces/dashes/country-code prefix. */
 export class RegisterDto {
   @IsString()
-  @Matches(/^\+?[0-9\s-]{8,20}$/, {
-    message: 'Enter a valid phone number (8–20 digits, optional leading +)',
+  @Transform(({ value }) => normalizePhone(value))
+  @Matches(PHONE_REGEX, {
+    message: 'Phone must be exactly 11 digits',
   })
-  @MaxLength(20)
   phone!: string;
 
   @IsString()

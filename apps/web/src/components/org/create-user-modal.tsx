@@ -15,6 +15,7 @@ import { OFFICER_ROLES } from '@/lib/education/members';
 import { generatePassword } from '@/lib/org/password';
 import {
   emailRules,
+  normalizePhone,
   passwordRules,
   phoneRules,
   requiredSelectRule,
@@ -220,7 +221,7 @@ function ModalBody({ onClose }: { onClose: () => void }) {
     }
     try {
       const result = await createUser({
-        phone: values.phone.trim(),
+        phone: normalizePhone(values.phone),
         password: values.password.trim(),
         firstName,
         lastName,
@@ -304,7 +305,7 @@ function ModalBody({ onClose }: { onClose: () => void }) {
           />
         </Form.Item>
         <Form.Item label="Phone" name="phone" rules={phoneRules()} className="!mb-0">
-          <Input id="cu-phone" type="tel" inputMode="tel" placeholder="+1 555 000 0000" />
+          <Input id="cu-phone" type="tel" inputMode="tel" placeholder="01568286512" />
         </Form.Item>
       </div>
 

@@ -12,17 +12,28 @@ import type { Rule } from 'antd/es/form';
 /* Constants — kept in sync with the API DTOs.                                */
 /* -------------------------------------------------------------------------- */
 
-/** 8–20 chars, digits with an optional leading `+` and inline `-`/space
- * separators — matches the `Matches(/^\+?[0-9\s-]{8,20}$/)` on `RegisterDto`. */
-export const PHONE_PATTERN = /^\+?[0-9\s-]{8,20}$/;
+/** Local Bangladeshi mobile format only: exactly 11 digits, e.g.
+ * `01568286512`. Mirrors `apps/api/src/common/phone.ts` — keep both in sync. */
+export const PHONE_REGEX = /^\d{11}$/;
 /** Loose http(s) URL. Anchored so a leading `mailto:` won't sneak past. */
 export const URL_PATTERN = /^https?:\/\/[^\s]+$/;
 
 export const NAME_MAX = 80;
 export const EMAIL_MAX = 255;
-export const PHONE_MAX = 20;
 export const PASSWORD_MIN = 8;
 export const PASSWORD_MAX = 200;
+
+/** Strip spaces, dashes, and a leading `+880`/`880`/`+88`/`88` prefix.
+ * Deliberately a simple strip, not smart E.164 conversion — a country-code
+ * form like `+8801717457286` normalizes to 10 digits and is rejected rather
+ * than silently gaining a `0`; the user has to type the local `0` themselves. */
+export function normalizePhone(raw: string): string {
+  return raw
+    .trim()
+    .replace(/[\s-]/g, '')
+    .replace(/^\+?880/, '')
+    .replace(/^\+?88/, '');
+}
 
 /* -------------------------------------------------------------------------- */
 /* Building blocks.                                                           */
@@ -65,10 +76,12 @@ export function shortNameRules(label: string): Rule[] {
 export function phoneRules({ required = true }: { required?: boolean } = {}): Rule[] {
   const rules: Rule[] = [
     {
-      pattern: PHONE_PATTERN,
-      message: 'Enter a valid mobile number (8–20 digits, e.g. +1 555 000 0000)',
+      validator(_, value) {
+        if (value === undefined || value === null || value === '') return Promise.resolve();
+        if (PHONE_REGEX.test(normalizePhone(String(value)))) return Promise.resolve();
+        return Promise.reject(new Error('Phone must be exactly 11 digits'));
+      },
     },
-    { max: PHONE_MAX, message: `Mobile number must be ${PHONE_MAX} characters or fewer` },
   ];
   if (required) rules.unshift(requiredText('Mobile number is required'));
   return rules;

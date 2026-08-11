@@ -22,7 +22,7 @@ import {
   type ProfileSocial,
   type ProfileSocialPlatform,
 } from '@/lib/profile/profile';
-import { emailRules, phoneRules, shortNameRules } from '@/lib/validation/rules';
+import { emailRules, normalizePhone, phoneRules, shortNameRules } from '@/lib/validation/rules';
 import { useGetMyProfileQuery, useUpdateMyProfileMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 import { useAppDispatch } from '@/store/hooks';
@@ -243,7 +243,7 @@ function ProfileForm({ profile }: { profile: Profile }) {
         avatarUrl: values.avatarUrl,
         socials: cleanedSocials,
         ...(emailChanged ? { email: values.email?.trim() || '' } : {}),
-        ...(phoneChanged ? { phone: values.phone.trim() } : {}),
+        ...(phoneChanged ? { phone: normalizePhone(values.phone) } : {}),
         ...(credentialChanged ? { currentPassword: values.currentPassword } : {}),
       }).unwrap();
       dispatch(
@@ -320,7 +320,7 @@ function ProfileForm({ profile }: { profile: Profile }) {
           </Form.Item>
 
           <Form.Item label="Phone" name="phone" rules={phoneRules()}>
-            <Input placeholder="+44 7700 900000" type="tel" inputMode="tel" />
+            <Input placeholder="01568286512" type="tel" inputMode="tel" />
           </Form.Item>
 
           {credentialChanged ? (

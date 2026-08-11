@@ -10,7 +10,6 @@ import {
 } from '@nestjs/common';
 
 import { CurrentContext, type RequestContext, Requires } from '@/access';
-import { type MemberWire } from '@/memberships';
 
 import { ConvertGuestDto, CreateGuestDto, UpdateGuestDto } from './dto/guests.dto';
 import {
@@ -20,7 +19,13 @@ import {
   UpdateVisitLogDto,
 } from './dto/logs.dto';
 import { PeopleService } from './people.service';
-import { type ContactLogWire, type GuestWire, type VisitLogWire } from './serializers';
+import {
+  type ContactLogWire,
+  type ConvertGuestResultWire,
+  type GuestMatchWire,
+  type GuestWire,
+  type VisitLogWire,
+} from './serializers';
 
 @Controller('guests')
 export class GuestsController {
@@ -65,14 +70,23 @@ export class GuestsController {
     return this.people.deleteGuest(ctx.subject, guestId);
   }
 
+  @Requires('guest', 'read')
+  @Get(':guestId/match')
+  checkGuestMatch(
+    @CurrentContext() ctx: RequestContext,
+    @Param('guestId') guestId: string,
+  ): Promise<GuestMatchWire> {
+    return this.people.checkGuestMatch(ctx.subject, guestId);
+  }
+
   @Requires('guest', 'update')
   @Post(':guestId/convert-to-member')
   convertToMember(
     @CurrentContext() ctx: RequestContext,
     @Param('guestId') guestId: string,
     @Body() dto: ConvertGuestDto,
-  ): Promise<MemberWire> {
-    return this.people.convertToMember(ctx.subject, guestId, dto);
+  ): Promise<ConvertGuestResultWire> {
+    return this.people.convertToMember(ctx.subject, ctx.session.user.id, guestId, dto);
   }
 
   @Requires('guestLog', 'read')

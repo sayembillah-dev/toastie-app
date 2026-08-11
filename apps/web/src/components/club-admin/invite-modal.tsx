@@ -110,7 +110,7 @@ function ModalBody({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
   );
 }
 
-function InviteLinkResult({ invite, onDone }: { invite: Invite; onDone: () => void }) {
+export function InviteLinkResult({ invite, onDone }: { invite: Invite; onDone: () => void }) {
   const { message } = App.useApp();
 
   const origin = useMemo(

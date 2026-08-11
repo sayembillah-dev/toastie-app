@@ -11,7 +11,7 @@ import { AuthShell } from '@/components/auth/auth-shell';
 import { RouteFallback } from '@/components/route-fallback';
 import { safeNextPath } from '@/lib/auth/next-path';
 import { writeAccessToken, writeRefreshToken, writeStoredContext } from '@/lib/auth/token-storage';
-import { phoneRules } from '@/lib/validation/rules';
+import { normalizePhone, phoneRules } from '@/lib/validation/rules';
 import { useAuthLoginMutation } from '@/store/api';
 import { useAppDispatch } from '@/store/hooks';
 import { defaultRouteForContext, isContextKeyValid, sessionLoaded } from '@/store/session-slice';
@@ -41,7 +41,7 @@ function LoginPageContent() {
     setError(null);
     try {
       const res = await login({
-        phone: values.phone.trim(),
+        phone: normalizePhone(values.phone),
         password: values.password,
       }).unwrap();
 
@@ -99,7 +99,7 @@ function LoginPageContent() {
               autoComplete="tel"
               inputMode="tel"
               size="large"
-              placeholder="+1 555 000 0000"
+              placeholder="01568286512"
               prefix={<Phone size={16} className="text-ink-muted" />}
             />
           </Form.Item>

@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
@@ -10,6 +10,8 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
+
+import { normalizePhone, PHONE_REGEX } from '@/common';
 
 /** Same catalogue as `guests.dto.ts`'s `SOCIAL_PLATFORMS` — kept as its own
  * copy rather than a shared import since a profile and a guest are
@@ -59,10 +61,10 @@ export class UpdateProfileDto {
 
   @IsOptional()
   @IsString()
-  @Matches(/^\+?[0-9\s-]{8,20}$/, {
-    message: 'Enter a valid phone number (8–20 digits, optional leading +)',
+  @Transform(({ value }) => (value === undefined ? value : normalizePhone(value)))
+  @Matches(PHONE_REGEX, {
+    message: 'Phone must be exactly 11 digits',
   })
-  @MaxLength(20)
   phone?: string;
 
   @IsOptional()
