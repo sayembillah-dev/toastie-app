@@ -286,7 +286,8 @@ export function PlannerCreateMeetingModal({
                   id="planner-create-time"
                   size="large"
                   className="w-full"
-                  format="HH:mm"
+                  format="h:mm A"
+                  use12Hours
                   minuteStep={5}
                   value={time ? dayjs(time, 'HH:mm') : null}
                   onChange={(value) =>

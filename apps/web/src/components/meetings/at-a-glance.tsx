@@ -240,7 +240,7 @@ function EditMeetingDetailsModal({ open, meeting, onClose }: EditMeetingDetailsM
       okText="Save"
       cancelText="Cancel"
       okButtonProps={{ disabled: meetingNumber === null || !date }}
-      title="Edit meeting number & date"
+      title="Edit meeting number, date & time"
       centered
     >
       <div className="flex flex-col gap-3 pt-2">
@@ -277,7 +277,8 @@ function EditMeetingDetailsModal({ open, meeting, onClose }: EditMeetingDetailsM
             <TimePicker
               id="hero-edit-time"
               className="w-full"
-              format="HH:mm"
+              format="h:mm A"
+              use12Hours
               minuteStep={5}
               value={time}
               onChange={(value) => setTime(value)}
@@ -312,14 +313,6 @@ function Hero({
       <div className="flex items-start justify-between gap-3">
         <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-300">
           Meeting #{meeting.meetingNumber}
-          <Button
-            type="text"
-            size="small"
-            className="print-hidden size-5! min-w-0! p-0! text-slate-300! hover:text-white!"
-            aria-label="Edit meeting number and date"
-            icon={<PencilSimple size={11} weight="bold" />}
-            onClick={() => setEditOpen(true)}
-          />
         </span>
         <span
           className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
@@ -349,6 +342,16 @@ function Hero({
           <Hourglass size={14} weight="bold" className="text-slate-400" />
           {runtime} min run time
         </span>
+        <Button
+          type="text"
+          size="small"
+          className="print-hidden h-6! gap-1 px-1.5! text-xs! text-slate-300! hover:bg-white/10! hover:text-white!"
+          aria-label="Edit meeting number, date and time"
+          icon={<PencilSimple size={12} weight="bold" />}
+          onClick={() => setEditOpen(true)}
+        >
+          Edit
+        </Button>
       </div>
     </section>
   );

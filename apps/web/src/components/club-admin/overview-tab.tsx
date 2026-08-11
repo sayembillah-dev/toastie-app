@@ -51,7 +51,11 @@ const DATE_FMT = new Intl.DateTimeFormat('en-GB', {
   month: 'short',
 });
 
-const TIME_FMT = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' });
+const TIME_FMT = new Intl.DateTimeFormat('en-US', {
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+});
 
 /** The Club Admin landing page — a read-only roll-up of the roster, invites,
  * dues and activity the other three tabs (Members, Permissions, Audit Trail)

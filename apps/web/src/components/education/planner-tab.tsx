@@ -227,8 +227,8 @@ function PlannerTableRow({
             variant="borderless"
             className="w-full"
             size="small"
-            showTime={{ format: 'HH:mm', minuteStep: 5 }}
-            format="D MMM YYYY, HH:mm"
+            showTime={{ format: 'h:mm A', minuteStep: 5, use12Hours: true }}
+            format="D MMM YYYY, h:mm A"
             value={row.dateTime ? dayjs(row.dateTime) : null}
             onChange={(value) =>
               patchRow(row.id, { dateTime: value ? value.format('YYYY-MM-DDTHH:mm') : null })

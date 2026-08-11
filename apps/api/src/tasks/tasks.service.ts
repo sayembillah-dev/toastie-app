@@ -294,22 +294,15 @@ export class TasksService {
     });
     if (!existing) throw new NotFoundException(`No task with id "${taskId}"`);
 
-    const isParticipant =
-      actorMembershipId != null &&
-      (existing.createdByMembershipId === actorMembershipId ||
-        existing.assignees.some((a) => a.membershipId === actorMembershipId));
-    if (
-      !isParticipant ||
-      !can(subject, 'update', 'task', {
-        clubId: existing.clubId,
-        ownerMembershipId: actorMembershipId as string,
-      })
-    ) {
+    // Notes are a comment thread, not a structural edit — anyone who can see
+    // this task (i.e. any club member) can add one, not just the creator or
+    // an assignee.
+    if (!actorMembershipId || !can(subject, 'read', 'task', { clubId: existing.clubId })) {
       throw new ForbiddenException({
         code: 'PERMISSION_DENIED',
         resource: 'task',
         action: 'update',
-        reason: 'Only the creator or an assignee can add notes',
+        reason: 'Only a member of this club can add notes',
       });
     }
 

@@ -17,10 +17,10 @@ const DATE_FMT = new Intl.DateTimeFormat('en-GB', {
   year: 'numeric',
 });
 
-const TIME_FMT = new Intl.DateTimeFormat('en-GB', {
-  hour: '2-digit',
+const TIME_FMT = new Intl.DateTimeFormat('en-US', {
+  hour: 'numeric',
   minute: '2-digit',
-  hour12: false,
+  hour12: true,
 });
 
 interface StatusStyle {

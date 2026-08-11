@@ -34,9 +34,12 @@ export function personSwatch(personId: string): (typeof AVATAR_PALETTE)[number] 
 /** Officers only — a plain Member can create a task but isn't a valid
  * assignee, matching "Assigned to — search officers." `roles` always
  * includes `'Member'` for a plain roster entry, so "officer" here is anyone
- * whose roles carry something else too. */
+ * whose roles carry something else too. Club Admins count as officers even
+ * when that's their only role — `isClubAdmin` is carried as its own boolean
+ * rather than folded into `roles` (see `Member.isClubAdmin`), so it needs its
+ * own check here. */
 export function officerOptions(members: Member[]): { value: string; label: string }[] {
   return members
-    .filter((m) => m.roles.some((r) => r !== 'Member'))
+    .filter((m) => m.isClubAdmin || m.roles.some((r) => r !== 'Member'))
     .map((m) => ({ value: m.id, label: `${m.firstName} ${m.lastName}` }));
 }
