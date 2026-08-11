@@ -8,7 +8,8 @@ import {
   Trash,
   WarningCircle,
 } from '@phosphor-icons/react/dist/ssr';
-import { App, Button, Input, Popconfirm, Skeleton, Tooltip } from 'antd';
+import { App, Button, DatePicker, Input, Popconfirm, Skeleton, Tooltip } from 'antd';
+import dayjs from 'dayjs';
 import Link from 'next/link';
 import { Fragment, useMemo, useState } from 'react';
 
@@ -108,7 +109,7 @@ function monthLabel(dateTime: string): string {
 }
 
 const MEETING_MIN_W = 96;
-const DATE_MIN_W = 140;
+const DATE_MIN_W = 190;
 const ACTION_MIN_W = 96;
 
 /* -----------------------------------------------------------------------------
@@ -148,7 +149,6 @@ function PlannerTableRow({
   const meetingNumberField = useBlurCommit(row.meetingNumber, (next) =>
     patchRow(row.id, { meetingNumber: next }),
   );
-  const dateTimeField = useBlurCommit(row.dateTime, (next) => patchRow(row.id, { dateTime: next }));
   const themeField = useBlurCommit(row.theme, (next) => patchRow(row.id, { theme: next }));
   const notesField = useBlurCommit(row.notes, (next) => patchRow(row.id, { notes: next }));
 
@@ -210,13 +210,16 @@ function PlannerTableRow({
           className={`border-b border-line px-1.5 py-1 align-middle ${cellClass}`}
           style={{ minWidth: DATE_MIN_W }}
         >
-          <input
-            type="datetime-local"
-            className="w-full rounded bg-transparent px-1.5 py-1 text-xs text-ink outline-none transition-colors focus:bg-canvas"
-            value={dateTimeField.value ?? ''}
-            onChange={(event) => dateTimeField.onChange(event.target.value || null)}
-            onFocus={dateTimeField.onFocus}
-            onBlur={dateTimeField.onBlur}
+          <DatePicker
+            variant="borderless"
+            className="w-full"
+            size="small"
+            showTime={{ format: 'HH:mm', minuteStep: 5 }}
+            format="D MMM YYYY, HH:mm"
+            value={row.dateTime ? dayjs(row.dateTime) : null}
+            onChange={(value) =>
+              patchRow(row.id, { dateTime: value ? value.format('YYYY-MM-DDTHH:mm') : null })
+            }
             aria-label={`Date and time for ${rowLabel}`}
           />
         </td>
@@ -269,7 +272,7 @@ function PlannerTableRow({
           />
         </td>
         <td
-          className={`border-b border-line px-1 py-1 text-center align-middle ${cellClass}`}
+          className={`sticky right-0 z-20 border-b border-l border-line-strong px-1 py-1 text-center align-middle ${stickyCellClass}`}
           style={{ minWidth: ACTION_MIN_W }}
         >
           <div className="flex items-center justify-center gap-0.5">
@@ -488,7 +491,7 @@ export function PlannerTab() {
                     </th>
                     <th
                       scope="col"
-                      className="sticky top-0 z-30 h-9 border-b border-line bg-sidebar px-3 text-center align-middle text-xs font-medium text-ink"
+                      className="sticky right-0 top-0 z-40 h-9 border-b border-l border-line-strong bg-sidebar px-3 text-center align-middle text-xs font-medium text-ink"
                       style={{ minWidth: ACTION_MIN_W }}
                     >
                       Action

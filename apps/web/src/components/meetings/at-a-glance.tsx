@@ -12,7 +12,8 @@ import {
   UsersThree,
   Warning,
 } from '@phosphor-icons/react/dist/ssr';
-import { App, Button, Input, InputNumber, Modal, Progress } from 'antd';
+import { App, Button, DatePicker, InputNumber, Modal, Progress, TimePicker } from 'antd';
+import dayjs, { type Dayjs } from 'dayjs';
 import { useMemo, useState } from 'react';
 
 import { buildAgenda, holderName } from '@/lib/meetings/agenda';
@@ -192,16 +193,20 @@ function EditMeetingDetailsModal({ open, meeting, onClose }: EditMeetingDetailsM
   const [updateMeeting, { isLoading }] = useUpdateMeetingMutation();
   const initial = splitLocalDateTime(new Date(meeting.dateTime));
   const [meetingNumber, setMeetingNumber] = useState<number | null>(meeting.meetingNumber);
-  const [date, setDate] = useState(initial.date);
-  const [time, setTime] = useState(initial.time || DEFAULT_START_TIME);
+  const [date, setDate] = useState<Dayjs | null>(
+    initial.date ? dayjs(initial.date, 'YYYY-MM-DD') : null,
+  );
+  const [time, setTime] = useState<Dayjs | null>(
+    dayjs(initial.time || DEFAULT_START_TIME, 'HH:mm'),
+  );
   const [error, setError] = useState<string | null>(null);
 
   function handleOpenChange(next: boolean) {
     if (next) {
       const parts = splitLocalDateTime(new Date(meeting.dateTime));
       setMeetingNumber(meeting.meetingNumber);
-      setDate(parts.date);
-      setTime(parts.time || DEFAULT_START_TIME);
+      setDate(parts.date ? dayjs(parts.date, 'YYYY-MM-DD') : null);
+      setTime(dayjs(parts.time || DEFAULT_START_TIME, 'HH:mm'));
       setError(null);
     }
   }
@@ -210,10 +215,11 @@ function EditMeetingDetailsModal({ open, meeting, onClose }: EditMeetingDetailsM
     if (meetingNumber === null || !date) return;
     setError(null);
     try {
+      const timeStr = time ? time.format('HH:mm') : DEFAULT_START_TIME;
       await updateMeeting({
         meetingId: meeting.id,
         meetingNumber,
-        dateTime: `${date}T${time || DEFAULT_START_TIME}:00`,
+        dateTime: `${date.format('YYYY-MM-DD')}T${timeStr}:00`,
       }).unwrap();
       message.success('Meeting details updated');
       onClose();
@@ -256,22 +262,25 @@ function EditMeetingDetailsModal({ open, meeting, onClose }: EditMeetingDetailsM
             <label htmlFor="hero-edit-date" className="mb-1 block text-xs font-medium text-ink">
               Date
             </label>
-            <Input
+            <DatePicker
               id="hero-edit-date"
-              type="date"
+              className="w-full"
+              format="D MMM YYYY"
               value={date}
-              onChange={(event) => setDate(event.target.value)}
+              onChange={(value) => setDate(value)}
             />
           </div>
           <div>
             <label htmlFor="hero-edit-time" className="mb-1 block text-xs font-medium text-ink">
               Time
             </label>
-            <Input
+            <TimePicker
               id="hero-edit-time"
-              type="time"
+              className="w-full"
+              format="HH:mm"
+              minuteStep={5}
               value={time}
-              onChange={(event) => setTime(event.target.value)}
+              onChange={(value) => setTime(value)}
             />
           </div>
         </div>

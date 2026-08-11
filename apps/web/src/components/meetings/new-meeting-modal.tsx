@@ -8,7 +8,8 @@ import {
   PenNib,
   WarningCircle,
 } from '@phosphor-icons/react/dist/ssr';
-import { App, Form, Input, InputNumber, Modal } from 'antd';
+import { App, DatePicker, Form, Input, InputNumber, Modal, TimePicker } from 'antd';
+import dayjs, { type Dayjs } from 'dayjs';
 import { useEffect, useState } from 'react';
 
 import type { Meeting } from '@/lib/meetings/meetings';
@@ -29,8 +30,8 @@ interface NewMeetingModalProps {
 
 interface FormValues {
   meetingNumber: number;
-  date: string;
-  time: string;
+  date: Dayjs | null;
+  time: Dayjs | null;
   theme: string;
 }
 
@@ -103,9 +104,11 @@ export function NewMeetingModal({ open, nextNumber, onClose, onCreated }: NewMee
     try {
       /* Local time, no zone suffix — the same shape the seeded meetings use, so
        * "19:00" stays 19:00 wherever the agenda is opened. */
+      const date = (values.date as Dayjs).format('YYYY-MM-DD');
+      const time = (values.time as Dayjs).format('HH:mm');
       const created = await createMeeting({
         meetingNumber: values.meetingNumber,
-        dateTime: `${values.date}T${values.time}:00`,
+        dateTime: `${date}T${time}:00`,
         theme: values.theme.trim(),
       }).unwrap();
 
@@ -143,8 +146,8 @@ export function NewMeetingModal({ open, nextNumber, onClose, onCreated }: NewMee
         disabled={isSubmitting}
         initialValues={{
           meetingNumber: nextNumber,
-          date: '',
-          time: DEFAULT_START_TIME,
+          date: null,
+          time: dayjs(DEFAULT_START_TIME, 'HH:mm'),
           theme: '',
         }}
       >
@@ -213,9 +216,6 @@ export function NewMeetingModal({ open, nextNumber, onClose, onCreated }: NewMee
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field htmlFor="meeting-date" label="Date" Icon={CalendarBlank} hint="Required">
-                {/* Native date/time controls rather than antd's pickers: they give
-                 * phones the OS wheel and keep antd's dayjs build out of the
-                 * bundle, while `Input` keeps the field visually in family. */}
                 <Form.Item
                   name="date"
                   className="!mb-0"
@@ -224,7 +224,12 @@ export function NewMeetingModal({ open, nextNumber, onClose, onCreated }: NewMee
                     notPastDateRule('Meeting date'),
                   ]}
                 >
-                  <Input id="meeting-date" size="large" type="date" />
+                  <DatePicker
+                    id="meeting-date"
+                    size="large"
+                    className="w-full"
+                    format="D MMM YYYY"
+                  />
                 </Form.Item>
               </Field>
 
@@ -234,7 +239,13 @@ export function NewMeetingModal({ open, nextNumber, onClose, onCreated }: NewMee
                   className="!mb-0"
                   rules={[{ required: true, message: 'Pick a start time' }]}
                 >
-                  <Input id="meeting-time" size="large" type="time" />
+                  <TimePicker
+                    id="meeting-time"
+                    size="large"
+                    className="w-full"
+                    format="HH:mm"
+                    minuteStep={5}
+                  />
                 </Form.Item>
               </Field>
             </div>

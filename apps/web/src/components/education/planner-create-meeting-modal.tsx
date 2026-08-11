@@ -9,7 +9,8 @@ import {
   Palette,
   WarningCircle,
 } from '@phosphor-icons/react/dist/ssr';
-import { App, Input, InputNumber, Modal } from 'antd';
+import { App, DatePicker, Input, InputNumber, Modal, TimePicker } from 'antd';
+import dayjs from 'dayjs';
 import { useState } from 'react';
 
 import { AssigneeSelect } from '@/components/education/assignee-select';
@@ -268,22 +269,29 @@ export function PlannerCreateMeetingModal({
               </Labelled>
 
               <Labelled htmlFor="planner-create-date" label="Date" Icon={CalendarBlank}>
-                <Input
+                <DatePicker
                   id="planner-create-date"
                   size="large"
-                  type="date"
-                  value={date}
-                  onChange={(event) => patch({ dateTime: joinDateTime(event.target.value, time) })}
+                  className="w-full"
+                  format="D MMM YYYY"
+                  value={date ? dayjs(date, 'YYYY-MM-DD') : null}
+                  onChange={(value) =>
+                    patch({ dateTime: joinDateTime(value ? value.format('YYYY-MM-DD') : '', time) })
+                  }
                 />
               </Labelled>
 
               <Labelled htmlFor="planner-create-time" label="Start time" Icon={Clock}>
-                <Input
+                <TimePicker
                   id="planner-create-time"
                   size="large"
-                  type="time"
-                  value={time}
-                  onChange={(event) => patch({ dateTime: joinDateTime(date, event.target.value) })}
+                  className="w-full"
+                  format="HH:mm"
+                  minuteStep={5}
+                  value={time ? dayjs(time, 'HH:mm') : null}
+                  onChange={(value) =>
+                    patch({ dateTime: joinDateTime(date, value ? value.format('HH:mm') : '') })
+                  }
                 />
               </Labelled>
             </div>
