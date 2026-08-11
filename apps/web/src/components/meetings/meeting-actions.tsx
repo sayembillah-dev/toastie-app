@@ -2,6 +2,7 @@
 
 import {
   CheckCircle,
+  Link as LinkIcon,
   PaperPlaneTilt,
   PenNib,
   Trash,
@@ -92,6 +93,20 @@ export function MeetingActions({ meeting }: MeetingActionsProps) {
     }
   }
 
+  /* No share token on this link — once published, the agenda is meant for
+   * anyone with the meeting id, the same way the club roster page itself
+   * has no token. */
+  async function handleCopyAgendaLink() {
+    const origin = typeof window !== 'undefined' && window.location ? window.location.origin : '';
+    const url = `${origin}/meetings/${meeting.id}/agenda`;
+    try {
+      await navigator.clipboard.writeText(url);
+      message.success('Public agenda link copied');
+    } catch {
+      message.error('Could not copy link');
+    }
+  }
+
   /* Runs the delete inside the confirm modal's `onOk`, same as guest delete —
    * keeps the dialog open with its own spinner and only navigates away once
    * the record is actually gone. */
@@ -171,6 +186,17 @@ export function MeetingActions({ meeting }: MeetingActionsProps) {
         >
           Publish
         </Button>
+        {isPublished && (
+          <Button
+            size="middle"
+            icon={<LinkIcon size={14} weight="bold" />}
+            onClick={() => {
+              void handleCopyAgendaLink();
+            }}
+          >
+            Copy public agenda link
+          </Button>
+        )}
         {canDelete && (
           <div className="ml-1 flex items-center gap-2 border-l border-line pl-3">
             <Button
