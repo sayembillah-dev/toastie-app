@@ -4,6 +4,7 @@ import {
   CalendarBlank,
   CalendarPlus,
   CheckCircle,
+  Flag,
   Plus,
   Trash,
   WarningCircle,
@@ -17,7 +18,13 @@ import { AssigneeSelect } from '@/components/education/assignee-select';
 import { PlannerCreateMeetingModal } from '@/components/education/planner-create-meeting-modal';
 import type { Member } from '@/lib/education/members';
 import type { Assignee, AssigneeField, PlannerRow } from '@/lib/education/planner';
-import { fromPlannerRowWire, plannerRowLabel, toAssigneesJson } from '@/lib/education/planner';
+import {
+  assigneeKey,
+  assigneeLabel,
+  fromPlannerRowWire,
+  plannerRowLabel,
+  toAssigneesJson,
+} from '@/lib/education/planner';
 import type { Meeting } from '@/lib/meetings/meetings';
 import type { Guest } from '@/lib/people/guests';
 import { useBlurCommit } from '@/lib/use-blur-commit';
@@ -123,6 +130,11 @@ interface PlannerTableRowProps {
   rowLabel: string;
   monthDividerLabel: string | null;
   created: Meeting | undefined;
+  /** The row that sits immediately before this one on the calendar (largest
+   * dateTime that's still less than this row's). Drives the same-role
+   * repeat-flag — `undefined` when this row has no prior meeting to compare
+   * against. */
+  previousRow: PlannerRow | undefined;
   members: Member[];
   guests: Guest[];
   patchRow: (
@@ -139,6 +151,7 @@ function PlannerTableRow({
   rowLabel,
   monthDividerLabel,
   created,
+  previousRow,
   members,
   guests,
   patchRow,
@@ -224,22 +237,48 @@ function PlannerTableRow({
           />
         </td>
 
-        {ALL_ASSIGNEE_COLUMNS.map((col) => (
-          <td
-            key={col.field}
-            className={`border-b border-line px-1.5 py-1 align-middle ${cellClass}`}
-            style={{ minWidth: col.minWidth }}
-          >
-            <AssigneeSelect
-              value={row[col.field] as Assignee | null}
-              onChange={(next) => updateAssignee(row.id, col.field, next)}
-              members={members}
-              guests={guests}
-              placeholder={col.label}
-              ariaLabel={`${col.label} for ${rowLabel}`}
-            />
-          </td>
-        ))}
+        {ALL_ASSIGNEE_COLUMNS.map((col) => {
+          const currAssignee = row[col.field] as Assignee | null;
+          const prevAssignee = (previousRow?.[col.field] as Assignee | null | undefined) ?? null;
+          const currKey = assigneeKey(currAssignee);
+          /* A cell only clashes when both meetings hold the slot and the same
+           * person fills both — empty slots and different people leave it
+           * alone. */
+          const isRepeatFromPrev = currKey !== null && currKey === assigneeKey(prevAssignee);
+          const cellFinalClass = isRepeatFromPrev
+            ? 'bg-rose-50/70 group-hover:bg-rose-100/70'
+            : cellClass;
+          const conflictTooltip = isRepeatFromPrev
+            ? `${assigneeLabel(currAssignee, members)} was ${col.label} in the previous meeting.`
+            : '';
+          return (
+            <td
+              key={col.field}
+              className={`relative border-b border-line px-1.5 py-1 align-middle ${cellFinalClass}`}
+              style={{ minWidth: col.minWidth }}
+            >
+              {isRepeatFromPrev ? (
+                <Tooltip title={conflictTooltip}>
+                  <span
+                    role="img"
+                    aria-label={conflictTooltip}
+                    className="absolute left-0 top-0 z-10 inline-flex cursor-help items-center justify-center rounded-br-md bg-rose-100 px-1 py-0.5 text-rose-600"
+                  >
+                    <Flag size={10} weight="fill" />
+                  </span>
+                </Tooltip>
+              ) : null}
+              <AssigneeSelect
+                value={currAssignee}
+                onChange={(next) => updateAssignee(row.id, col.field, next)}
+                members={members}
+                guests={guests}
+                placeholder={col.label}
+                ariaLabel={`${col.label} for ${rowLabel}`}
+              />
+            </td>
+          );
+        })}
 
         <td
           className={`border-b border-line px-1.5 py-1 align-middle ${cellClass}`}
@@ -365,6 +404,20 @@ export function PlannerTab() {
     () => new Map(meetings.map((meeting) => [meeting.id, meeting])),
     [meetings],
   );
+
+  /* Row id → the row that sits immediately before it on the calendar. Rows
+   * without a dateTime don't have a chronological position, so they neither
+   * appear in nor point at anything in this map. Drives the same-role
+   * repeat-flag in every assignee cell. */
+  const previousRowById = useMemo(() => {
+    const dated = rows.filter((r): r is PlannerRow & { dateTime: string } => r.dateTime !== null);
+    const sorted = [...dated].sort((a, b) => a.dateTime.localeCompare(b.dateTime));
+    const map = new Map<string, PlannerRow>();
+    for (let i = 1; i < sorted.length; i++) {
+      map.set(sorted[i].id, sorted[i - 1]);
+    }
+    return map;
+  }, [rows]);
 
   function findCreated(row: PlannerRow) {
     return row.meetingId ? meetingById.get(row.meetingId) : undefined;
@@ -526,6 +579,7 @@ export function PlannerTab() {
                         rowLabel={plannerRowLabel(row)}
                         monthDividerLabel={monthDividerLabel}
                         created={findCreated(row)}
+                        previousRow={previousRowById.get(row.id)}
                         members={members}
                         guests={guests}
                         patchRow={patchRow}

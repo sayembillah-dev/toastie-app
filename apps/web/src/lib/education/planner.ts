@@ -160,3 +160,16 @@ export function assigneeLabel(assignee: Assignee | null, members: Member[]): str
   const member = members.find((m) => m.id === assignee.memberId);
   return member ? `${member.firstName} ${member.lastName}` : 'Unknown member';
 }
+
+/** Stable identity for a slot's occupant — two calls return the same string
+ * only when the same person holds both slots. Used by the planner grid to
+ * flag someone taking the same role two meetings running. Members key on the
+ * membership id; roster guests on their guest id; a typed-in guest with no
+ * roster entry falls back to its trimmed lower-cased name, so re-typing the
+ * same guest under matching-cased whitespace still matches. */
+export function assigneeKey(assignee: Assignee | null): string | null {
+  if (!assignee) return null;
+  if (assignee.kind === 'member') return `m:${assignee.memberId}`;
+  if (assignee.guestId) return `gid:${assignee.guestId}`;
+  return `g:${assignee.name.trim().toLowerCase()}`;
+}
