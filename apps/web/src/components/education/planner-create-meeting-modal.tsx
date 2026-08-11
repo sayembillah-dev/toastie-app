@@ -10,10 +10,10 @@ import {
   WarningCircle,
 } from '@phosphor-icons/react/dist/ssr';
 import { App, DatePicker, Input, InputNumber, Modal, TimePicker } from 'antd';
-import dayjs from 'dayjs';
 import { useState } from 'react';
 
 import { AssigneeSelect } from '@/components/education/assignee-select';
+import dayjs from '@/lib/dayjs';
 import type { Member } from '@/lib/education/members';
 import type { Assignee, AssigneeField, PlannerRow } from '@/lib/education/planner';
 import { toAssigneesJson } from '@/lib/education/planner';

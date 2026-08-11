@@ -9,9 +9,9 @@ import {
   WarningCircle,
 } from '@phosphor-icons/react/dist/ssr';
 import { App, DatePicker, Form, Input, InputNumber, Modal, TimePicker } from 'antd';
-import dayjs, { type Dayjs } from 'dayjs';
 import { useEffect, useState } from 'react';
 
+import dayjs, { type Dayjs } from '@/lib/dayjs';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { DEFAULT_START_TIME } from '@/lib/meetings/meetings';
 import { notPastDateRule, textFieldRules } from '@/lib/validation/rules';

@@ -13,9 +13,9 @@ import {
   Warning,
 } from '@phosphor-icons/react/dist/ssr';
 import { App, Button, DatePicker, InputNumber, Modal, Progress, TimePicker } from 'antd';
-import dayjs, { type Dayjs } from 'dayjs';
 import { useMemo, useState } from 'react';
 
+import dayjs, { type Dayjs } from '@/lib/dayjs';
 import { buildAgenda, holderName } from '@/lib/meetings/agenda';
 import type { DraftSpeaker, MeetingDraft } from '@/lib/meetings/draft';
 import type { Meeting, MeetingStatus } from '@/lib/meetings/meetings';
@@ -215,7 +215,10 @@ function EditMeetingDetailsModal({ open, meeting, onClose }: EditMeetingDetailsM
     if (meetingNumber === null || !date) return;
     setError(null);
     try {
-      const timeStr = time ? time.format('HH:mm') : DEFAULT_START_TIME;
+      /* A cleared — or unparseable — time falls back to the club's default
+       * rather than formatting to "Invalid Date" and sending the API a
+       * date-time string it can only reject. */
+      const timeStr = time?.isValid() ? time.format('HH:mm') : DEFAULT_START_TIME;
       await updateMeeting({
         meetingId: meeting.id,
         meetingNumber,
