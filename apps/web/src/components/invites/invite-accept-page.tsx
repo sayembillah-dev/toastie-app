@@ -1,18 +1,17 @@
 'use client';
 
-import { Warning } from '@phosphor-icons/react/dist/ssr';
+import { UsersThree, Warning } from '@phosphor-icons/react/dist/ssr';
 import { Button, Spin, Tag } from 'antd';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import { AuthCard } from '@/components/auth/auth-card';
+import { AuthShell } from '@/components/auth/auth-shell';
 import { writeStoredContext } from '@/lib/auth/token-storage';
 import { useLightSession } from '@/lib/auth/use-light-session';
 import { useAcceptInviteMutation, useGetPublicInvitePreviewQuery } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
-
-import toastieLogo from '../../../assets/toastie.svg';
 
 interface InviteAcceptPageProps {
   token: string;
@@ -67,9 +66,11 @@ export function InviteAcceptPage({ token }: InviteAcceptPageProps) {
 
   if (sessionStatus === 'checking' || previewLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Spin size="large" />
-      </div>
+      <AuthShell>
+        <div className="flex justify-center">
+          <Spin size="large" />
+        </div>
+      </AuthShell>
     );
   }
 
@@ -81,67 +82,68 @@ export function InviteAcceptPage({ token }: InviteAcceptPageProps) {
 
   if (preview?.state !== 'valid') {
     return (
-      <div className="mx-auto flex min-h-screen w-full max-w-md items-center px-4">
-        <section className="w-full rounded-2xl border border-line bg-sidebar p-6 text-center shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-fill text-ink-soft">
-            <Warning size={22} />
-          </div>
-          <h1 className="mt-3 text-lg font-semibold text-ink">This invite is no longer valid</h1>
-          <p className="mt-1.5 text-sm text-ink-soft">
-            It may have expired, been used already, or been revoked.
-          </p>
-          <Link href="/" className="mt-4 inline-block">
-            <Button>Go to your dashboard</Button>
+      <AuthShell>
+        <AuthCard
+          icon={Warning}
+          title="This invite is no longer valid"
+          subtitle="It may have expired, been used already, or been revoked."
+        >
+          <Link href="/" className="block">
+            <Button block size="large">
+              Go to your dashboard
+            </Button>
           </Link>
-        </section>
-      </div>
+        </AuthCard>
+      </AuthShell>
     );
   }
 
   if (phase === 'redirecting') {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3">
-        <Spin size="large" />
-        <p className="text-sm text-ink-soft">Redirecting you to {redirectClubName}&hellip;</p>
-      </div>
+      <AuthShell>
+        <div className="flex flex-col items-center gap-3">
+          <Spin size="large" />
+          <p className="text-sm text-ink-soft">Redirecting you to {redirectClubName}&hellip;</p>
+        </div>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-md flex-col items-center justify-center gap-6 px-4 py-10">
-      <Image src={toastieLogo} alt="" aria-hidden className="h-8 w-auto" priority />
-
-      <section className="w-full rounded-2xl border border-line bg-sidebar p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-        <h1 className="text-lg font-semibold text-ink">Join {preview.clubName}?</h1>
-        <p className="mt-1.5 text-sm text-ink-soft">
-          Signed in as {session?.user.firstName} {session?.user.lastName}.
-        </p>
-        <p className="mt-2 flex flex-wrap items-center gap-1.5 text-sm text-ink-soft">
-          You&rsquo;ll join as{' '}
-          {preview.roles.length > 0 ? (
-            preview.roles.map((role) => (
-              <Tag key={role} className="m-0">
-                {role}
-              </Tag>
-            ))
-          ) : (
-            <Tag className="m-0">Member</Tag>
-          )}
-        </p>
-
-        {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+    <AuthShell>
+      <AuthCard
+        icon={UsersThree}
+        title={`Join ${preview.clubName}?`}
+        subtitle={
+          <>
+            Signed in as {session?.user.firstName} {session?.user.lastName}.
+            <span className="mt-1.5 flex flex-wrap items-center justify-center gap-1.5">
+              You&rsquo;ll join as{' '}
+              {preview.roles.length > 0 ? (
+                preview.roles.map((role) => (
+                  <Tag key={role} className="m-0">
+                    {role}
+                  </Tag>
+                ))
+              ) : (
+                <Tag className="m-0">Member</Tag>
+              )}
+            </span>
+          </>
+        }
+      >
+        {error ? <p className="mb-3 text-center text-sm text-red-600">{error}</p> : null}
 
         <Button
           type="primary"
           block
           size="large"
-          className="mt-5"
           loading={isAccepting || phase === 'accepting'}
           onClick={() => void handleAccept()}
         >
           Accept & join
         </Button>
-      </section>
-    </div>
+      </AuthCard>
+    </AuthShell>
   );
 }

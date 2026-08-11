@@ -1,11 +1,13 @@
 'use client';
 
-import { Alert, Button, Form, Input, Typography } from 'antd';
-import Image from 'next/image';
+import { EnvelopeSimple, LockKey, Phone, User, UserPlus } from '@phosphor-icons/react/dist/ssr';
+import { Alert, Button, Form, Input } from 'antd';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 
+import { AuthCard } from '@/components/auth/auth-card';
+import { AuthShell } from '@/components/auth/auth-shell';
 import { RouteFallback } from '@/components/route-fallback';
 import { safeNextPath } from '@/lib/auth/next-path';
 import { writeAccessToken, writeRefreshToken, writeStoredContext } from '@/lib/auth/token-storage';
@@ -13,10 +15,6 @@ import { emailRules, passwordRules, phoneRules, shortNameRules } from '@/lib/val
 import { useAuthRegisterMutation } from '@/store/api';
 import { useAppDispatch } from '@/store/hooks';
 import { isContextKeyValid, sessionLoaded } from '@/store/session-slice';
-
-import toastieLogo from '../../../../assets/toastie.svg';
-
-const { Title, Text } = Typography;
 
 interface FormValues {
   phone: string;
@@ -67,28 +65,20 @@ function RegisterPageContent() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-canvas-muted p-6">
-      <div className="w-full max-w-sm rounded-2xl border border-line bg-canvas p-8 shadow-sm">
-        <div className="mb-6 flex items-center gap-2">
-          <Image src={toastieLogo} alt="" aria-hidden className="h-8 w-auto" priority />
-          <span className="text-base font-semibold text-ink">Toastie</span>
-        </div>
+    <AuthShell>
+      <AuthCard
+        icon={UserPlus}
+        title="Create your account"
+        subtitle="You’ll be able to join or start a club right after signing in."
+        footer={
+          <>
+            Already have an account? <Link href="/login">Sign in</Link>
+          </>
+        }
+      >
+        {error ? <Alert type="error" showIcon className="mb-4" message={error} /> : null}
 
-        <Title level={4} className="!mb-1 !text-ink">
-          Create your account
-        </Title>
-        <Text className="!text-ink-soft">
-          You&rsquo;ll be able to join or start a club right after signing in.
-        </Text>
-
-        {error ? <Alert type="error" showIcon className="mt-4" message={error} /> : null}
-
-        <Form<FormValues>
-          layout="vertical"
-          className="mt-6"
-          onFinish={onSubmit}
-          disabled={isLoading}
-        >
+        <Form<FormValues> layout="vertical" onFinish={onSubmit} disabled={isLoading}>
           <div className="flex gap-3">
             <Form.Item
               label="First name"
@@ -96,7 +86,11 @@ function RegisterPageContent() {
               className="flex-1 !mb-4"
               rules={shortNameRules('First name')}
             >
-              <Input autoComplete="given-name" size="large" />
+              <Input
+                autoComplete="given-name"
+                size="large"
+                prefix={<User size={16} className="text-ink-muted" />}
+              />
             </Form.Item>
             <Form.Item
               label="Last name"
@@ -115,29 +109,35 @@ function RegisterPageContent() {
               inputMode="tel"
               size="large"
               placeholder="+1 555 000 0000"
+              prefix={<Phone size={16} className="text-ink-muted" />}
             />
           </Form.Item>
 
           <Form.Item label="Email (optional)" name="email" rules={emailRules()}>
-            <Input type="email" autoComplete="email" size="large" />
+            <Input
+              type="email"
+              autoComplete="email"
+              size="large"
+              prefix={<EnvelopeSimple size={16} className="text-ink-muted" />}
+            />
           </Form.Item>
 
           <Form.Item label="Password" name="password" rules={passwordRules()}>
-            <Input.Password autoComplete="new-password" size="large" />
+            <Input.Password
+              autoComplete="new-password"
+              size="large"
+              prefix={<LockKey size={16} className="text-ink-muted" />}
+            />
           </Form.Item>
 
-          <Form.Item className="!mb-2">
+          <Form.Item className="!mb-0">
             <Button type="primary" htmlType="submit" block size="large" loading={isLoading}>
               Create account
             </Button>
           </Form.Item>
         </Form>
-
-        <Text className="!text-xs !text-ink-muted">
-          Already have an account? <Link href="/login">Sign in</Link>
-        </Text>
-      </div>
-    </div>
+      </AuthCard>
+    </AuthShell>
   );
 }
 
