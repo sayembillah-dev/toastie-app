@@ -180,21 +180,22 @@ export class SubjectFactory {
 
 /** Picks a sensible landing context for `/auth/session` consumers: an owned
  * club first (the common case), then any org assignment, then Super Admin
- * only if the user has literally nothing else. A user with zero of anything
- * returns `global` — the client renders the onboarding screen and never
- * actually acts under that context. */
+ * only if the user has literally nothing else. A clubless, non-admin user
+ * holds no context at all — `null`, not `global` — so the onboarding
+ * screen's requests (e.g. join-by-code) don't carry an `X-Toastly-Context`
+ * header that `ContextGuard` then rejects as not held. */
 function pickDefaultContext(
   isSuperAdmin: boolean,
   memberships: SessionMembership[],
   orgAssignments: SessionOrgAssignment[],
-): ActiveContextKey {
+): ActiveContextKey | null {
   if (memberships.length > 0) return `club:${memberships[0].clubId}`;
   if (orgAssignments.length > 0) {
     const oa = orgAssignments[0];
     return `${oa.unitType}:${oa.unitId}` as ActiveContextKey;
   }
   if (isSuperAdmin) return 'global';
-  return 'global';
+  return null;
 }
 
 function parseOverrides(raw: unknown): Record<string, 'allow' | 'deny'> {

@@ -143,7 +143,7 @@ export function defaultRouteForContext(key: ActiveContextKey | string | null): s
 /** True when the stored key is still held by the returned session. Rejects a
  * `club:c-01` context if the user has been removed from that club. */
 export function isContextKeyValid(
-  key: ActiveContextKey | string,
+  key: ActiveContextKey | string | null,
   payload: Pick<SessionResponse, 'memberships' | 'orgAssignments' | 'user'>,
 ): boolean {
   const parsed = parseContextKey(key);

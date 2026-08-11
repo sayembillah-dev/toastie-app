@@ -53,10 +53,11 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     }
   }, [status, router]);
 
-  /* Skip the non-club redirect for onboarding users: their `contextKey`
-   * falls back to `'global'` (the backend has nowhere else to send a user
-   * with zero memberships and zero org assignments), which would otherwise
-   * push the URL to `/super-admin` while `OnboardingScreen` renders. */
+  /* Onboarding users hold no context at all — `contextKey` is `null` (the
+   * backend has nowhere else to send a user with zero memberships and zero
+   * org assignments) — so `unitKeyForContext` already resolves to `null`
+   * and this effect no-ops. The `isOnboarding` guard just short-circuits
+   * that explicitly rather than relying on it. */
   useEffect(() => {
     if (status !== 'ready' || pathname !== '/' || isOnboarding) return;
     const unit = unitKeyForContext(contextKey);

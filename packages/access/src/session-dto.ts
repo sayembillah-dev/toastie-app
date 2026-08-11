@@ -49,5 +49,5 @@ export interface SessionResponse {
   user: SessionUser;
   memberships: SessionMembership[];
   orgAssignments: SessionOrgAssignment[];
-  defaultContextKey: ActiveContextKey;
+  defaultContextKey: ActiveContextKey | null;
 }
