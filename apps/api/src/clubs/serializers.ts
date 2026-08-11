@@ -51,6 +51,59 @@ export function toOrgClubWire(row: Club): OrgClubWire {
   return out;
 }
 
+/** Wire shape for `GET`/`PATCH /clubs/mine` — a Club Admin's own club, with
+ * the profile fields they can edit plus the lineage names auto-populated
+ * from org placement (read-only; a Director changes these, not the club
+ * itself). */
+export interface ClubProfileWire {
+  id: string;
+  name: string;
+  clubNumber?: string;
+  motto?: string;
+  venueAddress?: string;
+  venueMapUrl?: string;
+  socials: { platform: string; url: string }[];
+  areaName?: string;
+  divisionName?: string;
+  districtName?: string;
+  updatedAt: string;
+}
+
+export function toClubProfileWire(
+  row: Pick<
+    Club,
+    | 'id'
+    | 'name'
+    | 'clubNumber'
+    | 'motto'
+    | 'venueAddress'
+    | 'venueMapUrl'
+    | 'socials'
+    | 'updatedAt'
+  > & {
+    area?: { name: string; division?: { name: string; district?: { name: string } } } | null;
+  },
+): ClubProfileWire {
+  const out: ClubProfileWire = {
+    id: row.id,
+    name: row.name,
+    socials: Array.isArray(row.socials) ? (row.socials as { platform: string; url: string }[]) : [],
+    updatedAt: row.updatedAt.toISOString(),
+  };
+  if (row.clubNumber) out.clubNumber = row.clubNumber;
+  if (row.motto) out.motto = row.motto;
+  if (row.venueAddress) out.venueAddress = row.venueAddress;
+  if (row.venueMapUrl) out.venueMapUrl = row.venueMapUrl;
+  if (row.area) {
+    out.areaName = row.area.name;
+    if (row.area.division) {
+      out.divisionName = row.area.division.name;
+      if (row.area.division.district) out.districtName = row.area.division.district.name;
+    }
+  }
+  return out;
+}
+
 export function toPublicClubWire(
   row: Pick<Club, 'id' | 'slug' | 'name' | 'clubNumber'> & {
     area?: { name: string; division?: { name: string; district?: { name: string } } } | null;

@@ -2,6 +2,7 @@
 
 import {
   AddressBook,
+  Buildings,
   CalendarBlank,
   ClockCounterClockwise,
   Envelope,
@@ -217,6 +218,12 @@ export function OverviewTab() {
             title="Audit Trail"
             subtitle="Every action, who did it, when"
             href="/club-admin/audit-trail"
+          />
+          <OrgCard
+            Icon={Buildings}
+            title="Club Profile"
+            subtitle="Name, venue, motto, socials"
+            href="/club-admin/profile"
           />
         </div>
       </div>

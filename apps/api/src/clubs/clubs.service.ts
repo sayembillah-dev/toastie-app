@@ -9,21 +9,48 @@ import { Prisma } from '@prisma/client';
 import { can, type PermissionSubject, scopeFilter } from '@toastly/access';
 
 import { ClubLineageCache } from '@/access';
+import { ActivityService } from '@/activity';
 import { PrismaService } from '@/prisma';
 
-import { type CreateOrgClubDto, type UpdateOrgClubDto } from './dto/clubs.dto';
 import {
+  type CreateOrgClubDto,
+  type UpdateClubProfileDto,
+  type UpdateOrgClubDto,
+} from './dto/clubs.dto';
+import {
+  type ClubProfileWire,
   type OrgClubWire,
   type PublicClubWire,
+  toClubProfileWire,
   toOrgClubWire,
   toPublicClubWire,
 } from './serializers';
+
+/** Reused by `getProfile`/`updateProfile` so both return the identical
+ * shape `toClubProfileWire` expects, lineage names included. */
+const CLUB_PROFILE_SELECT = {
+  id: true,
+  name: true,
+  clubNumber: true,
+  motto: true,
+  venueAddress: true,
+  venueMapUrl: true,
+  socials: true,
+  updatedAt: true,
+  area: {
+    select: {
+      name: true,
+      division: { select: { name: true, district: { select: { name: true } } } },
+    },
+  },
+} satisfies Prisma.ClubSelect;
 
 @Injectable()
 export class ClubsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly lineageCache: ClubLineageCache,
+    private readonly activity: ActivityService,
   ) {}
 
   /** Directory list, scoped to the caller's `club:read` reach. Unplaced
@@ -298,6 +325,87 @@ export class ClubsService {
     });
 
     return { clubId: club.id, clubName: club.name };
+  }
+
+  /** Read by the Club Profile page — `GET /clubs/mine`. Permission is
+   * enforced at the route (`club:update`) against `ctx.clubId`, same as
+   * `getJoinCode`. */
+  async getProfile(clubId: string): Promise<ClubProfileWire> {
+    const row = await this.prisma.club.findUnique({
+      where: { id: clubId },
+      select: CLUB_PROFILE_SELECT,
+    });
+    if (!row) throw new NotFoundException(`No club with id "${clubId}"`);
+    return toClubProfileWire(row);
+  }
+
+  /** Write side of the Club Profile page — `PATCH /clubs/mine`. Unlike
+   * `update()` (the director-facing `/org-clubs/:clubId` route), there's no
+   * reparenting here and no `existing.areaId` requirement — a Club Admin
+   * edits their own club's identity fields regardless of placement. */
+  async updateProfile(
+    clubId: string,
+    actorMembershipId: string | null,
+    dto: UpdateClubProfileDto,
+  ): Promise<ClubProfileWire> {
+    const existing = await this.prisma.club.findUnique({
+      where: { id: clubId },
+      select: { id: true },
+    });
+    if (!existing) throw new NotFoundException(`No club with id "${clubId}"`);
+
+    const data: Prisma.ClubUpdateInput = {};
+    if (dto.name !== undefined) data.name = dto.name.trim();
+    if ('clubNumber' in dto && dto.clubNumber !== undefined) {
+      data.clubNumber = dto.clubNumber === null ? null : dto.clubNumber.trim() || null;
+    }
+    if ('motto' in dto && dto.motto !== undefined) {
+      data.motto = dto.motto === null ? null : dto.motto.trim() || null;
+    }
+    if ('venueAddress' in dto && dto.venueAddress !== undefined) {
+      data.venueAddress = dto.venueAddress === null ? null : dto.venueAddress.trim() || null;
+    }
+    if ('venueMapUrl' in dto && dto.venueMapUrl !== undefined) {
+      data.venueMapUrl = dto.venueMapUrl === null ? null : dto.venueMapUrl.trim() || null;
+    }
+    if (dto.socials !== undefined) {
+      data.socials = dto.socials.map((social) => ({
+        platform: social.platform,
+        url: social.url.trim(),
+      }));
+    }
+
+    try {
+      const row = await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.club.update({
+          where: { id: clubId },
+          data,
+          select: CLUB_PROFILE_SELECT,
+        });
+        await this.activity.record(
+          {
+            clubId,
+            actorMembershipId,
+            category: 'org',
+            action: 'updated the club profile',
+            summary: 'Updated the club profile',
+            entityType: 'club',
+            entityId: clubId,
+          },
+          tx,
+        );
+        return updated;
+      });
+      return toClubProfileWire(row);
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException({
+          code: 'CLUB_NUMBER_TAKEN',
+          message: 'That club number is already in use',
+        });
+      }
+      throw err;
+    }
   }
 
   private readonly joinCodeAlphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';

@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   Bell,
   BookOpen,
+  Buildings,
   CaretRight,
   CheckSquare,
   ClipboardText,
@@ -168,6 +169,12 @@ const clubAdminNav: NavEntry[] = [
     title: 'Audit Trail',
     Icon: ClockCounterClockwise,
     access: { resource: 'activityLog', action: 'read' },
+  },
+  {
+    href: '/club-admin/profile',
+    title: 'Club Profile',
+    Icon: Buildings,
+    access: { resource: 'club', action: 'update' },
   },
 ];
 

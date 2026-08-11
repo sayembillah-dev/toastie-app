@@ -1,6 +1,7 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 import type { OrgRole, OrgUnitType, SessionResponse } from '@toastly/access';
 import type { ActivityLog } from '@/lib/activity/activity-log';
+import type { ClubProfile, UpdateClubProfileInput } from '@/lib/club/club-profile';
 import type { CreateInviteInput, Invite } from '@/lib/club-admin/invites';
 import type { Evaluation } from '@/lib/education/evaluations';
 import type { HistoryEvent, MemberStats } from '@/lib/education/history';
@@ -185,6 +186,7 @@ export const toastlyApi = createApi({
     'PlatformUserMembership',
     'OrgAssignment',
     'Profile',
+    'ClubProfile',
   ],
   endpoints: (build) => ({
     /* `includeRemoved` opts into seeing soft-removed members — the Club Admin
@@ -373,6 +375,19 @@ export const toastlyApi = createApi({
      * authed baseQuery already attaches. */
     getClubJoinCode: build.query<{ code: string }, void>({
       query: () => ({ url: '/clubs/join-code', method: 'GET' }),
+    }),
+
+    /* Club Admin's Club Profile page — name, motto, venue, socials, etc for
+     * their own club. Same active-club-context reasoning as
+     * `getClubJoinCode`; distinct from `updateOrgClub` below, which is the
+     * director-facing directory CRUD. */
+    getClubProfile: build.query<ClubProfile, void>({
+      query: () => ({ url: '/clubs/mine', method: 'GET' }),
+      providesTags: ['ClubProfile'],
+    }),
+    updateClubProfile: build.mutation<ClubProfile, UpdateClubProfileInput>({
+      query: (body) => ({ url: '/clubs/mine', method: 'PATCH', body }),
+      invalidatesTags: ['ClubProfile', { type: 'ActivityLog', id: 'LIST' }],
     }),
 
     /* Clubless-onboarding counterpart to `acceptInvite` — same "no club
@@ -2493,6 +2508,8 @@ export const {
   useAcceptInviteMutation,
   useGetPublicClubDirectoryQuery,
   useGetClubJoinCodeQuery,
+  useGetClubProfileQuery,
+  useUpdateClubProfileMutation,
   useJoinClubByCodeMutation,
   useAuthLoginMutation,
   useAuthRegisterMutation,

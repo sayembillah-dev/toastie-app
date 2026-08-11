@@ -12,11 +12,22 @@ import {
   Query,
 } from '@nestjs/common';
 
-import { CurrentContext, Public, type RequestContext, Requires } from '@/access';
+import {
+  actorMembershipIdFor,
+  CurrentContext,
+  Public,
+  type RequestContext,
+  Requires,
+} from '@/access';
 
 import { ClubsService } from './clubs.service';
-import { CreateOrgClubDto, JoinByCodeDto, UpdateOrgClubDto } from './dto/clubs.dto';
-import { type OrgClubWire, type PublicClubWire } from './serializers';
+import {
+  CreateOrgClubDto,
+  JoinByCodeDto,
+  UpdateClubProfileDto,
+  UpdateOrgClubDto,
+} from './dto/clubs.dto';
+import { type ClubProfileWire, type OrgClubWire, type PublicClubWire } from './serializers';
 
 /** Two controllers, two URL trees:
  *   - `/clubs/*`     — anyone browsing for a club (`directory`, public) and
@@ -49,6 +60,27 @@ export class PublicClubsController {
   @Get('join-code')
   getJoinCode(@CurrentContext() ctx: RequestContext): Promise<{ code: string }> {
     return this.clubs.getJoinCode(requireClubContext(ctx));
+  }
+
+  /** Club Admin's own Club Profile page — name, motto, venue, socials, etc.
+   * Same `club:update` gate and `requireClubContext` framing as
+   * `getJoinCode`; distinct from `OrgClubsController#update`, which is the
+   * director-facing `/org-clubs/:clubId` route and carries reparenting
+   * logic that doesn't apply here. */
+  @Requires('club', 'update')
+  @Get('mine')
+  getMine(@CurrentContext() ctx: RequestContext): Promise<ClubProfileWire> {
+    return this.clubs.getProfile(requireClubContext(ctx));
+  }
+
+  @Requires('club', 'update')
+  @Patch('mine')
+  updateMine(
+    @CurrentContext() ctx: RequestContext,
+    @Body() dto: UpdateClubProfileDto,
+  ): Promise<ClubProfileWire> {
+    const clubId = requireClubContext(ctx);
+    return this.clubs.updateProfile(clubId, actorMembershipIdFor(ctx, clubId), dto);
   }
 
   /** No `@Requires` — the caller isn't a member of the target club yet, so
