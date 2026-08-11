@@ -2374,6 +2374,7 @@ export interface CreateOrgAssignmentInput {
 
 export const {
   useGetMembersQuery,
+  useLazyGetMembersQuery,
   useGetMemberQuery,
   useGetMemberHistoryQuery,
   useGetMemberStatsQuery,
@@ -2394,6 +2395,7 @@ export const {
   useUpdateMeetingMutation,
   useDeleteMeetingMutation,
   useGetGuestsQuery,
+  useLazyGetGuestsQuery,
   useGetGuestQuery,
   useCreateGuestMutation,
   useCheckGuestMatchQuery,
@@ -2425,6 +2427,7 @@ export const {
   useUpdateChecklistItemMutation,
   useDeleteChecklistItemMutation,
   useGetMeetingRolesQuery,
+  useLazyGetMeetingRolesQuery,
   useSetMeetingRoleMutation,
   useGetPreparedSpeakersQuery,
   useCreatePreparedSpeakerMutation,

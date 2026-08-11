@@ -1,7 +1,19 @@
-import { CalendarBlank, Circle, Clock, PenNib } from '@phosphor-icons/react/dist/ssr';
+'use client';
+
+import { CalendarBlank, Circle, Clock, Copy, PenNib } from '@phosphor-icons/react/dist/ssr';
+import { App, Button } from 'antd';
 import Link from 'next/link';
 
+import { buildMeetingCaption } from '@/lib/meetings/caption';
 import type { Meeting, MeetingStatus } from '@/lib/meetings/meetings';
+import { toAssigneeMap } from '@/lib/meetings/role-assignments';
+import {
+  useLazyGetGuestsQuery,
+  useLazyGetMeetingRolesQuery,
+  useLazyGetMembersQuery,
+} from '@/store/api';
+import { useAppSelector } from '@/store/hooks';
+import { selectSessionMemberships } from '@/store/session-slice';
 
 interface MeetingCardProps {
   meeting: Meeting;
@@ -68,6 +80,48 @@ export function MeetingCard({ meeting, variant = 'default' }: MeetingCardProps) 
   const when = new Date(meeting.dateTime);
   const isFeatured = variant === 'featured';
 
+  const { message } = App.useApp();
+  const memberships = useAppSelector(selectSessionMemberships);
+  const [fetchRoles] = useLazyGetMeetingRolesQuery();
+  const [fetchMembers] = useLazyGetMembersQuery();
+  const [fetchGuests] = useLazyGetGuestsQuery();
+
+  /* Role/member/guest data is only needed once someone actually wants the
+   * caption, so it's fetched lazily on click rather than on every card's
+   * mount — a grid of dozens of past meetings would otherwise fire a roles
+   * request per tile for a feature most of them will never use. */
+  async function handleCopyCaption() {
+    try {
+      const [rolesResult, membersResult, guestsResult] = await Promise.all([
+        fetchRoles(meeting.id),
+        fetchMembers(),
+        fetchGuests(),
+      ]);
+      const assignments = toAssigneeMap(rolesResult.data ?? [], guestsResult.data ?? []);
+      const members = membersResult.data ?? [];
+
+      function nameOf(roleKey: string): string {
+        const assignee = assignments[roleKey];
+        if (!assignee) return '';
+        if (assignee.kind === 'guest') return assignee.name;
+        const member = members.find((m) => m.id === assignee.memberId);
+        return member ? `${member.firstName} ${member.lastName}` : '';
+      }
+
+      const clubName = memberships.find((m) => m.clubId === meeting.clubId)?.clubName ?? '';
+      const caption = buildMeetingCaption(meeting, clubName, {
+        generalEvaluator: nameOf('general-evaluator'),
+        tableTopicsMaster: nameOf('table-topic-master'),
+        toastmaster: nameOf('toastmaster'),
+      });
+
+      await navigator.clipboard.writeText(caption);
+      message.success('Caption copied');
+    } catch {
+      message.error('Could not copy caption');
+    }
+  }
+
   return (
     <Link
       href={`/meetings/${meeting.id}`}
@@ -129,6 +183,20 @@ export function MeetingCard({ meeting, variant = 'default' }: MeetingCardProps) 
             <Clock size={isFeatured ? 16 : 14} weight="bold" className="text-ink-muted" />
             <time dateTime={meeting.dateTime}>{TIME_FMT.format(when)}</time>
           </span>
+        </div>
+
+        <div className="mt-1 flex flex-wrap gap-2">
+          <Button
+            size="small"
+            icon={<Copy size={13} />}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              void handleCopyCaption();
+            }}
+          >
+            Copy caption
+          </Button>
         </div>
       </div>
     </Link>
