@@ -2519,6 +2519,7 @@ export const {
   useGetPublicClubDirectoryQuery,
   useGetClubJoinCodeQuery,
   useGetClubProfileQuery,
+  useLazyGetClubProfileQuery,
   useUpdateClubProfileMutation,
   useJoinClubByCodeMutation,
   useAuthLoginMutation,

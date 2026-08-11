@@ -36,11 +36,22 @@ export interface CaptionRoleNames {
   toastmaster: string;
 }
 
-/** Builds the WhatsApp/Facebook invite caption shared for a meeting. Venue is
- * left blank until club profile carries a physical address to fill it in. */
+/** Club details the invite caption draws on. Venue/map are blank until the
+ * club profile carries them — either drops its line rather than printing
+ * an empty stub. */
+export interface CaptionClubInfo {
+  name: string;
+  venueAddress: string;
+  venueMapUrl: string;
+}
+
+/** Builds the WhatsApp/Facebook invite caption shared for a meeting. Each
+ * paragraph is assembled as its own group of lines and the groups are joined
+ * with a blank line between them, so the copied text reads as distinct
+ * paragraphs instead of one dense block. */
 export function buildMeetingCaption(
   meeting: Meeting,
-  clubName: string,
+  club: CaptionClubInfo,
   roleNames: CaptionRoleNames,
 ): string {
   const when = new Date(meeting.dateTime);
@@ -55,24 +66,28 @@ export function buildMeetingCaption(
     roleNames.toastmaster ? `🎤 ${toastmasterLabel} — ${roleNames.toastmaster}` : null,
   ].filter((line): line is string => line !== null);
 
-  const lines = [
-    `📢 ${ordinal(meeting.meetingNumber)} General Meeting | ${clubName} 🎙️`,
-    `Dear Fellow Toastmasters & Guests,`,
-    `You’re warmly invited to our upcoming regular meeting with the theme:`,
-    `💬 “${meeting.theme}”`,
+  const detailLines = [
+    `📅 Date: ${CAPTION_DATE_FMT.format(when)}`,
+    `🕖 Time: ${CAPTION_TIME_FMT.format(when)}`,
+    club.venueAddress ? `📍 Venue: ${club.venueAddress}` : null,
+    club.venueMapUrl ? `🗺️ Map: ${club.venueMapUrl}` : null,
+  ].filter((line): line is string => line !== null);
+
+  const sections = [
+    [`📢 ${ordinal(meeting.meetingNumber)} General Meeting | ${club.name} 🎙️`],
+    [
+      'Dear Fellow Toastmasters & Guests,',
+      'You’re warmly invited to our upcoming regular meeting with the theme:',
+      `💬 “${meeting.theme}”`,
+    ],
   ];
 
   if (roleLines.length > 0) {
-    lines.push('✨ Role Players:', ...roleLines);
+    sections.push(['✨ Role Players:', ...roleLines]);
   }
 
-  lines.push(
-    `📅 Date: ${CAPTION_DATE_FMT.format(when)}`,
-    `🕖 Time: ${CAPTION_TIME_FMT.format(when)}`,
-    `📍 Venue: `,
-    '',
-    'Come join us for an evening of learning, speaking, networking, and growth! 🌟',
-  );
+  sections.push(detailLines);
+  sections.push(['Come join us for an evening of learning, speaking, networking, and growth! 🌟']);
 
-  return lines.join('\n');
+  return sections.map((section) => section.join('\n')).join('\n\n');
 }

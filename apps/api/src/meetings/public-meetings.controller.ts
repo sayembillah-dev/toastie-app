@@ -43,6 +43,8 @@ export interface PublicMeetingAgendaWire {
   dateTime: string;
   theme: string;
   clubName: string;
+  clubContactPhone: string | null;
+  clubVenueMapUrl: string | null;
   word?: WordOfTheDayWire;
   roles: PublicAgendaRoleWire[];
   speakers: PublicAgendaSpeakerWire[];
@@ -121,7 +123,7 @@ export class PublicMeetingsController {
         wordPartOfSpeech: true,
         wordMeaning: true,
         wordExample: true,
-        club: { select: { name: true } },
+        club: { select: { name: true, contactPhone: true, venueMapUrl: true } },
         roleAssignments: {
           select: {
             roleKey: true,
@@ -156,6 +158,8 @@ export class PublicMeetingsController {
       dateTime: meeting.dateTime.toISOString(),
       theme: meeting.theme,
       clubName: meeting.club.name,
+      clubContactPhone: meeting.club.contactPhone,
+      clubVenueMapUrl: meeting.club.venueMapUrl,
       roles: meeting.roleAssignments
         .map((row) => ({ roleKey: row.roleKey, name: fullName(row.membership ?? row.guest) }))
         .filter((role) => role.name),

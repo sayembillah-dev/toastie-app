@@ -3,10 +3,12 @@
 import {
   CalendarBlank,
   Clock,
+  MapPin,
   Quotes,
   TextAa,
   UsersThree,
   Warning,
+  WhatsappLogo,
 } from '@phosphor-icons/react/dist/ssr';
 import { Spin } from 'antd';
 import { useMemo } from 'react';
@@ -40,6 +42,13 @@ const MENTOR_KEYS = [
   'table-topic-master',
   'table-topic-evaluator',
 ];
+
+/** WhatsApp deeplinks need the full international number — storage is the
+ * local 11-digit form (`0XXXXXXXXXX`), so drop the leading `0` and prepend
+ * the BD country code. */
+function toWhatsappNumber(phone: string): string {
+  return `880${phone.replace(/\D/g, '').replace(/^0/, '')}`;
+}
 
 function initialsOf(name: string): string {
   const parts = name.split(' ').filter(Boolean);
@@ -209,6 +218,32 @@ export function PublicAgendaPage({ meetingId }: PublicAgendaPageProps) {
               {CLOCK_FMT.format(startsAt)}
             </span>
           </div>
+          {agenda.clubContactPhone || agenda.clubVenueMapUrl ? (
+            <div className="mt-5 flex flex-wrap gap-2">
+              {agenda.clubContactPhone ? (
+                <a
+                  href={`https://wa.me/${toWhatsappNumber(agenda.clubContactPhone)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-white/20"
+                >
+                  <WhatsappLogo size={15} weight="fill" />
+                  Contact Club
+                </a>
+              ) : null}
+              {agenda.clubVenueMapUrl ? (
+                <a
+                  href={agenda.clubVenueMapUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-white/20"
+                >
+                  <MapPin size={15} weight="fill" />
+                  View Location
+                </a>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </header>
 

@@ -25,6 +25,8 @@ export interface PublicMeetingAgenda {
   dateTime: string;
   theme: string;
   clubName: string;
+  clubContactPhone: string | null;
+  clubVenueMapUrl: string | null;
   word?: WordOfTheDay;
   roles: PublicAgendaRole[];
   speakers: PublicAgendaSpeaker[];

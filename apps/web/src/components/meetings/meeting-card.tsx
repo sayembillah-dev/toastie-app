@@ -8,6 +8,7 @@ import { buildMeetingCaption } from '@/lib/meetings/caption';
 import type { Meeting, MeetingStatus } from '@/lib/meetings/meetings';
 import { toAssigneeMap } from '@/lib/meetings/role-assignments';
 import {
+  useLazyGetClubProfileQuery,
   useLazyGetGuestsQuery,
   useLazyGetMeetingRolesQuery,
   useLazyGetMembersQuery,
@@ -85,17 +86,19 @@ export function MeetingCard({ meeting, variant = 'default' }: MeetingCardProps) 
   const [fetchRoles] = useLazyGetMeetingRolesQuery();
   const [fetchMembers] = useLazyGetMembersQuery();
   const [fetchGuests] = useLazyGetGuestsQuery();
+  const [fetchClubProfile] = useLazyGetClubProfileQuery();
 
-  /* Role/member/guest data is only needed once someone actually wants the
-   * caption, so it's fetched lazily on click rather than on every card's
-   * mount — a grid of dozens of past meetings would otherwise fire a roles
-   * request per tile for a feature most of them will never use. */
+  /* Role/member/guest/club-profile data is only needed once someone actually
+   * wants the caption, so it's fetched lazily on click rather than on every
+   * card's mount — a grid of dozens of past meetings would otherwise fire a
+   * roles request per tile for a feature most of them will never use. */
   async function handleCopyCaption() {
     try {
-      const [rolesResult, membersResult, guestsResult] = await Promise.all([
+      const [rolesResult, membersResult, guestsResult, clubProfileResult] = await Promise.all([
         fetchRoles(meeting.id),
         fetchMembers(),
         fetchGuests(),
+        fetchClubProfile(),
       ]);
       const assignments = toAssigneeMap(rolesResult.data ?? [], guestsResult.data ?? []);
       const members = membersResult.data ?? [];
@@ -109,11 +112,19 @@ export function MeetingCard({ meeting, variant = 'default' }: MeetingCardProps) 
       }
 
       const clubName = memberships.find((m) => m.clubId === meeting.clubId)?.clubName ?? '';
-      const caption = buildMeetingCaption(meeting, clubName, {
-        generalEvaluator: nameOf('general-evaluator'),
-        tableTopicsMaster: nameOf('table-topic-master'),
-        toastmaster: nameOf('toastmaster'),
-      });
+      const caption = buildMeetingCaption(
+        meeting,
+        {
+          name: clubProfileResult.data?.name ?? clubName,
+          venueAddress: clubProfileResult.data?.venueAddress ?? '',
+          venueMapUrl: clubProfileResult.data?.venueMapUrl ?? '',
+        },
+        {
+          generalEvaluator: nameOf('general-evaluator'),
+          tableTopicsMaster: nameOf('table-topic-master'),
+          toastmaster: nameOf('toastmaster'),
+        },
+      );
 
       await navigator.clipboard.writeText(caption);
       message.success('Caption copied');
