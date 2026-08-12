@@ -91,11 +91,15 @@ async function toAssigneeJson(
   return null;
 }
 
-/** "YYYY-MM-DDTHH:mm" ← the same truncated-ISO shape the planner grid's
- * `datetime-local` input stores, kept consistent with how the create flow
- * turns that same string into a `Date` (`new Date(\`${dateTime}:00\`)`). */
+/** `PlannerRow.dateTime` is a string column holding the same **instant** the
+ * meeting's `DateTime` column does — a full ISO-8601 timestamp, offset and
+ * all. It deliberately is not truncated to "YYYY-MM-DDTHH:mm": a wall clock
+ * with no offset can only be resolved against *some* timezone, and the one
+ * this process runs in (UTC on the VPS) is never the one the meeting was
+ * scheduled in. Both sides staying instants means this mirror never has to
+ * guess. */
 function toPlannerDateTime(date: Date): string {
-  return date.toISOString().slice(0, 16);
+  return date.toISOString();
 }
 
 /** Meeting role assignments changed → refresh the linked planner row's
@@ -210,7 +214,7 @@ export async function syncMeetingFromPlannerRow(
   const meetingData: Prisma.MeetingUpdateInput = {};
   if (row.theme !== undefined) meetingData.theme = row.theme;
   if (row.meetingNumber !== null) meetingData.meetingNumber = row.meetingNumber;
-  if (row.dateTime) meetingData.dateTime = new Date(`${row.dateTime}:00`);
+  if (row.dateTime) meetingData.dateTime = new Date(row.dateTime);
 
   if (Object.keys(meetingData).length > 0) {
     try {

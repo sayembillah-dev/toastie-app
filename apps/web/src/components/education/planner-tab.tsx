@@ -10,12 +10,12 @@ import {
   WarningCircle,
 } from '@phosphor-icons/react/dist/ssr';
 import { App, Button, DatePicker, Input, Popconfirm, Skeleton, Tooltip } from 'antd';
-import dayjs from 'dayjs';
 import Link from 'next/link';
 import { Fragment, useMemo, useState } from 'react';
 import { AssigneeSelect } from '@/components/education/assignee-select';
 import { PlannerCreateMeetingModal } from '@/components/education/planner-create-meeting-modal';
 import { ReadOnly } from '@/components/permissions/read-only';
+import dayjs from '@/lib/dayjs';
 import type { Member } from '@/lib/education/members';
 import type { Assignee, AssigneeField, PlannerRow } from '@/lib/education/planner';
 import {
@@ -25,6 +25,7 @@ import {
   plannerRowLabel,
   toAssigneesJson,
 } from '@/lib/education/planner';
+import { localMonthKey } from '@/lib/meetings/datetime';
 import type { Meeting } from '@/lib/meetings/meetings';
 import type { Guest } from '@/lib/people/guests';
 import { useBlurCommit } from '@/lib/use-blur-commit';
@@ -100,11 +101,10 @@ function subHeaderGroupClass(tint: Tint): string {
  * row's — rows with no date don't trigger a divider and just flow inline.
  * -------------------------------------------------------------------------- */
 
-function monthKey(dateTime: string | null): string | null {
-  // datetime-local strings are "YYYY-MM-DDTHH:mm" — the first 7 chars are the
-  // month key we compare against neighbours.
-  return dateTime ? dateTime.slice(0, 7) : null;
-}
+/* `dateTime` is a stored instant, so the month has to be read off the viewer's
+ * local clock — slicing the ISO string would group by UTC month and file a
+ * late-evening meeting on the 31st under the following month. */
+const monthKey = localMonthKey;
 
 const MONTH_LABEL_FMT = new Intl.DateTimeFormat(undefined, {
   month: 'long',
@@ -230,8 +230,13 @@ function PlannerTableRow({
             showTime={{ format: 'h:mm A', minuteStep: 5, use12Hours: true }}
             format="D MMM YYYY, h:mm A"
             value={row.dateTime ? dayjs(row.dateTime) : null}
+            /* Stored as an instant, shown local — the picker is already
+               working in local time, so `toISOString` is the whole
+               conversion. */
             onChange={(value) =>
-              patchRow(row.id, { dateTime: value ? value.format('YYYY-MM-DDTHH:mm') : null })
+              patchRow(row.id, {
+                dateTime: value ? value.second(0).millisecond(0).toISOString() : null,
+              })
             }
             aria-label={`Date and time for ${rowLabel}`}
           />
@@ -411,7 +416,12 @@ export function PlannerTab() {
    * repeat-flag in every assignee cell. */
   const previousRowById = useMemo(() => {
     const dated = rows.filter((r): r is PlannerRow & { dateTime: string } => r.dateTime !== null);
-    const sorted = [...dated].sort((a, b) => a.dateTime.localeCompare(b.dateTime));
+    /* Compared as instants rather than as strings: the stored values are
+     * ISO timestamps, and lexical order only happens to match chronological
+     * order while every one of them carries the same offset. */
+    const sorted = [...dated].sort(
+      (a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime(),
+    );
     const map = new Map<string, PlannerRow>();
     for (let i = 1; i < sorted.length; i++) {
       map.set(sorted[i].id, sorted[i - 1]);

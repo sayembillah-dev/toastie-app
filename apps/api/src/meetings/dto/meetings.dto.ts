@@ -5,10 +5,13 @@ import {
   IsISO8601,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
+
+import { INSTANT_MESSAGE, INSTANT_REGEX } from '../../common';
 
 const THEME_MAX = 120;
 const WORD_MAX = 40;
@@ -60,6 +63,7 @@ export class CreateMeetingDto {
   meetingNumber!: number;
 
   @IsISO8601()
+  @Matches(INSTANT_REGEX, { message: INSTANT_MESSAGE })
   dateTime!: string;
 
   @IsString()
@@ -78,6 +82,7 @@ export class UpdateMeetingDto {
 
   @IsOptional()
   @IsISO8601()
+  @Matches(INSTANT_REGEX, { message: INSTANT_MESSAGE })
   dateTime?: string;
 
   @IsOptional()

@@ -19,6 +19,7 @@ import { PersonAvatar } from '@/components/ui/person-avatar';
 import dayjs, { type Dayjs } from '@/lib/dayjs';
 import type { Member } from '@/lib/education/members';
 import { buildAgenda, holderName } from '@/lib/meetings/agenda';
+import { splitLocalDateTime, toInstant } from '@/lib/meetings/datetime';
 import type { DraftSpeaker, MeetingDraft } from '@/lib/meetings/draft';
 import type { Meeting, MeetingStatus } from '@/lib/meetings/meetings';
 import { DEFAULT_START_TIME } from '@/lib/meetings/meetings';
@@ -168,17 +169,6 @@ function CountPill({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** "YYYY-MM-DD" / "HH:mm" read off a Date's *local* parts — matches how the
- * planner's create-meeting dialog builds the same pair, so the two stay
- * consistent about what a naive date-time string means. */
-function splitLocalDateTime(date: Date): { date: string; time: string } {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return {
-    date: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
-    time: `${pad(date.getHours())}:${pad(date.getMinutes())}`,
-  };
-}
-
 interface EditMeetingDetailsModalProps {
   open: boolean;
   meeting: Meeting;
@@ -193,22 +183,20 @@ interface EditMeetingDetailsModalProps {
 function EditMeetingDetailsModal({ open, meeting, onClose }: EditMeetingDetailsModalProps) {
   const { message } = App.useApp();
   const [updateMeeting, { isLoading }] = useUpdateMeetingMutation();
-  const initial = splitLocalDateTime(new Date(meeting.dateTime));
+  const initial = splitLocalDateTime(meeting.dateTime);
   const [meetingNumber, setMeetingNumber] = useState<number | null>(meeting.meetingNumber);
   const [date, setDate] = useState<Dayjs | null>(
     initial.date ? dayjs(initial.date, 'YYYY-MM-DD') : null,
   );
-  const [time, setTime] = useState<Dayjs | null>(
-    dayjs(initial.time || DEFAULT_START_TIME, 'HH:mm'),
-  );
+  const [time, setTime] = useState<Dayjs | null>(dayjs(initial.time, 'HH:mm'));
   const [error, setError] = useState<string | null>(null);
 
   function handleOpenChange(next: boolean) {
     if (next) {
-      const parts = splitLocalDateTime(new Date(meeting.dateTime));
+      const parts = splitLocalDateTime(meeting.dateTime);
       setMeetingNumber(meeting.meetingNumber);
       setDate(parts.date ? dayjs(parts.date, 'YYYY-MM-DD') : null);
-      setTime(dayjs(parts.time || DEFAULT_START_TIME, 'HH:mm'));
+      setTime(dayjs(parts.time, 'HH:mm'));
       setError(null);
     }
   }
@@ -218,13 +206,13 @@ function EditMeetingDetailsModal({ open, meeting, onClose }: EditMeetingDetailsM
     setError(null);
     try {
       /* A cleared — or unparseable — time falls back to the club's default
-       * rather than formatting to "Invalid Date" and sending the API a
-       * date-time string it can only reject. */
+       * inside `toInstant` rather than formatting to "Invalid Date" and
+       * sending the API a date-time string it can only reject. */
       const timeStr = time?.isValid() ? time.format('HH:mm') : DEFAULT_START_TIME;
       await updateMeeting({
         meetingId: meeting.id,
         meetingNumber,
-        dateTime: `${date.format('YYYY-MM-DD')}T${timeStr}:00`,
+        dateTime: toInstant(date, timeStr),
       }).unwrap();
       message.success('Meeting details updated');
       onClose();

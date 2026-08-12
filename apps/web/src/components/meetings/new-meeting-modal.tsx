@@ -12,6 +12,7 @@ import { App, DatePicker, Form, Input, InputNumber, Modal, TimePicker } from 'an
 import { useEffect, useState } from 'react';
 
 import dayjs, { type Dayjs } from '@/lib/dayjs';
+import { toInstant } from '@/lib/meetings/datetime';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { DEFAULT_START_TIME } from '@/lib/meetings/meetings';
 import { notPastDateRule, textFieldRules } from '@/lib/validation/rules';
@@ -102,13 +103,13 @@ export function NewMeetingModal({ open, nextNumber, onClose, onCreated }: NewMee
     }
 
     try {
-      /* Local time, no zone suffix — the same shape the seeded meetings use, so
-       * "19:00" stays 19:00 wherever the agenda is opened. */
-      const date = (values.date as Dayjs).format('YYYY-MM-DD');
+      /* Sent as an instant, not as the typed wall clock — see
+       * `lib/meetings/datetime`. The pickers are local, so what is typed here
+       * is what every viewer in this timezone reads back. */
       const time = (values.time as Dayjs).format('HH:mm');
       const created = await createMeeting({
         meetingNumber: values.meetingNumber,
-        dateTime: `${date}T${time}:00`,
+        dateTime: toInstant(values.date as Dayjs, time),
         theme: values.theme.trim(),
       }).unwrap();
 

@@ -1,4 +1,15 @@
-import { IsInt, IsObject, IsOptional, IsString, MaxLength, Min, ValidateIf } from 'class-validator';
+import {
+  IsInt,
+  IsObject,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  Min,
+  ValidateIf,
+} from 'class-validator';
+
+import { INSTANT_MESSAGE, INSTANT_REGEX } from '../../common';
 
 export const PLANNER_THEME_MAX = 120;
 export const PLANNER_NOTES_MAX = 2000;
@@ -15,9 +26,13 @@ export class UpdatePlannerRowDto {
   @Min(1)
   meetingNumber?: number | null;
 
+  /** Stored as a string column, but the value is the same instant the linked
+   * meeting holds — offset included, so the mirror can convert between the two
+   * without guessing a timezone. `null` clears an undated row. */
   @IsOptional()
   @ValidateIf((_, value) => value !== null)
   @IsString()
+  @Matches(INSTANT_REGEX, { message: INSTANT_MESSAGE })
   dateTime?: string | null;
 
   @IsOptional()

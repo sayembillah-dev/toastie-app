@@ -698,9 +698,11 @@ model PlannerRow {
   id            String    @id @default(cuid())
   clubId        String
   meetingNumber Int?
-  /// Raw `datetime-local` string ("YYYY-MM-DDTHH:mm") — same free-text
-  /// storage as the grid's own input, not a `DateTime` column, so a
-  /// half-filled date doesn't need a sentinel value.
+  /// The row's slot as a full ISO-8601 instant ("2026-08-14T04:30:00.000Z") —
+  /// the same moment `Meeting.dateTime` holds, so `planner-mirror` can move a
+  /// value between the two without resolving a wall clock against whatever
+  /// timezone the API process happens to run in. Kept a `String?` rather than
+  /// a `DateTime?` so a half-filled row doesn't need a sentinel value.
   dateTime      String?
   theme         String    @default("")
   notes         String    @default("") @db.Text

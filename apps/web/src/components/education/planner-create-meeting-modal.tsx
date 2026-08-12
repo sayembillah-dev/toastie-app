@@ -17,9 +17,9 @@ import dayjs from '@/lib/dayjs';
 import type { Member } from '@/lib/education/members';
 import type { Assignee, AssigneeField, PlannerRow } from '@/lib/education/planner';
 import { toAssigneesJson } from '@/lib/education/planner';
+import { splitLocalDateTime, toInstant } from '@/lib/meetings/datetime';
 import { countUnlinkedGuestAssignees } from '@/lib/meetings/from-planner';
 import type { Meeting } from '@/lib/meetings/meetings';
-import { DEFAULT_START_TIME } from '@/lib/meetings/meetings';
 import type { Guest } from '@/lib/people/guests';
 import { useCreateMeetingMutation, useUpdatePlannerRowMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
@@ -81,15 +81,11 @@ const ROLE_GROUPS: Array<{ title: string; fields: RoleField[] }> = [
 
 const ALL_ROLE_FIELDS: RoleField[] = ROLE_GROUPS.flatMap((group) => group.fields);
 
-/** `datetime-local` values are "YYYY-MM-DDTHH:mm", so the two halves are a
- * slice apart. Time falls back to the club's usual slot rather than midnight. */
-function splitDateTime(dateTime: string | null): { date: string; time: string } {
-  if (!dateTime) return { date: '', time: DEFAULT_START_TIME };
-  return { date: dateTime.slice(0, 10), time: dateTime.slice(11, 16) || DEFAULT_START_TIME };
-}
-
+/** A planner row's `dateTime` is an instant, so the pickers' two halves come
+ * off the viewer's local clock rather than out of a string slice — see
+ * `lib/meetings/datetime`. */
 function joinDateTime(date: string, time: string): string | null {
-  return date ? `${date}T${time || DEFAULT_START_TIME}` : null;
+  return date ? toInstant(date, time) : null;
 }
 
 function Labelled({
@@ -145,7 +141,7 @@ export function PlannerCreateMeetingModal({
   const { message } = App.useApp();
 
   const form = edits ?? row;
-  const { date, time } = splitDateTime(form?.dateTime ?? null);
+  const { date, time } = splitLocalDateTime(form?.dateTime ?? null);
 
   const theme = form?.theme.trim() ?? '';
   const canSubmit = form !== null && form.meetingNumber !== null && date !== '' && theme !== '';
@@ -175,8 +171,7 @@ export function PlannerCreateMeetingModal({
     try {
       created = await createMeeting({
         meetingNumber,
-        /* Seconds appended to match the shape the meeting record stores. */
-        dateTime: `${date}T${time}:00`,
+        dateTime: toInstant(date, time),
         theme,
       }).unwrap();
     } catch (error) {
