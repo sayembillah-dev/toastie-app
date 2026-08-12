@@ -48,6 +48,7 @@ export function ClubsList({ title, subtitle, areaId, canDelete, moveOptions }: C
         onRetry={refetch}
         getKey={(club) => club.id}
         addLabel="Add club"
+        addResource="club"
         onAdd={() => setAddOpen(true)}
         emptyIcon={Buildings}
         emptyTitle="No clubs yet."

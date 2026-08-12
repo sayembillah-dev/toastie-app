@@ -13,9 +13,9 @@ import { useMemo, useState, useSyncExternalStore } from 'react';
 import { MeetingCard } from '@/components/meetings/meeting-card';
 import { NewMeetingModal } from '@/components/meetings/new-meeting-modal';
 import { StaggerList } from '@/components/motion/stagger-list';
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { nextMeetingNumber, partitionMeetings } from '@/lib/meetings/meetings';
-import { useCan } from '@/lib/permissions/use-can';
 import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
 import { useGetMeetingsQuery } from '@/store/api';
 
@@ -164,8 +164,6 @@ export function MeetingsTabs() {
    * defer the actual partition until the clock is trustworthy. */
   const now = useClientNow();
   const { data: meetings } = useGetMeetingsQuery();
-  const { can } = useCan();
-  const canMutate = can('update', 'meeting');
   const [isCreateOpen, setCreateOpen] = useState(false);
   const router = useRouter();
   const { activeKey, onChange } = usePersistentTab('tab', 'current');
@@ -209,15 +207,16 @@ export function MeetingsTabs() {
          * Wrapper carries the breakpoint because antd's Button CSS is
          * unlayered and would beat Tailwind's `hidden`. */}
         <span className="hidden shrink-0 sm:inline-flex">
-          <Button
-            type="primary"
-            size="middle"
-            disabled={!canMutate}
-            onClick={handleCreateMeeting}
-            icon={<Plus size={16} weight="bold" />}
-          >
-            New meeting
-          </Button>
+          <ReadOnly resource="meeting" action="create">
+            <Button
+              type="primary"
+              size="middle"
+              onClick={handleCreateMeeting}
+              icon={<Plus size={16} weight="bold" />}
+            >
+              New meeting
+            </Button>
+          </ReadOnly>
         </span>
       </header>
 
@@ -289,15 +288,16 @@ export function MeetingsTabs() {
           bottom: 'calc(1rem + env(safe-area-inset-bottom))',
         }}
       >
-        <Button
-          type="primary"
-          shape="circle"
-          disabled={!canMutate}
-          onClick={handleCreateMeeting}
-          aria-label="Create new meeting"
-          icon={<Plus size={22} weight="bold" />}
-          className="!size-14 shadow-lg"
-        />
+        <ReadOnly resource="meeting" action="create">
+          <Button
+            type="primary"
+            shape="circle"
+            onClick={handleCreateMeeting}
+            aria-label="Create new meeting"
+            icon={<Plus size={22} weight="bold" />}
+            className="!size-14 shadow-lg"
+          />
+        </ReadOnly>
       </div>
 
       <NewMeetingModal

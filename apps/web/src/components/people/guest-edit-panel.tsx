@@ -4,7 +4,7 @@ import { CameraPlus, Plus, Trash, XCircle } from '@phosphor-icons/react/dist/ssr
 import type { UploadFile } from 'antd';
 import { App, Button, Checkbox, Drawer, Form, Input, Select, Space, Upload } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
-
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { Guest, GuestSocial, SocialPlatform } from '@/lib/people/guests';
 import {
   getGuestFullName,
@@ -279,9 +279,11 @@ export function GuestEditPanel({ guest, open, onClose }: GuestEditPanelProps) {
           <Button onClick={handleDiscard} disabled={isLoading}>
             Discard
           </Button>
-          <Button type="primary" loading={isLoading} onClick={handleSave}>
-            Save details
-          </Button>
+          <ReadOnly resource="guest">
+            <Button type="primary" loading={isLoading} onClick={handleSave}>
+              Save details
+            </Button>
+          </ReadOnly>
         </div>
       }
       styles={{
@@ -289,145 +291,147 @@ export function GuestEditPanel({ guest, open, onClose }: GuestEditPanelProps) {
         footer: { padding: '12px 24px' },
       }}
     >
-      <Form
-        form={form}
-        layout="vertical"
-        initialValues={initialValues}
-        requiredMark="optional"
-        disabled={isLoading}
-      >
-        <Form.Item label="Avatar">
-          <AvatarField
-            firstName={guest.firstName}
-            lastName={guest.lastName}
-            guestId={guest.id}
-            value={shownAvatar ?? undefined}
-            onChange={(next) => {
-              if (next) {
-                setAvatarPending({ file: next, previewUrl: URL.createObjectURL(next) });
-                setAvatarCleared(false);
-              } else {
-                setAvatarPending(null);
-                setAvatarCleared(true);
-              }
-            }}
-            onError={(msg) => message.error(msg)}
-          />
-        </Form.Item>
-
-        <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-          <Form.Item label="First name" name="firstName" rules={shortNameRules('First name')}>
-            <Input placeholder="First name" />
+      <ReadOnly resource="guest" display="block">
+        <Form
+          form={form}
+          layout="vertical"
+          initialValues={initialValues}
+          requiredMark="optional"
+          disabled={isLoading}
+        >
+          <Form.Item label="Avatar">
+            <AvatarField
+              firstName={guest.firstName}
+              lastName={guest.lastName}
+              guestId={guest.id}
+              value={shownAvatar ?? undefined}
+              onChange={(next) => {
+                if (next) {
+                  setAvatarPending({ file: next, previewUrl: URL.createObjectURL(next) });
+                  setAvatarCleared(false);
+                } else {
+                  setAvatarPending(null);
+                  setAvatarCleared(true);
+                }
+              }}
+              onError={(msg) => message.error(msg)}
+            />
           </Form.Item>
-          <Form.Item
-            label="Last name"
-            name="lastName"
-            rules={shortNameRules('Last name', { required: false })}
-          >
-            <Input placeholder="Last name" />
+
+          <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+            <Form.Item label="First name" name="firstName" rules={shortNameRules('First name')}>
+              <Input placeholder="First name" />
+            </Form.Item>
+            <Form.Item
+              label="Last name"
+              name="lastName"
+              rules={shortNameRules('Last name', { required: false })}
+            >
+              <Input placeholder="Last name" />
+            </Form.Item>
+          </div>
+
+          <Form.Item label="Email" name="email" rules={emailRules()}>
+            <Input placeholder="name@example.com" type="email" />
           </Form.Item>
-        </div>
 
-        <Form.Item label="Email" name="email" rules={emailRules()}>
-          <Input placeholder="name@example.com" type="email" />
-        </Form.Item>
-
-        <Form.Item label="Phone" name="phone" rules={phoneRules({ required: false })}>
-          <Input placeholder="01568286512" type="tel" inputMode="tel" />
-        </Form.Item>
-
-        <Form.Item name="whatsappSameAsPhone" valuePropName="checked" className="!mb-2">
-          <Checkbox>WhatsApp is the same as the phone number</Checkbox>
-        </Form.Item>
-
-        {!sameAsPhone ? (
-          <Form.Item
-            label="WhatsApp number"
-            name="whatsapp"
-            rules={phoneRules({ required: false })}
-          >
+          <Form.Item label="Phone" name="phone" rules={phoneRules({ required: false })}>
             <Input placeholder="01568286512" type="tel" inputMode="tel" />
           </Form.Item>
-        ) : null}
 
-        <Form.Item label="Socials" className="!mb-4">
-          <Form.List name="socials">
-            {(fields, { add, remove }) => (
-              <div className="flex flex-col gap-2">
-                {fields.map(({ key, name, ...restField }) => (
-                  /* `key` from Form.List has been unreliable under React 19 —
-                   * `name` is the row index and is guaranteed unique per list. */
-                  <Space.Compact key={key ?? name} className="w-full items-start !gap-2" block>
-                    <Form.Item
-                      {...restField}
-                      name={[name, 'platform']}
-                      noStyle
-                      rules={[{ required: true, message: 'Pick a platform' }]}
-                    >
-                      <Select<SocialPlatform>
-                        options={SOCIAL_OPTIONS}
-                        placeholder="Platform"
-                        className="!w-40 shrink-0"
+          <Form.Item name="whatsappSameAsPhone" valuePropName="checked" className="!mb-2">
+            <Checkbox>WhatsApp is the same as the phone number</Checkbox>
+          </Form.Item>
+
+          {!sameAsPhone ? (
+            <Form.Item
+              label="WhatsApp number"
+              name="whatsapp"
+              rules={phoneRules({ required: false })}
+            >
+              <Input placeholder="01568286512" type="tel" inputMode="tel" />
+            </Form.Item>
+          ) : null}
+
+          <Form.Item label="Socials" className="!mb-4">
+            <Form.List name="socials">
+              {(fields, { add, remove }) => (
+                <div className="flex flex-col gap-2">
+                  {fields.map(({ key, name, ...restField }) => (
+                    /* `key` from Form.List has been unreliable under React 19 —
+                     * `name` is the row index and is guaranteed unique per list. */
+                    <Space.Compact key={key ?? name} className="w-full items-start !gap-2" block>
+                      <Form.Item
+                        {...restField}
+                        name={[name, 'platform']}
+                        noStyle
+                        rules={[{ required: true, message: 'Pick a platform' }]}
+                      >
+                        <Select<SocialPlatform>
+                          options={SOCIAL_OPTIONS}
+                          placeholder="Platform"
+                          className="!w-40 shrink-0"
+                        />
+                      </Form.Item>
+                      <Form.Item
+                        {...restField}
+                        name={[name, 'url']}
+                        noStyle
+                        rules={[
+                          { required: true, message: 'URL is required' },
+                          {
+                            pattern: URL_PATTERN,
+                            message: 'That does not look like a URL',
+                          },
+                        ]}
+                      >
+                        <Input placeholder="https://…" className="!flex-1" />
+                      </Form.Item>
+                      <Button
+                        type="text"
+                        onClick={() => remove(name)}
+                        aria-label="Remove this social link"
+                        icon={<Trash size={14} weight="bold" />}
+                        className="!shrink-0 !text-ink-muted"
                       />
-                    </Form.Item>
-                    <Form.Item
-                      {...restField}
-                      name={[name, 'url']}
-                      noStyle
-                      rules={[
-                        { required: true, message: 'URL is required' },
-                        {
-                          pattern: URL_PATTERN,
-                          message: 'That does not look like a URL',
-                        },
-                      ]}
-                    >
-                      <Input placeholder="https://…" className="!flex-1" />
-                    </Form.Item>
-                    <Button
-                      type="text"
-                      onClick={() => remove(name)}
-                      aria-label="Remove this social link"
-                      icon={<Trash size={14} weight="bold" />}
-                      className="!shrink-0 !text-ink-muted"
-                    />
-                  </Space.Compact>
-                ))}
-                <Button
-                  type="dashed"
-                  onClick={() => add({ platform: 'linkedin', url: '' })}
-                  icon={<Plus size={14} weight="bold" />}
-                  block
-                >
-                  Add social
-                </Button>
-              </div>
-            )}
-          </Form.List>
-        </Form.Item>
+                    </Space.Compact>
+                  ))}
+                  <Button
+                    type="dashed"
+                    onClick={() => add({ platform: 'linkedin', url: '' })}
+                    icon={<Plus size={14} weight="bold" />}
+                    block
+                  >
+                    Add social
+                  </Button>
+                </div>
+              )}
+            </Form.List>
+          </Form.Item>
 
-        <Form.Item label="Invited by" name="invitedBy">
-          <Input placeholder="Who brought them along?" maxLength={120} />
-        </Form.Item>
+          <Form.Item label="Invited by" name="invitedBy">
+            <Input placeholder="Who brought them along?" maxLength={120} />
+          </Form.Item>
 
-        <Form.Item label="Bio" name="bio">
-          <Input.TextArea
-            rows={3}
-            maxLength={600}
-            showCount
-            placeholder="A few sentences the club can jog its memory with."
-          />
-        </Form.Item>
+          <Form.Item label="Bio" name="bio">
+            <Input.TextArea
+              rows={3}
+              maxLength={600}
+              showCount
+              placeholder="A few sentences the club can jog its memory with."
+            />
+          </Form.Item>
 
-        <Form.Item label="Notes" name="notes" help="Private — visible to club officers only.">
-          <Input.TextArea
-            rows={3}
-            maxLength={1000}
-            showCount
-            placeholder="Follow-ups, availability, anything the next officer should know."
-          />
-        </Form.Item>
-      </Form>
+          <Form.Item label="Notes" name="notes" help="Private — visible to club officers only.">
+            <Input.TextArea
+              rows={3}
+              maxLength={1000}
+              showCount
+              placeholder="Follow-ups, availability, anything the next officer should know."
+            />
+          </Form.Item>
+        </Form>
+      </ReadOnly>
     </Drawer>
   );
 }

@@ -5,6 +5,7 @@ import { Button, Progress, Segmented, Skeleton } from 'antd';
 import { useMemo, useState } from 'react';
 
 import { BudgetLineModal } from '@/components/finance/budget-line-modal';
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { BudgetLine } from '@/lib/finance/budget';
 import { CURRENT_FISCAL_YEAR, computeActuals, FISCAL_YEARS } from '@/lib/finance/budget';
 import { formatMoney } from '@/lib/finance/money';
@@ -161,9 +162,11 @@ function BudgetSection({
     <div className="rounded-xl border border-line bg-canvas p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-ink">{title}</h2>
-        <Button size="small" icon={<Plus size={14} />} disabled={!canAddMore} onClick={onAdd}>
-          Add line
-        </Button>
+        <ReadOnly resource="budget" action="create">
+          <Button size="small" icon={<Plus size={14} />} disabled={!canAddMore} onClick={onAdd}>
+            Add line
+          </Button>
+        </ReadOnly>
       </div>
 
       {sectionLines.length === 0 ? (

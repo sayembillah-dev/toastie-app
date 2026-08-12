@@ -4,6 +4,7 @@ import { CheckCircle, Copy, Link as LinkIcon } from '@phosphor-icons/react/dist/
 import { App, Button, Form, Input, Modal, QRCode, Select } from 'antd';
 import { useMemo, useState } from 'react';
 
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { Invite } from '@/lib/club-admin/invites';
 import type { OfficerRole } from '@/lib/education/members';
 import { OFFICER_ROLES } from '@/lib/education/members';
@@ -102,9 +103,11 @@ function ModalBody({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
 
       <div className="flex items-center justify-end gap-2">
         <Button onClick={onCancel}>Cancel</Button>
-        <Button type="primary" loading={isSubmitting} onClick={handleSave}>
-          Generate link
-        </Button>
+        <ReadOnly resource="invite" action="create">
+          <Button type="primary" loading={isSubmitting} onClick={handleSave}>
+            Generate link
+          </Button>
+        </ReadOnly>
       </div>
     </Form>
   );

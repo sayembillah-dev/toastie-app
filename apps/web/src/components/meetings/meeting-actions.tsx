@@ -11,9 +11,8 @@ import {
 import { App, Button } from 'antd';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { Meeting, MeetingStatus } from '@/lib/meetings/meetings';
-import { useCan } from '@/lib/permissions/use-can';
 import { useDeleteMeetingMutation, useUpdateMeetingMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 import { useAppSelector } from '@/store/hooks';
@@ -42,8 +41,6 @@ export function MeetingActions({ meeting }: MeetingActionsProps) {
   const [deleteMeeting, { isLoading: isDeleting }] = useDeleteMeetingMutation();
   const { message, modal } = App.useApp();
   const router = useRouter();
-  const { can } = useCan();
-  const canDelete = can('delete', 'meeting');
 
   const isPublished = meeting.status === 'published';
   const workingTheme = draft.theme.trim();
@@ -163,29 +160,31 @@ export function MeetingActions({ meeting }: MeetingActionsProps) {
       </div>
 
       <div className="flex shrink-0 flex-wrap gap-2">
-        <Button
-          size="middle"
-          icon={<PenNib size={14} weight="bold" />}
-          disabled={pending === 'published'}
-          loading={pending === 'draft'}
-          onClick={() => {
-            void commit('draft');
-          }}
-        >
-          Save as Draft
-        </Button>
-        <Button
-          type="primary"
-          size="middle"
-          icon={<PaperPlaneTilt size={14} weight="bold" />}
-          disabled={pending === 'draft'}
-          loading={pending === 'published'}
-          onClick={() => {
-            void commit('published');
-          }}
-        >
-          Publish
-        </Button>
+        <ReadOnly resource="meeting" className="gap-2">
+          <Button
+            size="middle"
+            icon={<PenNib size={14} weight="bold" />}
+            disabled={pending === 'published'}
+            loading={pending === 'draft'}
+            onClick={() => {
+              void commit('draft');
+            }}
+          >
+            Save as Draft
+          </Button>
+          <Button
+            type="primary"
+            size="middle"
+            icon={<PaperPlaneTilt size={14} weight="bold" />}
+            disabled={pending === 'draft'}
+            loading={pending === 'published'}
+            onClick={() => {
+              void commit('published');
+            }}
+          >
+            Publish
+          </Button>
+        </ReadOnly>
         {isPublished && (
           <Button
             size="middle"
@@ -197,7 +196,7 @@ export function MeetingActions({ meeting }: MeetingActionsProps) {
             Copy public agenda link
           </Button>
         )}
-        {canDelete && (
+        <ReadOnly resource="meeting" action="delete">
           <div className="ml-1 flex items-center gap-2 border-l border-line pl-3">
             <Button
               danger
@@ -211,7 +210,7 @@ export function MeetingActions({ meeting }: MeetingActionsProps) {
               Delete
             </Button>
           </div>
-        )}
+        </ReadOnly>
       </div>
     </div>
   );

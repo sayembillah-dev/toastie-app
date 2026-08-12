@@ -18,6 +18,7 @@ import { ConvertGuestModal } from '@/components/club-admin/convert-guest-modal';
 import { ContactLogsDrawer } from '@/components/people/contact-logs-drawer';
 import { GuestEditPanel } from '@/components/people/guest-edit-panel';
 import { VisitLogsDrawer } from '@/components/people/visit-logs-drawer';
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { Guest, GuestStage } from '@/lib/people/guests';
 import { GUEST_STAGES, getGuestFullName } from '@/lib/people/guests';
 import { useDeleteGuestMutation, useUpdateGuestMutation } from '@/store/api';
@@ -274,27 +275,31 @@ export function GuestActions({ guest }: GuestActionsProps) {
         className="flex flex-col gap-2 rounded-2xl border border-line bg-canvas p-3"
       >
         <SectionTitle>Actions</SectionTitle>
-        <MoveStageTrigger guest={guest} />
-        <Button
-          block
-          size="middle"
-          onClick={() => setEditOpen(true)}
-          icon={<PencilSimple size={16} weight="bold" />}
-          className="justify-start"
-        >
-          Edit
-        </Button>
-        <Button
-          block
-          danger
-          size="middle"
-          loading={isDeleting}
-          onClick={confirmDelete}
-          icon={<Trash size={16} weight="bold" />}
-          className="justify-start"
-        >
-          Delete
-        </Button>
+        <ReadOnly resource="guest" display="block" className="flex flex-col gap-2">
+          <MoveStageTrigger guest={guest} />
+          <Button
+            block
+            size="middle"
+            onClick={() => setEditOpen(true)}
+            icon={<PencilSimple size={16} weight="bold" />}
+            className="justify-start"
+          >
+            Edit
+          </Button>
+        </ReadOnly>
+        <ReadOnly resource="guest" action="delete" display="block">
+          <Button
+            block
+            danger
+            size="middle"
+            loading={isDeleting}
+            onClick={confirmDelete}
+            icon={<Trash size={16} weight="bold" />}
+            className="justify-start"
+          >
+            Delete
+          </Button>
+        </ReadOnly>
       </section>
 
       <GuestActivity guest={guest} />

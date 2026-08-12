@@ -1,6 +1,7 @@
 'use client';
 
 import { App, Button, Form, Input, Modal, Popconfirm } from 'antd';
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { District } from '@/lib/org/types';
 import { DISTRICT_CODE_MAX, ORG_NAME_MAX } from '@/lib/org/types';
 import { textFieldRules } from '@/lib/validation/rules';
@@ -144,9 +145,11 @@ function ModalBody({ district, onDone, onCancel }: ModalBodyProps) {
         )}
         <div className="flex gap-2">
           <Button onClick={onCancel}>Cancel</Button>
-          <Button type="primary" loading={busy} onClick={handleSave}>
-            {district ? 'Save' : 'Add'}
-          </Button>
+          <ReadOnly resource="orgUnit" action={district ? 'update' : 'create'}>
+            <Button type="primary" loading={busy} onClick={handleSave}>
+              {district ? 'Save' : 'Add'}
+            </Button>
+          </ReadOnly>
         </div>
       </div>
     </Form>

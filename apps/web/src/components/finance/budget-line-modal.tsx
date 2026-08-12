@@ -2,7 +2,7 @@
 
 import { App, Button, Form, Input, InputNumber, Modal, Popconfirm, Select } from 'antd';
 import { useMemo } from 'react';
-
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { BudgetLine } from '@/lib/finance/budget';
 import { BUDGET_LINE_NOTE_MAX } from '@/lib/finance/budget';
 import { formatMoney, fromMinor, toMinor } from '@/lib/finance/money';
@@ -171,80 +171,94 @@ function ModalBody({
       }}
       className="flex flex-col gap-4"
     >
-      <Form.Item label="Category" name="category" className="!mb-0">
-        {line ? (
-          <p className="text-sm text-ink">{CATEGORY_LABELS[line.category]}</p>
-        ) : (
-          <Select
-            id="budget-category"
-            options={availableCategories.map((value) => ({ value, label: CATEGORY_LABELS[value] }))}
+      <ReadOnly
+        resource="budget"
+        action={line ? 'update' : 'create'}
+        display="block"
+        className="flex flex-col gap-4"
+      >
+        <Form.Item label="Category" name="category" className="!mb-0">
+          {line ? (
+            <p className="text-sm text-ink">{CATEGORY_LABELS[line.category]}</p>
+          ) : (
+            <Select
+              id="budget-category"
+              options={availableCategories.map((value) => ({
+                value,
+                label: CATEGORY_LABELS[value],
+              }))}
+            />
+          )}
+        </Form.Item>
+
+        <Form.Item
+          label={`Planned amount for FY ${fiscalYear}`}
+          name="planned"
+          rules={amountRules({ label: 'Planned amount', allowZero: true })}
+          className="!mb-0"
+        >
+          <InputNumber
+            id="budget-planned"
+            className="w-full"
+            min={0}
+            step={1}
+            precision={2}
+            prefix="৳"
           />
-        )}
-      </Form.Item>
+        </Form.Item>
 
-      <Form.Item
-        label={`Planned amount for FY ${fiscalYear}`}
-        name="planned"
-        rules={amountRules({ label: 'Planned amount', allowZero: true })}
-        className="!mb-0"
-      >
-        <InputNumber
-          id="budget-planned"
-          className="w-full"
-          min={0}
-          step={1}
-          precision={2}
-          prefix="৳"
-        />
-      </Form.Item>
+        <Form.Item
+          label="Note (optional)"
+          name="note"
+          rules={[
+            {
+              max: BUDGET_LINE_NOTE_MAX,
+              message: `Keep it under ${BUDGET_LINE_NOTE_MAX} characters`,
+            },
+          ]}
+          className="!mb-0"
+        >
+          <Input.TextArea
+            id="budget-note"
+            placeholder="Assumptions behind this figure"
+            maxLength={BUDGET_LINE_NOTE_MAX}
+            autoSize={{ minRows: 2, maxRows: 4 }}
+          />
+        </Form.Item>
 
-      <Form.Item
-        label="Note (optional)"
-        name="note"
-        rules={[
-          {
-            max: BUDGET_LINE_NOTE_MAX,
-            message: `Keep it under ${BUDGET_LINE_NOTE_MAX} characters`,
-          },
-        ]}
-        className="!mb-0"
-      >
-        <Input.TextArea
-          id="budget-note"
-          placeholder="Assumptions behind this figure"
-          maxLength={BUDGET_LINE_NOTE_MAX}
-          autoSize={{ minRows: 2, maxRows: 4 }}
-        />
-      </Form.Item>
-
-      {planned > 0 ? (
-        <p className="text-xs text-ink-muted">
-          Plans for {formatMoney(toMinor(planned))} this year.
-        </p>
-      ) : null}
+        {planned > 0 ? (
+          <p className="text-xs text-ink-muted">
+            Plans for {formatMoney(toMinor(planned))} this year.
+          </p>
+        ) : null}
+      </ReadOnly>
 
       <div className="flex items-center justify-between gap-2">
         {line ? (
-          <Popconfirm
-            title="Delete this budget line?"
-            description="This cannot be undone."
-            okText="Delete"
-            okButtonProps={{ danger: true, loading: isDeleting }}
-            cancelText="Cancel"
-            onConfirm={handleDelete}
-          >
-            <Button danger disabled={busy || isDeleting}>
-              Delete
-            </Button>
-          </Popconfirm>
+          <ReadOnly resource="budget" action="delete">
+            <Popconfirm
+              title="Delete this budget line?"
+              description="This cannot be undone."
+              okText="Delete"
+              okButtonProps={{ danger: true, loading: isDeleting }}
+              cancelText="Cancel"
+              onConfirm={handleDelete}
+            >
+              <Button danger disabled={busy || isDeleting}>
+                Delete
+              </Button>
+            </Popconfirm>
+          </ReadOnly>
         ) : (
           <span />
         )}
         <div className="flex gap-2">
           <Button onClick={onCancel}>Cancel</Button>
-          <Button type="primary" loading={busy} onClick={handleSave}>
-            {line ? 'Save' : 'Add'}
-          </Button>
+          <ReadOnly resource="budget" action={line ? 'update' : 'create'}>
+            <Button type="primary" loading={busy} onClick={handleSave}>
+              {line ? 'Save' : 'Add'}
+            </Button>
+          </ReadOnly>
         </div>
       </div>
     </Form>

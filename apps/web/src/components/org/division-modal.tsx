@@ -1,6 +1,7 @@
 'use client';
 
 import { App, Button, Form, Input, Modal, Popconfirm } from 'antd';
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { Division } from '@/lib/org/types';
 import { ORG_NAME_MAX } from '@/lib/org/types';
 import { textFieldRules } from '@/lib/validation/rules';
@@ -141,9 +142,11 @@ function ModalBody({ districtId, division, canDelete, onDone, onCancel }: ModalB
         )}
         <div className="flex gap-2">
           <Button onClick={onCancel}>Cancel</Button>
-          <Button type="primary" loading={busy} onClick={handleSave}>
-            {division ? 'Save' : 'Add'}
-          </Button>
+          <ReadOnly resource="orgUnit" action={division ? 'update' : 'create'}>
+            <Button type="primary" loading={busy} onClick={handleSave}>
+              {division ? 'Save' : 'Add'}
+            </Button>
+          </ReadOnly>
         </div>
       </div>
     </Form>

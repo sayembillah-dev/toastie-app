@@ -10,7 +10,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { PlannerDayPanel } from '@/components/library/planner-day-panel';
 import type { CreatePlannerIdeaInput, IdeaStatus } from '@/lib/library/planner';
 import { groupIdeasByDay } from '@/lib/library/planner';
-import { useCan } from '@/lib/permissions/use-can';
 import {
   useCreatePlannerIdeaMutation,
   useDeletePlannerIdeaMutation,
@@ -49,8 +48,6 @@ const DAY_FORMAT = 'YYYY-MM-DD';
 export function PlannerTab() {
   const isDesktop = useIsDesktop();
   const { message } = App.useApp();
-  const { can } = useCan();
-  const canMutate = can('update', 'library');
 
   /* The calendar is controlled so the visible month is available as query
    * state — the fetch window is derived from it. */
@@ -204,7 +201,6 @@ export function PlannerTab() {
           key={selectedKey}
           ideas={ideas}
           loading={isLoading}
-          canMutate={canMutate}
           onAdd={addIdea}
           onRemove={removeIdea}
           onStatusChange={updateIdeaStatus}

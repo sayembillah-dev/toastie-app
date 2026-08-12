@@ -14,7 +14,7 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 import { App, Button, DatePicker, InputNumber, Modal, Progress, TimePicker } from 'antd';
 import { useMemo, useState } from 'react';
-
+import { ReadOnly } from '@/components/permissions/read-only';
 import { PersonAvatar } from '@/components/ui/person-avatar';
 import dayjs, { type Dayjs } from '@/lib/dayjs';
 import type { Member } from '@/lib/education/members';
@@ -347,16 +347,18 @@ function Hero({
           <Hourglass size={14} weight="bold" className="text-slate-400" />
           {runtime} min run time
         </span>
-        <Button
-          type="text"
-          size="small"
-          className="print-hidden h-6! gap-1 px-1.5! text-xs! text-slate-300! hover:bg-white/10! hover:text-white!"
-          aria-label="Edit meeting number, date and time"
-          icon={<PencilSimple size={12} weight="bold" />}
-          onClick={() => setEditOpen(true)}
-        >
-          Edit
-        </Button>
+        <ReadOnly resource="meeting">
+          <Button
+            type="text"
+            size="small"
+            className="print-hidden h-6! gap-1 px-1.5! text-xs! text-slate-300! hover:bg-white/10! hover:text-white!"
+            aria-label="Edit meeting number, date and time"
+            icon={<PencilSimple size={12} weight="bold" />}
+            onClick={() => setEditOpen(true)}
+          >
+            Edit
+          </Button>
+        </ReadOnly>
       </div>
     </section>
   );

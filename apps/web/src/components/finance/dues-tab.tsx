@@ -4,6 +4,7 @@ import { HandCoins, MagnifyingGlass, WarningCircle } from '@phosphor-icons/react
 import { App, Button, Dropdown, Input, Segmented, Skeleton, Tag } from 'antd';
 import { useMemo, useState } from 'react';
 import { DuesPaymentModal } from '@/components/finance/dues-payment-modal';
+import { ReadOnly } from '@/components/permissions/read-only';
 import { PersonAvatar } from '@/components/ui/person-avatar';
 import { formatRoles, getInitials } from '@/lib/education/members';
 import type { DuesRecord, DuesStatus } from '@/lib/finance/dues';
@@ -191,34 +192,38 @@ export function DuesTab() {
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <Tag color={STATUS_TAG_COLOR[status]}>{DUES_STATUS_LABELS[status]}</Tag>
-                  <Dropdown
-                    trigger={['click']}
-                    menu={{
-                      items: [
-                        {
-                          key: 'pay',
-                          label: status === 'paid' ? 'Record another payment' : 'Record payment',
+                  {/* The fence sits outside Dropdown so its trigger child is
+                   * still the Button — disabled, so the menu never opens. */}
+                  <ReadOnly resource="dues">
+                    <Dropdown
+                      trigger={['click']}
+                      menu={{
+                        items: [
+                          {
+                            key: 'pay',
+                            label: status === 'paid' ? 'Record another payment' : 'Record payment',
+                          },
+                          {
+                            key: 'waive',
+                            label: record.waived ? 'Remove waiver' : 'Mark waived',
+                          },
+                          {
+                            key: 'reset',
+                            label: 'Reset',
+                            danger: true,
+                            disabled: record.amountPaidMinor === 0 && !record.waived,
+                          },
+                        ],
+                        onClick: ({ key }) => {
+                          if (key === 'pay') setPayingRecord(record);
+                          else if (key === 'waive') handleWaive(record);
+                          else if (key === 'reset') handleReset(record);
                         },
-                        {
-                          key: 'waive',
-                          label: record.waived ? 'Remove waiver' : 'Mark waived',
-                        },
-                        {
-                          key: 'reset',
-                          label: 'Reset',
-                          danger: true,
-                          disabled: record.amountPaidMinor === 0 && !record.waived,
-                        },
-                      ],
-                      onClick: ({ key }) => {
-                        if (key === 'pay') setPayingRecord(record);
-                        else if (key === 'waive') handleWaive(record);
-                        else if (key === 'reset') handleReset(record);
-                      },
-                    }}
-                  >
-                    <Button size="small">Actions</Button>
-                  </Dropdown>
+                      }}
+                    >
+                      <Button size="small">Actions</Button>
+                    </Dropdown>
+                  </ReadOnly>
                 </div>
               </li>
             );

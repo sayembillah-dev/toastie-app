@@ -4,7 +4,7 @@ import { MagnifyingGlass, TrashSimple, UserPlus, X } from '@phosphor-icons/react
 import { App, Button, Checkbox, Input, Select, Skeleton } from 'antd';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-
+import { ReadOnly } from '@/components/permissions/read-only';
 import { getPrimaryRole } from '@/lib/education/members';
 import { getGuestFullName } from '@/lib/people/guests';
 import {
@@ -330,7 +330,7 @@ export function AttendanceTab({ meetingId }: AttendanceTabProps) {
             placeholder="Search members or guests"
             prefix={<MagnifyingGlass size={16} className="text-ink-muted" />}
           />
-          <div className="flex items-center gap-2 sm:shrink-0">
+          <ReadOnly resource="attendance" className="items-center gap-2 sm:shrink-0">
             <Button
               size="large"
               loading={isMarkingAll}
@@ -347,7 +347,7 @@ export function AttendanceTab({ meetingId }: AttendanceTabProps) {
             >
               Clear
             </Button>
-          </div>
+          </ReadOnly>
         </div>
 
         <div className="mb-3 flex items-center justify-between">
@@ -359,62 +359,64 @@ export function AttendanceTab({ meetingId }: AttendanceTabProps) {
           </span>
         </div>
 
-        {filteredMembers.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-line-strong px-6 py-10 text-center">
-            <p className="text-sm font-medium text-ink">
-              {memberRows.length === 0 ? 'No members yet' : 'No matches'}
-            </p>
-            <p className="mt-1 text-xs text-ink-muted">
-              {memberRows.length === 0
-                ? 'Add members from the roster page to check them in here.'
-                : 'Try a different search term.'}
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {filteredMembers.map((row) => (
-              <AttendanceRow key={row.id} row={row} onToggle={() => handleToggleMember(row.id)} />
-            ))}
-          </div>
-        )}
-
-        <div className="mb-3 mt-6 flex items-center justify-between">
-          <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-muted">
-            Guests
-          </span>
-          <span className="text-[11px] text-ink-muted">
-            {presentGuests}/{guestRows.length} present
-          </span>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          {filteredGuests.map((row) => (
-            <AttendanceRow
-              key={row.id}
-              row={row}
-              onToggle={() => handleToggleGuest(row.id)}
-              onRemove={() => handleRemoveGuest(row.id)}
-            />
-          ))}
-
-          {addingGuest ? (
-            <GuestPicker
-              options={guestPickerOptions}
-              onCommit={handleAddGuest}
-              onCancel={() => setAddingGuest(false)}
-            />
+        <ReadOnly resource="attendance" display="block">
+          {filteredMembers.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-line-strong px-6 py-10 text-center">
+              <p className="text-sm font-medium text-ink">
+                {memberRows.length === 0 ? 'No members yet' : 'No matches'}
+              </p>
+              <p className="mt-1 text-xs text-ink-muted">
+                {memberRows.length === 0
+                  ? 'Add members from the roster page to check them in here.'
+                  : 'Try a different search term.'}
+              </p>
+            </div>
           ) : (
-            <Button
-              block
-              size="large"
-              type="dashed"
-              icon={<UserPlus size={16} weight="bold" />}
-              onClick={() => setAddingGuest(true)}
-            >
-              Add guest
-            </Button>
+            <div className="flex flex-col gap-2">
+              {filteredMembers.map((row) => (
+                <AttendanceRow key={row.id} row={row} onToggle={() => handleToggleMember(row.id)} />
+              ))}
+            </div>
           )}
-        </div>
+
+          <div className="mb-3 mt-6 flex items-center justify-between">
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-muted">
+              Guests
+            </span>
+            <span className="text-[11px] text-ink-muted">
+              {presentGuests}/{guestRows.length} present
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            {filteredGuests.map((row) => (
+              <AttendanceRow
+                key={row.id}
+                row={row}
+                onToggle={() => handleToggleGuest(row.id)}
+                onRemove={() => handleRemoveGuest(row.id)}
+              />
+            ))}
+
+            {addingGuest ? (
+              <GuestPicker
+                options={guestPickerOptions}
+                onCommit={handleAddGuest}
+                onCancel={() => setAddingGuest(false)}
+              />
+            ) : (
+              <Button
+                block
+                size="large"
+                type="dashed"
+                icon={<UserPlus size={16} weight="bold" />}
+                onClick={() => setAddingGuest(true)}
+              >
+                Add guest
+              </Button>
+            )}
+          </div>
+        </ReadOnly>
       </div>
     </section>
   );

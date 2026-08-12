@@ -4,6 +4,7 @@ import { UserCircle } from '@phosphor-icons/react/dist/ssr';
 import { App } from 'antd';
 import { useMemo } from 'react';
 import { AssigneeSelect } from '@/components/education/assignee-select';
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { Assignee } from '@/lib/education/planner';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { assigneeToRef, toAssigneeMap } from '@/lib/meetings/role-assignments';
@@ -61,33 +62,35 @@ export function RolesTab({ meeting }: RolesTabProps) {
 
       {/* Single column on phones so each picker gets full width; two columns
        * from `md` up to mirror the layout in the reference. */}
-      <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
-        {roles.map((role) => {
-          const inputId = `role-${role.key}`;
-          return (
-            <div key={role.key}>
-              <label
-                htmlFor={inputId}
-                className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-ink"
-              >
-                <UserCircle size={12} weight="bold" className="text-ink-muted" />
-                {role.label}
-              </label>
-              <div className="rounded-lg border border-line bg-sidebar px-2">
-                <AssigneeSelect
-                  value={assignments[role.key] ?? null}
-                  onChange={(next) => handleAssign(role.key, next)}
-                  members={members ?? []}
-                  guests={guests ?? []}
-                  placeholder={isLoading ? 'Loading…' : 'Unassigned'}
-                  ariaLabel={role.label}
-                  allowFreeformGuest={false}
-                />
+      <ReadOnly resource="meetingRole" display="block">
+        <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
+          {roles.map((role) => {
+            const inputId = `role-${role.key}`;
+            return (
+              <div key={role.key}>
+                <label
+                  htmlFor={inputId}
+                  className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-ink"
+                >
+                  <UserCircle size={12} weight="bold" className="text-ink-muted" />
+                  {role.label}
+                </label>
+                <div className="rounded-lg border border-line bg-sidebar px-2">
+                  <AssigneeSelect
+                    value={assignments[role.key] ?? null}
+                    onChange={(next) => handleAssign(role.key, next)}
+                    members={members ?? []}
+                    guests={guests ?? []}
+                    placeholder={isLoading ? 'Loading…' : 'Unassigned'}
+                    ariaLabel={role.label}
+                    allowFreeformGuest={false}
+                  />
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      </ReadOnly>
     </section>
   );
 }

@@ -10,6 +10,7 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 import { App, Button, Dropdown, Input, Skeleton } from 'antd';
 import { useState } from 'react';
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { TableTopicQuestion } from '@/lib/meetings/table-topics';
 import { MAX_TABLE_TOPIC_QUESTIONS, TABLE_TOPIC_TEXT_MAX } from '@/lib/meetings/table-topics';
 import {
@@ -288,64 +289,66 @@ export function TableTopicsTab({ meetingId }: TableTopicsTabProps) {
           </div>
         </header>
 
-        {/* Add lives above the list so it's always one tap away on long
-         * meeting nights — no scrolling to the end to append the 8th topic. */}
-        <div className="mb-3">
-          <Button
-            block
-            size="large"
-            type="dashed"
-            icon={<Plus size={16} weight="bold" />}
-            disabled={!canAdd}
-            onClick={handleAdd}
-          >
-            Add Question
-          </Button>
-        </div>
-
-        {editingId === NEW_QUESTION ? (
-          <ul className="mb-2 flex flex-col gap-2">
-            <QuestionRow
-              number={questions.length + 1}
-              question={{ id: NEW_QUESTION, text: '', asked: false }}
-              isEditing
-              draftText={draftText}
-              onDraftChange={setDraftText}
-              onSave={handleSaveEdit}
-              onCancel={handleCancelEdit}
-              onEdit={() => {}}
-              onDelete={() => {}}
-              onToggleAsked={() => {}}
-            />
-          </ul>
-        ) : null}
-
-        {questions.length === 0 && editingId !== NEW_QUESTION ? (
-          <div className="rounded-xl border border-dashed border-line-strong px-6 py-10 text-center">
-            <p className="text-sm font-medium text-ink">No questions yet</p>
-            <p className="mt-1 text-xs text-ink-muted">
-              Use the button above to add the first question.
-            </p>
+        <ReadOnly resource="tableTopic" display="block">
+          {/* Add lives above the list so it's always one tap away on long
+           * meeting nights — no scrolling to the end to append the 8th topic. */}
+          <div className="mb-3">
+            <Button
+              block
+              size="large"
+              type="dashed"
+              icon={<Plus size={16} weight="bold" />}
+              disabled={!canAdd}
+              onClick={handleAdd}
+            >
+              Add Question
+            </Button>
           </div>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {questions.map((question, index) => (
+
+          {editingId === NEW_QUESTION ? (
+            <ul className="mb-2 flex flex-col gap-2">
               <QuestionRow
-                key={question.id}
-                number={index + 1}
-                question={question}
-                isEditing={editingId === question.id}
+                number={questions.length + 1}
+                question={{ id: NEW_QUESTION, text: '', asked: false }}
+                isEditing
                 draftText={draftText}
                 onDraftChange={setDraftText}
                 onSave={handleSaveEdit}
                 onCancel={handleCancelEdit}
-                onEdit={() => handleStartEdit(question)}
-                onDelete={() => handleDelete(question.id)}
-                onToggleAsked={() => handleToggleAsked(question)}
+                onEdit={() => {}}
+                onDelete={() => {}}
+                onToggleAsked={() => {}}
               />
-            ))}
-          </ul>
-        )}
+            </ul>
+          ) : null}
+
+          {questions.length === 0 && editingId !== NEW_QUESTION ? (
+            <div className="rounded-xl border border-dashed border-line-strong px-6 py-10 text-center">
+              <p className="text-sm font-medium text-ink">No questions yet</p>
+              <p className="mt-1 text-xs text-ink-muted">
+                Use the button above to add the first question.
+              </p>
+            </div>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {questions.map((question, index) => (
+                <QuestionRow
+                  key={question.id}
+                  number={index + 1}
+                  question={question}
+                  isEditing={editingId === question.id}
+                  draftText={draftText}
+                  onDraftChange={setDraftText}
+                  onSave={handleSaveEdit}
+                  onCancel={handleCancelEdit}
+                  onEdit={() => handleStartEdit(question)}
+                  onDelete={() => handleDelete(question.id)}
+                  onToggleAsked={() => handleToggleAsked(question)}
+                />
+              ))}
+            </ul>
+          )}
+        </ReadOnly>
       </div>
     </section>
   );

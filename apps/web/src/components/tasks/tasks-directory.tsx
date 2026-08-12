@@ -8,7 +8,7 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 import { Button, Input } from 'antd';
 import { useMemo, useState } from 'react';
-
+import { ReadOnly } from '@/components/permissions/read-only';
 import { useCurrentMemberId } from '@/lib/me/current-member';
 import { useCan } from '@/lib/permissions/use-can';
 import type { Task } from '@/lib/tasks/tasks';
@@ -97,7 +97,7 @@ export function TasksDirectory() {
           Action items officers hand out and track — yours first, then everyone else&rsquo;s.
         </p>
         <div className="flex w-full items-center gap-2 sm:w-auto">
-          {canCreate ? (
+          <ReadOnly resource="task" action="create">
             <Button
               type="primary"
               size="middle"
@@ -106,7 +106,7 @@ export function TasksDirectory() {
             >
               New task
             </Button>
-          ) : null}
+          </ReadOnly>
           <div className="min-w-0 flex-1 sm:w-72 sm:flex-none">
             <Input
               allowClear

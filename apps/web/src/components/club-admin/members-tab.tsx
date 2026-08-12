@@ -13,6 +13,7 @@ import { ConvertGuestModal } from '@/components/club-admin/convert-guest-modal';
 import { InvitePanel } from '@/components/club-admin/invite-panel';
 import { MemberFormModal } from '@/components/club-admin/member-form-modal';
 import { StaggerItem, StaggerList } from '@/components/motion/stagger-list';
+import { ReadOnly } from '@/components/permissions/read-only';
 import { PersonAvatar } from '@/components/ui/person-avatar';
 import type { Member } from '@/lib/education/members';
 import { formatRoles, getInitials } from '@/lib/education/members';
@@ -112,13 +113,13 @@ export function MembersTab() {
               ]}
             />
           </div>
-          {canMutate ? (
+          <ReadOnly resource="member" action="create">
             <div className="flex flex-wrap items-center gap-2">
               <Button icon={<UserPlus size={14} />} onClick={() => setConvertOpen(true)}>
                 Add from guests
               </Button>
             </div>
-          ) : null}
+          </ReadOnly>
         </div>
 
         {isError ? (
@@ -180,7 +181,7 @@ export function MembersTab() {
                     <p className="truncate text-xs text-ink-muted">{formatRoles(member)}</p>
                   </div>
                 </div>
-                {canMutate ? (
+                <ReadOnly resource="memberRole">
                   <Dropdown
                     trigger={['click']}
                     menu={{
@@ -204,7 +205,7 @@ export function MembersTab() {
                   >
                     <Button size="small">Actions</Button>
                   </Dropdown>
-                ) : null}
+                </ReadOnly>
               </StaggerItem>
             ))}
           </StaggerList>

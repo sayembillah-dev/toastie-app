@@ -13,9 +13,9 @@ import { App, Button, DatePicker, Input, Popconfirm, Skeleton, Tooltip } from 'a
 import dayjs from 'dayjs';
 import Link from 'next/link';
 import { Fragment, useMemo, useState } from 'react';
-
 import { AssigneeSelect } from '@/components/education/assignee-select';
 import { PlannerCreateMeetingModal } from '@/components/education/planner-create-meeting-modal';
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { Member } from '@/lib/education/members';
 import type { Assignee, AssigneeField, PlannerRow } from '@/lib/education/planner';
 import {
@@ -490,7 +490,7 @@ export function PlannerTab() {
             <Skeleton active title={false} paragraph={{ rows: 4 }} />
           </div>
         ) : (
-          <>
+          <ReadOnly resource="education" display="block">
             {/* Both axes scroll inside this container so `position: sticky` on
              * headers and left columns scopes to a single, predictable element. */}
             <div className="max-h-[calc(100dvh-320px)] min-h-[420px] overflow-auto rounded-2xl">
@@ -607,7 +607,7 @@ export function PlannerTab() {
                 Add meeting
               </Button>
             </div>
-          </>
+          </ReadOnly>
         )}
       </div>
 

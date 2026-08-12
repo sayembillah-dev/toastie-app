@@ -14,7 +14,7 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 import { App, Button, Drawer, Form, Input, Select } from 'antd';
 import { useMemo, useState } from 'react';
-
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { ContactLog, ContactMethod } from '@/lib/people/contact-logs';
 import {
   CONTACT_LOG_OUTCOME_MAX,
@@ -131,15 +131,17 @@ export function ContactLogsDrawer({ guest, open, onClose }: ContactLogsDrawerPro
     >
       <div className="flex flex-col gap-4">
         {mode.kind === 'closed' ? (
-          <Button
-            block
-            type="primary"
-            size="middle"
-            icon={<Plus size={16} weight="bold" />}
-            onClick={openCreate}
-          >
-            Add log
-          </Button>
+          <ReadOnly resource="guestLog" action="create" display="block">
+            <Button
+              block
+              type="primary"
+              size="middle"
+              icon={<Plus size={16} weight="bold" />}
+              onClick={openCreate}
+            >
+              Add log
+            </Button>
+          </ReadOnly>
         ) : (
           <ContactLogForm guest={guest} mode={mode} onDone={closeForm} />
         )}
@@ -384,7 +386,7 @@ function LogCard({ log, onEdit, onDelete, disabled, highlighted }: LogCardProps)
             </div>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <ReadOnly resource="guestLog" className="shrink-0 items-center gap-1">
           <Button
             type="text"
             size="small"
@@ -401,7 +403,7 @@ function LogCard({ log, onEdit, onDelete, disabled, highlighted }: LogCardProps)
             disabled={disabled}
             icon={<Trash size={14} weight="bold" className="text-rose-600" />}
           />
-        </div>
+        </ReadOnly>
       </header>
       <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-ink-soft">
         {log.outcome}

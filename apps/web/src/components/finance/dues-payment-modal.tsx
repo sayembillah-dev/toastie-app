@@ -2,7 +2,7 @@
 
 import { App, Button, DatePicker, Form, Input, InputNumber, Modal, Select } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
-
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { Member } from '@/lib/education/members';
 import type { DuesRecord } from '@/lib/finance/dues';
 import { getDuesPeriod } from '@/lib/finance/dues';
@@ -98,63 +98,67 @@ function ModalBody({ record, member, onDone, onCancel }: ModalBodyProps) {
       }}
       className="flex flex-col gap-4"
     >
-      <div className="rounded-lg bg-fill px-3 py-2 text-xs text-ink-soft">
-        {member ? `${member.firstName} ${member.lastName}` : record.memberId} ·{' '}
-        {period?.label ?? record.periodId} · Standard amount {formatMoney(record.amountDueMinor)}
-      </div>
+      <ReadOnly resource="dues" display="block" className="flex flex-col gap-4">
+        <div className="rounded-lg bg-fill px-3 py-2 text-xs text-ink-soft">
+          {member ? `${member.firstName} ${member.lastName}` : record.memberId} ·{' '}
+          {period?.label ?? record.periodId} · Standard amount {formatMoney(record.amountDueMinor)}
+        </div>
 
-      <Form.Item
-        label="Amount paid (total for this period)"
-        name="amount"
-        rules={amountRules({ label: 'Amount' })}
-        className="!mb-0"
-      >
-        <InputNumber
-          id="dues-amount"
-          className="w-full"
-          min={0}
-          step={1}
-          precision={2}
-          prefix="৳"
-        />
-      </Form.Item>
-
-      <div className="grid grid-cols-2 gap-3">
         <Form.Item
-          label="Date"
-          name="paidOn"
-          rules={[{ required: true, message: 'Pick a payment date' }]}
+          label="Amount paid (total for this period)"
+          name="amount"
+          rules={amountRules({ label: 'Amount' })}
           className="!mb-0"
         >
-          <DatePicker id="dues-paid-on" className="w-full" format="D MMM YYYY" />
-        </Form.Item>
-        <Form.Item label="Method" name="method" className="!mb-0">
-          <Select
-            id="dues-method"
-            options={PAYMENT_METHODS.map((value) => ({ value, label: METHOD_LABELS[value] }))}
+          <InputNumber
+            id="dues-amount"
+            className="w-full"
+            min={0}
+            step={1}
+            precision={2}
+            prefix="৳"
           />
         </Form.Item>
-      </div>
 
-      <Form.Item
-        label="Note (optional)"
-        name="note"
-        rules={[{ max: 200, message: 'Keep it under 200 characters' }]}
-        className="!mb-0"
-      >
-        <Input.TextArea
-          id="dues-note"
-          placeholder="Anything worth remembering about this payment"
-          maxLength={200}
-          autoSize={{ minRows: 2, maxRows: 4 }}
-        />
-      </Form.Item>
+        <div className="grid grid-cols-2 gap-3">
+          <Form.Item
+            label="Date"
+            name="paidOn"
+            rules={[{ required: true, message: 'Pick a payment date' }]}
+            className="!mb-0"
+          >
+            <DatePicker id="dues-paid-on" className="w-full" format="D MMM YYYY" />
+          </Form.Item>
+          <Form.Item label="Method" name="method" className="!mb-0">
+            <Select
+              id="dues-method"
+              options={PAYMENT_METHODS.map((value) => ({ value, label: METHOD_LABELS[value] }))}
+            />
+          </Form.Item>
+        </div>
+
+        <Form.Item
+          label="Note (optional)"
+          name="note"
+          rules={[{ max: 200, message: 'Keep it under 200 characters' }]}
+          className="!mb-0"
+        >
+          <Input.TextArea
+            id="dues-note"
+            placeholder="Anything worth remembering about this payment"
+            maxLength={200}
+            autoSize={{ minRows: 2, maxRows: 4 }}
+          />
+        </Form.Item>
+      </ReadOnly>
 
       <div className="flex items-center justify-end gap-2">
         <Button onClick={onCancel}>Cancel</Button>
-        <Button type="primary" loading={isLoading} onClick={handleSave}>
-          Save payment
-        </Button>
+        <ReadOnly resource="dues">
+          <Button type="primary" loading={isLoading} onClick={handleSave}>
+            Save payment
+          </Button>
+        </ReadOnly>
       </div>
     </Form>
   );

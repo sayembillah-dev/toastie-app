@@ -2,7 +2,7 @@
 
 import { ChatCircle, CheckCircle, Circle } from '@phosphor-icons/react/dist/ssr';
 import { App, Tooltip } from 'antd';
-
+import { ReadOnlyWhen } from '@/components/permissions/read-only';
 import { useCurrentMemberId } from '@/lib/me/current-member';
 import { useCan } from '@/lib/permissions/use-can';
 import { PRIORITY_STYLES, personInitials, personSwatch } from '@/lib/tasks/task-ui';
@@ -48,20 +48,22 @@ export function TaskCard({ task, onOpen }: TaskCardProps) {
   // `<button>` can't contain another `<button>`.
   return (
     <div className="flex w-full items-start gap-2.5 rounded-xl border border-line bg-canvas p-3.5 transition-colors hover:border-line-strong hover:shadow-sm">
-      <button
-        type="button"
-        onClick={handleToggle}
-        disabled={!canToggle}
-        aria-pressed={task.done}
-        aria-label={task.done ? 'Mark as not done' : 'Mark as done'}
-        className="mt-0.5 shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed"
-      >
-        {task.done ? (
-          <CheckCircle size={20} weight="fill" className="text-emerald-600" />
-        ) : (
-          <Circle size={20} className={canToggle ? 'text-ink-muted' : 'text-ink-muted/50'} />
-        )}
-      </button>
+      <ReadOnlyWhen readOnly={!canToggle}>
+        <button
+          type="button"
+          onClick={handleToggle}
+          disabled={!canToggle}
+          aria-pressed={task.done}
+          aria-label={task.done ? 'Mark as not done' : 'Mark as done'}
+          className="mt-0.5 shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed"
+        >
+          {task.done ? (
+            <CheckCircle size={20} weight="fill" className="text-emerald-600" />
+          ) : (
+            <Circle size={20} className={canToggle ? 'text-ink-muted' : 'text-ink-muted/50'} />
+          )}
+        </button>
+      </ReadOnlyWhen>
 
       <button
         type="button"

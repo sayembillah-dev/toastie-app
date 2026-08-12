@@ -7,8 +7,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { AssetPreviewModal } from '@/components/library/asset-preview-modal';
 import { AssetUploadModal } from '@/components/library/asset-upload-modal';
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { Asset } from '@/lib/library/assets';
-import { useCan } from '@/lib/permissions/use-can';
 import { useListAssetsQuery } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -32,8 +32,6 @@ interface AssetsTabProps {
  * fills the rest. Infinite scroll uses an IntersectionObserver on a sentinel
  * so the grid keeps fetching as long as the sentinel is on-screen. */
 export function AssetsTab({ className }: AssetsTabProps) {
-  const { can } = useCan();
-  const canMutate = can('update', 'library');
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [offset, setOffset] = useState(0);
@@ -109,14 +107,11 @@ export function AssetsTab({ className }: AssetsTabProps) {
             prefix={<MagnifyingGlass size={16} className="text-ink-muted" />}
           />
         </div>
-        <Button
-          type="primary"
-          icon={<Plus size={14} />}
-          disabled={!canMutate}
-          onClick={() => setUploadOpen(true)}
-        >
-          Upload
-        </Button>
+        <ReadOnly resource="library" action="create">
+          <Button type="primary" icon={<Plus size={14} />} onClick={() => setUploadOpen(true)}>
+            Upload
+          </Button>
+        </ReadOnly>
       </div>
 
       {isError ? (
@@ -176,16 +171,17 @@ export function AssetsTab({ className }: AssetsTabProps) {
               <p className="mt-1 text-xs text-ink-muted">
                 Upload a flyer, photo or template to get started.
               </p>
-              <Button
-                type="primary"
-                size="small"
-                icon={<Plus size={14} />}
-                className="mt-4"
-                disabled={!canMutate}
-                onClick={() => setUploadOpen(true)}
-              >
-                Upload asset
-              </Button>
+              <ReadOnly resource="library" action="create">
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<Plus size={14} />}
+                  className="mt-4"
+                  onClick={() => setUploadOpen(true)}
+                >
+                  Upload asset
+                </Button>
+              </ReadOnly>
             </>
           )}
         </div>

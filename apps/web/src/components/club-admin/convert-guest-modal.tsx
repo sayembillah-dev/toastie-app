@@ -6,6 +6,7 @@ import { App, Button, Modal, Select } from 'antd';
 import { useMemo, useState } from 'react';
 
 import { InviteLinkResult } from '@/components/club-admin/invite-modal';
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { OfficerRole } from '@/lib/education/members';
 import { OFFICER_ROLES } from '@/lib/education/members';
 import type { ConvertGuestResult } from '@/lib/people/guests';
@@ -186,9 +187,11 @@ function ModalBody({
 
       <div className="flex items-center justify-end gap-2">
         <Button onClick={onCancel}>Cancel</Button>
-        <Button type="primary" disabled={!canSave} loading={isSubmitting} onClick={handleSave}>
-          {match?.status === 'existing-user' ? 'Link as member' : 'Add as member'}
-        </Button>
+        <ReadOnly resource="member" action="create">
+          <Button type="primary" disabled={!canSave} loading={isSubmitting} onClick={handleSave}>
+            {match?.status === 'existing-user' ? 'Link as member' : 'Add as member'}
+          </Button>
+        </ReadOnly>
       </div>
     </div>
   );

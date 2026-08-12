@@ -11,6 +11,7 @@ import { ACTIONS, can as canDecide, overrideKey, RESOURCE_KEYS } from '@toastly/
 import { App, Button, Checkbox, Input, Select, Skeleton } from 'antd';
 import { useMemo, useState } from 'react';
 
+import { ReadOnly } from '@/components/permissions/read-only';
 import { PersonAvatar } from '@/components/ui/person-avatar';
 import type { Member } from '@/lib/education/members';
 import { formatRoles, getInitials } from '@/lib/education/members';
@@ -251,10 +252,10 @@ export function PermissionsTab() {
                   No resources match &ldquo;{filter.trim()}&rdquo;.
                 </p>
               ) : (
-                <>
+                <ReadOnly resource="memberPermission" display="block">
                   <DesktopGrid rows={visibleRows} onToggle={handleToggle} />
                   <MobileList rows={visibleRows} onToggle={handleToggle} />
-                </>
+                </ReadOnly>
               )}
             </>
           )}
@@ -295,14 +296,16 @@ function MemberHeader({
           <span className="rounded-full bg-fill px-2 py-0.5 text-xs font-medium text-ink-soft">
             {customisedCount} custom
           </span>
-          <Button
-            size="small"
-            icon={<ArrowCounterClockwise size={13} />}
-            loading={resetting}
-            onClick={onReset}
-          >
-            Reset
-          </Button>
+          <ReadOnly resource="memberPermission">
+            <Button
+              size="small"
+              icon={<ArrowCounterClockwise size={13} />}
+              loading={resetting}
+              onClick={onReset}
+            >
+              Reset
+            </Button>
+          </ReadOnly>
         </div>
       ) : null}
     </div>

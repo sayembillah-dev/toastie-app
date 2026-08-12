@@ -3,6 +3,7 @@
 import { App, Button, Drawer, Form, Input } from 'antd';
 import { useRouter } from 'next/navigation';
 
+import { ReadOnly } from '@/components/permissions/read-only';
 import { getGuestFullName } from '@/lib/people/guests';
 import { emailRules, normalizePhone, phoneRules, shortNameRules } from '@/lib/validation/rules';
 import { useCreateGuestMutation } from '@/store/api';
@@ -91,9 +92,11 @@ export function AddGuestDrawer({ open, onClose }: AddGuestDrawerProps) {
           <Button onClick={handleClose} disabled={isLoading}>
             Cancel
           </Button>
-          <Button type="primary" loading={isLoading} onClick={handleSave}>
-            Add guest
-          </Button>
+          <ReadOnly resource="guest" action="create">
+            <Button type="primary" loading={isLoading} onClick={handleSave}>
+              Add guest
+            </Button>
+          </ReadOnly>
         </div>
       }
       styles={{
@@ -101,36 +104,42 @@ export function AddGuestDrawer({ open, onClose }: AddGuestDrawerProps) {
         footer: { padding: '12px 24px' },
       }}
     >
-      <Form form={form} layout="vertical" requiredMark="optional" disabled={isLoading}>
-        <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-          <Form.Item label="First name" name="firstName" rules={shortNameRules('First name')}>
-            <Input placeholder="First name" autoFocus />
+      <ReadOnly resource="guest" action="create" display="block">
+        <Form form={form} layout="vertical" requiredMark="optional" disabled={isLoading}>
+          <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+            <Form.Item label="First name" name="firstName" rules={shortNameRules('First name')}>
+              <Input placeholder="First name" autoFocus />
+            </Form.Item>
+            <Form.Item
+              label="Last name"
+              name="lastName"
+              rules={shortNameRules('Last name', { required: false })}
+            >
+              <Input placeholder="Last name" />
+            </Form.Item>
+          </div>
+
+          <Form.Item label="Email" name="email" rules={emailRules()}>
+            <Input placeholder="name@example.com" type="email" />
           </Form.Item>
+
+          <Form.Item label="Phone" name="phone" rules={phoneRules({ required: false })}>
+            <Input placeholder="01568286512" type="tel" inputMode="tel" />
+          </Form.Item>
+
           <Form.Item
-            label="Last name"
-            name="lastName"
-            rules={shortNameRules('Last name', { required: false })}
+            label="WhatsApp number"
+            name="whatsapp"
+            rules={phoneRules({ required: false })}
           >
-            <Input placeholder="Last name" />
+            <Input placeholder="Leave blank if same as phone" type="tel" inputMode="tel" />
           </Form.Item>
-        </div>
 
-        <Form.Item label="Email" name="email" rules={emailRules()}>
-          <Input placeholder="name@example.com" type="email" />
-        </Form.Item>
-
-        <Form.Item label="Phone" name="phone" rules={phoneRules({ required: false })}>
-          <Input placeholder="01568286512" type="tel" inputMode="tel" />
-        </Form.Item>
-
-        <Form.Item label="WhatsApp number" name="whatsapp" rules={phoneRules({ required: false })}>
-          <Input placeholder="Leave blank if same as phone" type="tel" inputMode="tel" />
-        </Form.Item>
-
-        <Form.Item label="Invited by" name="invitedBy" className="!mb-0">
-          <Input placeholder="Who brought them along?" maxLength={120} />
-        </Form.Item>
-      </Form>
+          <Form.Item label="Invited by" name="invitedBy" className="!mb-0">
+            <Input placeholder="Who brought them along?" maxLength={120} />
+          </Form.Item>
+        </Form>
+      </ReadOnly>
     </Drawer>
   );
 }

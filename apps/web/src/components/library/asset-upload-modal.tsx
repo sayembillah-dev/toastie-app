@@ -6,6 +6,7 @@ import { App, Button, Input, Modal, Upload } from 'antd';
 import NextImage from 'next/image';
 import { useEffect, useState } from 'react';
 
+import { ReadOnly } from '@/components/permissions/read-only';
 import {
   ASSET_FILE_MAX_BYTES,
   ASSET_MIME_TYPES,
@@ -228,9 +229,16 @@ function UploadBody({ onDone, onCancel }: UploadBodyProps) {
 
       <div className="flex justify-end gap-2">
         <Button onClick={onCancel}>Cancel</Button>
-        <Button type="primary" disabled={!canSave} loading={isSaving || busy} onClick={handleSave}>
-          Upload
-        </Button>
+        <ReadOnly resource="library" action="create">
+          <Button
+            type="primary"
+            disabled={!canSave}
+            loading={isSaving || busy}
+            onClick={handleSave}
+          >
+            Upload
+          </Button>
+        </ReadOnly>
       </div>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import { App, Button, Form, Input, Modal, Select } from 'antd';
 
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { Member, OfficerRole } from '@/lib/education/members';
 import { OFFICER_ROLES } from '@/lib/education/members';
 import { NAME_MAX, requiredSelectRule, shortNameRules } from '@/lib/validation/rules';
@@ -132,9 +133,11 @@ function ModalBody({ member, onDone, onCancel }: ModalBodyProps) {
 
       <div className="flex items-center justify-end gap-2">
         <Button onClick={onCancel}>Cancel</Button>
-        <Button type="primary" loading={busy} onClick={handleSave}>
-          {member ? 'Save' : 'Add'}
-        </Button>
+        <ReadOnly resource="member" action={member ? 'update' : 'create'}>
+          <Button type="primary" loading={busy} onClick={handleSave}>
+            {member ? 'Save' : 'Add'}
+          </Button>
+        </ReadOnly>
       </div>
     </Form>
   );

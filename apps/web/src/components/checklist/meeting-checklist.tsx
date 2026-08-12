@@ -11,6 +11,7 @@ import {
 import { App, Button, Dropdown, Input, Progress, Skeleton } from 'antd';
 import { useState } from 'react';
 
+import { ReadOnlyWhen, useReadOnly } from '@/components/permissions/read-only';
 import type { ChecklistItem } from '@/lib/inventory/checklist';
 import { CHECKLIST_ITEM_TEXT_MAX } from '@/lib/inventory/checklist';
 import {
@@ -41,9 +42,14 @@ export function MeetingChecklist({
   meetingId,
   title = 'Pre-Meeting Checklist',
   subtitle = 'Room setup and prep. Tick each item off before the meeting starts.',
-  readOnly = false,
+  readOnly: archived = false,
 }: MeetingChecklistProps) {
   const { message } = App.useApp();
+  /* Two different reasons to be read-only. `archived` is a past meeting —
+   * nothing to explain, the affordances just go away. `locked` is permission,
+   * which stays on screen and greys out so the tooltip can say why. */
+  const locked = useReadOnly('checklist');
+  const readOnly = archived || locked;
   const { data: tasks, isLoading, isError, error, refetch } = useGetChecklistQuery(meetingId);
   const [createItem, { isLoading: isCreating }] = useCreateChecklistItemMutation();
   const [updateItem] = useUpdateChecklistItemMutation();
@@ -178,57 +184,59 @@ export function MeetingChecklist({
           />
         )}
 
-        {!readOnly ? (
-          <div className="mb-3">
-            {isAdding ? (
-              <div className="rounded-xl border border-line-strong bg-canvas p-3">
-                <div className="flex flex-col gap-2">
-                  <Input
-                    autoFocus
-                    value={draftText}
-                    placeholder="What needs doing before the meeting?"
-                    maxLength={CHECKLIST_ITEM_TEXT_MAX}
-                    onChange={(event) => setDraftText(event.target.value)}
-                    onPressEnter={saveAdd}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Escape') {
-                        event.preventDefault();
-                        cancelAdd();
-                      }
-                    }}
-                  />
-                  <div className="flex items-center justify-end gap-2">
-                    <Button size="small" onClick={cancelAdd}>
-                      Cancel
-                    </Button>
-                    <Button
-                      size="small"
-                      type="primary"
-                      loading={isCreating}
-                      disabled={draftText.trim().length === 0}
-                      onClick={saveAdd}
-                    >
-                      Save
-                    </Button>
+        {!archived ? (
+          <ReadOnlyWhen readOnly={locked} display="block">
+            <div className="mb-3">
+              {isAdding ? (
+                <div className="rounded-xl border border-line-strong bg-canvas p-3">
+                  <div className="flex flex-col gap-2">
+                    <Input
+                      autoFocus
+                      value={draftText}
+                      placeholder="What needs doing before the meeting?"
+                      maxLength={CHECKLIST_ITEM_TEXT_MAX}
+                      onChange={(event) => setDraftText(event.target.value)}
+                      onPressEnter={saveAdd}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Escape') {
+                          event.preventDefault();
+                          cancelAdd();
+                        }
+                      }}
+                    />
+                    <div className="flex items-center justify-end gap-2">
+                      <Button size="small" onClick={cancelAdd}>
+                        Cancel
+                      </Button>
+                      <Button
+                        size="small"
+                        type="primary"
+                        loading={isCreating}
+                        disabled={draftText.trim().length === 0}
+                        onClick={saveAdd}
+                      >
+                        Save
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ) : (
-              <Button
-                block
-                size="large"
-                type="dashed"
-                icon={<Plus size={16} weight="bold" />}
-                disabled={!canOpenAdd}
-                onClick={() => {
-                  setAdding(true);
-                  setDraftText('');
-                }}
-              >
-                Add Item
-              </Button>
-            )}
-          </div>
+              ) : (
+                <Button
+                  block
+                  size="large"
+                  type="dashed"
+                  icon={<Plus size={16} weight="bold" />}
+                  disabled={!canOpenAdd}
+                  onClick={() => {
+                    setAdding(true);
+                    setDraftText('');
+                  }}
+                >
+                  Add Item
+                </Button>
+              )}
+            </div>
+          </ReadOnlyWhen>
         ) : null}
 
         {tasks.length === 0 ? (
@@ -247,6 +255,7 @@ export function MeetingChecklist({
                 key={task.id}
                 task={task}
                 readOnly={readOnly}
+                locked={locked}
                 isEditing={editingId === task.id}
                 draftText={draftText}
                 onDraftChange={setDraftText}
@@ -267,6 +276,9 @@ export function MeetingChecklist({
 interface TaskRowProps {
   task: ChecklistItem;
   readOnly: boolean;
+  /** Read-only because of permission rather than because the meeting is
+   * archived — the affordance stays visible and explains itself. */
+  locked: boolean;
   isEditing: boolean;
   draftText: string;
   onDraftChange: (text: string) => void;
@@ -280,6 +292,7 @@ interface TaskRowProps {
 function TaskRow({
   task,
   readOnly,
+  locked,
   isEditing,
   draftText,
   onDraftChange,
@@ -332,50 +345,57 @@ function TaskRow({
       }`}
     >
       <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={onToggle}
-          disabled={readOnly}
-          aria-pressed={task.done}
-          className={`flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas ${
-            readOnly ? 'cursor-default' : ''
-          }`}
-        >
-          {task.done ? (
-            <CheckCircle size={22} weight="fill" className="shrink-0 text-emerald-600" />
-          ) : (
-            <Circle size={22} className="shrink-0 text-ink-muted" />
-          )}
-          <span
-            className={`min-w-0 flex-1 text-sm ${
-              task.done ? 'text-ink-muted line-through decoration-ink-muted/50' : 'text-ink-soft'
+        <ReadOnlyWhen readOnly={locked} display="block" className="min-w-0 flex-1">
+          <button
+            type="button"
+            onClick={onToggle}
+            disabled={readOnly}
+            aria-pressed={task.done}
+            className={`flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas ${
+              readOnly ? 'cursor-default' : ''
             }`}
           >
-            {task.text}
-          </span>
-        </button>
-        {readOnly ? null : (
-          <Dropdown
-            trigger={['click']}
-            menu={{
-              items: [
-                { key: 'edit', icon: <PencilSimple size={14} />, label: 'Edit' },
-                { key: 'delete', icon: <TrashSimple size={14} />, label: 'Delete', danger: true },
-              ],
-              onClick: ({ key }) => {
-                if (key === 'edit') onStartEdit();
-                else if (key === 'delete') onDelete();
-              },
-            }}
-          >
-            <button
-              type="button"
-              aria-label="More options"
-              className="flex size-8 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-fill focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+            {task.done ? (
+              <CheckCircle size={22} weight="fill" className="shrink-0 text-emerald-600" />
+            ) : (
+              <Circle size={22} className="shrink-0 text-ink-muted" />
+            )}
+            <span
+              className={`min-w-0 flex-1 text-sm ${
+                task.done ? 'text-ink-muted line-through decoration-ink-muted/50' : 'text-ink-soft'
+              }`}
             >
-              <DotsThreeVertical size={18} weight="bold" />
-            </button>
-          </Dropdown>
+              {task.text}
+            </span>
+          </button>
+        </ReadOnlyWhen>
+        {readOnly && !locked ? null : (
+          /* A plain <button> is outside ConfigProvider's reach, so the
+           * Dropdown itself has to be told it is disabled. */
+          <ReadOnlyWhen readOnly={locked}>
+            <Dropdown
+              disabled={locked}
+              trigger={['click']}
+              menu={{
+                items: [
+                  { key: 'edit', icon: <PencilSimple size={14} />, label: 'Edit' },
+                  { key: 'delete', icon: <TrashSimple size={14} />, label: 'Delete', danger: true },
+                ],
+                onClick: ({ key }) => {
+                  if (key === 'edit') onStartEdit();
+                  else if (key === 'delete') onDelete();
+                },
+              }}
+            >
+              <button
+                type="button"
+                aria-label="More options"
+                className="flex size-8 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-fill focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+              >
+                <DotsThreeVertical size={18} weight="bold" />
+              </button>
+            </Dropdown>
+          </ReadOnlyWhen>
         )}
       </div>
     </li>

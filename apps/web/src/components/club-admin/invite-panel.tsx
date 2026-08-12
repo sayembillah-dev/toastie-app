@@ -3,8 +3,8 @@
 import { Link as LinkIcon, Plus } from '@phosphor-icons/react/dist/ssr';
 import { App, Button, Tag } from 'antd';
 import { useMemo, useState } from 'react';
-
 import { InviteModal } from '@/components/club-admin/invite-modal';
+import { ReadOnly } from '@/components/permissions/read-only';
 import { useCan } from '@/lib/permissions/use-can';
 import { useGetInvitesQuery, useRevokeInviteMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
@@ -61,13 +61,13 @@ export function InvitePanel() {
 
   return (
     <div className="flex flex-col gap-4">
-      {canCreate ? (
-        <div className="flex justify-end">
+      <div className="flex justify-end">
+        <ReadOnly resource="invite" action="create">
           <Button icon={<Plus size={14} />} onClick={() => setInviteOpen(true)}>
             Invite member
           </Button>
-        </div>
-      ) : null}
+        </ReadOnly>
+      </div>
 
       {canRead && pendingInvites.length > 0 ? (
         <div>
@@ -107,11 +107,11 @@ export function InvitePanel() {
                   >
                     Copy link
                   </Button>
-                  {canRevoke ? (
+                  <ReadOnly resource="invite" action="delete">
                     <Button size="small" danger onClick={() => void handleRevokeInvite(invite.id)}>
                       Revoke
                     </Button>
-                  ) : null}
+                  </ReadOnly>
                 </div>
               </li>
             ))}

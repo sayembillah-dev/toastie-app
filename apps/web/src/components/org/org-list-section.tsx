@@ -1,10 +1,11 @@
 'use client';
 
 import { Plus } from '@phosphor-icons/react/dist/ssr';
+import type { ResourceKey } from '@toastly/access';
 import { Button } from 'antd';
 import { Fragment } from 'react';
-
 import { StaggerList } from '@/components/motion/stagger-list';
+import { ReadOnly } from '@/components/permissions/read-only';
 import { getApiErrorMessage } from '@/store/api-error';
 
 import { ORG_GRID_CLASSES, OrgGridEmpty, OrgGridError, OrgGridSkeleton } from './org-card';
@@ -30,6 +31,9 @@ interface OrgListSectionProps<T> {
   emptyDescription: string;
   addLabel: string;
   onAdd: () => void;
+  /** What the Add button creates. Defaults to a unit in the org tree; the
+   * clubs list passes `club`, which directors are granted separately. */
+  addResource?: ResourceKey;
 }
 
 /** One drill-down level of a unit-switcher dashboard — a titled header with
@@ -52,6 +56,7 @@ export function OrgListSection<T>({
   emptyDescription,
   addLabel,
   onAdd,
+  addResource = 'orgUnit',
 }: OrgListSectionProps<T>) {
   return (
     <div className="mx-auto max-w-5xl">
@@ -60,9 +65,11 @@ export function OrgListSection<T>({
           <h1 className="text-xl font-semibold text-ink">{title}</h1>
           {subtitle ? <p className="mt-1 text-sm text-ink-soft">{subtitle}</p> : null}
         </div>
-        <Button type="primary" icon={<Plus size={14} />} onClick={onAdd}>
-          {addLabel}
-        </Button>
+        <ReadOnly resource={addResource} action="create">
+          <Button type="primary" icon={<Plus size={14} />} onClick={onAdd}>
+            {addLabel}
+          </Button>
+        </ReadOnly>
       </div>
 
       {isError ? <OrgGridError message={getApiErrorMessage(error)} onRetry={onRetry} /> : null}
@@ -75,9 +82,11 @@ export function OrgListSection<T>({
           title={emptyTitle}
           description={emptyDescription}
           action={
-            <Button type="primary" size="small" icon={<Plus size={14} />} onClick={onAdd}>
-              {addLabel}
-            </Button>
+            <ReadOnly resource={addResource} action="create">
+              <Button type="primary" size="small" icon={<Plus size={14} />} onClick={onAdd}>
+                {addLabel}
+              </Button>
+            </ReadOnly>
           }
         />
       ) : null}

@@ -6,6 +6,7 @@ import { App, Button, Input, Modal, Popconfirm, Upload } from 'antd';
 import NextImage from 'next/image';
 import { useEffect, useState } from 'react';
 
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { InventoryImageMimeType, InventoryItem } from '@/lib/inventory/inventory-items';
 import {
   INVENTORY_DESCRIPTION_MAX,
@@ -169,109 +170,125 @@ function ModalBody({ item, onDone, onCancel }: ModalBodyProps) {
     }
   };
 
+  /* The row already exists for a reader to look at, so the fields stay on
+   * screen and go grey rather than being swapped for a read-only rendering.
+   * Cancel is deliberately outside the fence — closing is not a write. */
+  const writeAction = item ? 'update' : 'create';
+
   return (
     <div className="flex flex-col gap-4">
-      {shownImage ? (
-        <div className="relative overflow-hidden rounded-lg border border-line bg-fill">
-          <div className="relative w-full" style={{ paddingTop: '56%' }}>
-            <NextImage
-              src={shownImage}
-              alt=""
-              fill
-              unoptimized
-              className="object-contain"
-              sizes="(max-width: 640px) 100vw, 480px"
+      <ReadOnly
+        resource="inventory"
+        action={writeAction}
+        display="block"
+        className="flex flex-col gap-4"
+      >
+        {shownImage ? (
+          <div className="relative overflow-hidden rounded-lg border border-line bg-fill">
+            <div className="relative w-full" style={{ paddingTop: '56%' }}>
+              <NextImage
+                src={shownImage}
+                alt=""
+                fill
+                unoptimized
+                className="object-contain"
+                sizes="(max-width: 640px) 100vw, 480px"
+              />
+            </div>
+            <Button
+              type="text"
+              size="small"
+              aria-label="Remove image"
+              onClick={() => {
+                setPendingImage(null);
+                setImageCleared(true);
+              }}
+              icon={<X size={14} />}
+              className="!absolute top-2 right-2 !bg-canvas/90"
             />
           </div>
-          <Button
-            type="text"
-            size="small"
-            aria-label="Remove image"
-            onClick={() => {
-              setPendingImage(null);
-              setImageCleared(true);
-            }}
-            icon={<X size={14} />}
-            className="!absolute top-2 right-2 !bg-canvas/90"
+        ) : (
+          <Upload.Dragger
+            accept={ACCEPT}
+            multiple={false}
+            beforeUpload={handleBeforeUpload}
+            showUploadList={false}
+            disabled={uploading}
+          >
+            <p className="mb-2 flex justify-center text-ink-soft">
+              <CloudArrowUp size={28} weight="regular" />
+            </p>
+            <p className="text-sm font-medium text-ink">Add a photo (optional)</p>
+            <p className="mt-1 text-xs text-ink-muted">
+              PNG, JPEG, WEBP or GIF · up to{' '}
+              {(INVENTORY_IMAGE_MAX_BYTES / (1024 * 1024)).toFixed(0)} MB
+            </p>
+          </Upload.Dragger>
+        )}
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="inventory-title" className="text-sm font-medium text-ink">
+            Title
+          </label>
+          <Input
+            id="inventory-title"
+            placeholder="What is this?"
+            value={title}
+            maxLength={INVENTORY_TITLE_MAX}
+            showCount
+            prefix={<ImageIcon size={14} className="text-ink-muted" />}
+            onChange={(event) => setTitle(event.target.value)}
+            onPressEnter={handleSave}
           />
         </div>
-      ) : (
-        <Upload.Dragger
-          accept={ACCEPT}
-          multiple={false}
-          beforeUpload={handleBeforeUpload}
-          showUploadList={false}
-          disabled={uploading}
-        >
-          <p className="mb-2 flex justify-center text-ink-soft">
-            <CloudArrowUp size={28} weight="regular" />
-          </p>
-          <p className="text-sm font-medium text-ink">Add a photo (optional)</p>
-          <p className="mt-1 text-xs text-ink-muted">
-            PNG, JPEG, WEBP or GIF · up to {(INVENTORY_IMAGE_MAX_BYTES / (1024 * 1024)).toFixed(0)}{' '}
-            MB
-          </p>
-        </Upload.Dragger>
-      )}
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="inventory-title" className="text-sm font-medium text-ink">
-          Title
-        </label>
-        <Input
-          id="inventory-title"
-          placeholder="What is this?"
-          value={title}
-          maxLength={INVENTORY_TITLE_MAX}
-          showCount
-          prefix={<ImageIcon size={14} className="text-ink-muted" />}
-          onChange={(event) => setTitle(event.target.value)}
-          onPressEnter={handleSave}
-        />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="inventory-description" className="text-sm font-medium text-ink">
-          Description
-        </label>
-        <Input.TextArea
-          id="inventory-description"
-          placeholder="Where it lives, condition, any quirks."
-          value={description}
-          maxLength={INVENTORY_DESCRIPTION_MAX}
-          showCount
-          autoSize={{ minRows: 3, maxRows: 6 }}
-          onChange={(event) => setDescription(event.target.value)}
-        />
-      </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="inventory-description" className="text-sm font-medium text-ink">
+            Description
+          </label>
+          <Input.TextArea
+            id="inventory-description"
+            placeholder="Where it lives, condition, any quirks."
+            value={description}
+            maxLength={INVENTORY_DESCRIPTION_MAX}
+            showCount
+            autoSize={{ minRows: 3, maxRows: 6 }}
+            onChange={(event) => setDescription(event.target.value)}
+          />
+        </div>
+      </ReadOnly>
 
       <div className="flex items-center justify-between gap-2">
         {item ? (
-          <Popconfirm
-            title="Delete this item?"
-            description="This cannot be undone."
-            okText="Delete"
-            okButtonProps={{ danger: true, loading: isDeleting }}
-            cancelText="Cancel"
-            onConfirm={handleDelete}
-          >
-            <Button danger disabled={busy || isDeleting}>
-              Delete
-            </Button>
-          </Popconfirm>
+          <ReadOnly resource="inventory" action="delete">
+            <Popconfirm
+              title="Delete this item?"
+              description="This cannot be undone."
+              okText="Delete"
+              okButtonProps={{ danger: true, loading: isDeleting }}
+              cancelText="Cancel"
+              onConfirm={handleDelete}
+            >
+              <Button danger disabled={busy || isDeleting}>
+                Delete
+              </Button>
+            </Popconfirm>
+          </ReadOnly>
         ) : (
           <span />
         )}
         <div className="flex gap-2">
           <Button onClick={onCancel}>Cancel</Button>
-          <Button
-            type="primary"
-            disabled={!canSave}
-            loading={isCreating || isUpdating}
-            onClick={handleSave}
-          >
-            {item ? 'Save' : 'Add'}
-          </Button>
+          <ReadOnly resource="inventory" action={writeAction}>
+            <Button
+              type="primary"
+              disabled={!canSave}
+              loading={isCreating || isUpdating}
+              onClick={handleSave}
+            >
+              {item ? 'Save' : 'Add'}
+            </Button>
+          </ReadOnly>
         </div>
       </div>
     </div>

@@ -11,7 +11,7 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 import { App, AutoComplete, Button, Drawer, Form, Input, Select } from 'antd';
 import { useMemo, useState } from 'react';
-
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { Meeting } from '@/lib/meetings/meetings';
 import type { Guest } from '@/lib/people/guests';
 import { getGuestFullName } from '@/lib/people/guests';
@@ -103,15 +103,17 @@ export function VisitLogsDrawer({ guest, open, onClose }: VisitLogsDrawerProps) 
     >
       <div className="flex flex-col gap-4">
         {mode.kind === 'closed' ? (
-          <Button
-            block
-            type="primary"
-            size="middle"
-            icon={<Plus size={16} weight="bold" />}
-            onClick={openCreate}
-          >
-            Add visit
-          </Button>
+          <ReadOnly resource="guestLog" action="create" display="block">
+            <Button
+              block
+              type="primary"
+              size="middle"
+              icon={<Plus size={16} weight="bold" />}
+              onClick={openCreate}
+            >
+              Add visit
+            </Button>
+          </ReadOnly>
         ) : (
           <VisitLogForm guest={guest} mode={mode} meetings={meetings ?? []} onDone={closeForm} />
         )}
@@ -429,7 +431,7 @@ function LogCard({ log, meeting, onEdit, onDelete, disabled, highlighted }: LogC
             ) : null}
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <ReadOnly resource="guestLog" className="shrink-0 items-center gap-1">
           <Button
             type="text"
             size="small"
@@ -446,7 +448,7 @@ function LogCard({ log, meeting, onEdit, onDelete, disabled, highlighted }: LogC
             disabled={disabled}
             icon={<Trash size={14} weight="bold" className="text-rose-600" />}
           />
-        </div>
+        </ReadOnly>
       </header>
 
       {log.role || log.notes || log.updatedAt ? (

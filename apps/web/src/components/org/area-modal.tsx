@@ -1,6 +1,7 @@
 'use client';
 
 import { App, Button, Form, Input, Modal, Popconfirm } from 'antd';
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { Area } from '@/lib/org/types';
 import { ORG_NAME_MAX } from '@/lib/org/types';
 import { textFieldRules } from '@/lib/validation/rules';
@@ -131,9 +132,11 @@ function ModalBody({ divisionId, area, canDelete, onDone, onCancel }: ModalBodyP
         )}
         <div className="flex gap-2">
           <Button onClick={onCancel}>Cancel</Button>
-          <Button type="primary" loading={busy} onClick={handleSave}>
-            {area ? 'Save' : 'Add'}
-          </Button>
+          <ReadOnly resource="orgUnit" action={area ? 'update' : 'create'}>
+            <Button type="primary" loading={busy} onClick={handleSave}>
+              {area ? 'Save' : 'Add'}
+            </Button>
+          </ReadOnly>
         </div>
       </div>
     </Form>

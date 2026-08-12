@@ -13,8 +13,8 @@ import { useMemo, useState } from 'react';
 
 import { InventoryItemModal } from '@/components/inventory/inventory-item-modal';
 import { StaggerList } from '@/components/motion/stagger-list';
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { InventoryItem } from '@/lib/inventory/inventory-items';
-import { useCan } from '@/lib/permissions/use-can';
 import { useListInventoryItemsQuery } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -29,8 +29,6 @@ function matchesQuery(item: InventoryItem, needle: string): boolean {
  * owns. Each row has a title, an optional description and an optional image.
  * The list is small enough to fit in one endpoint and filter on the client. */
 export function InventoryTab() {
-  const { can } = useCan();
-  const canMutate = can('update', 'inventory');
   const [query, setQuery] = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
@@ -60,14 +58,11 @@ export function InventoryTab() {
             prefix={<MagnifyingGlass size={16} className="text-ink-muted" />}
           />
         </div>
-        <Button
-          type="primary"
-          icon={<Plus size={14} />}
-          disabled={!canMutate}
-          onClick={() => setAddOpen(true)}
-        >
-          Add item
-        </Button>
+        <ReadOnly resource="inventory" action="create">
+          <Button type="primary" icon={<Plus size={14} />} onClick={() => setAddOpen(true)}>
+            Add item
+          </Button>
+        </ReadOnly>
       </div>
 
       {isError ? (
@@ -127,16 +122,17 @@ export function InventoryTab() {
               <p className="mt-1 text-xs text-ink-muted">
                 Log the club&rsquo;s physical assets so nothing goes missing between meetings.
               </p>
-              <Button
-                type="primary"
-                size="small"
-                icon={<Plus size={14} />}
-                className="mt-4"
-                disabled={!canMutate}
-                onClick={() => setAddOpen(true)}
-              >
-                Add item
-              </Button>
+              <ReadOnly resource="inventory" action="create">
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<Plus size={14} />}
+                  className="mt-4"
+                  onClick={() => setAddOpen(true)}
+                >
+                  Add item
+                </Button>
+              </ReadOnly>
             </>
           )}
         </div>

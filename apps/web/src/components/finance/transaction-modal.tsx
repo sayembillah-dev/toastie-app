@@ -14,7 +14,7 @@ import {
 } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useMemo } from 'react';
-
+import { ReadOnly } from '@/components/permissions/read-only';
 import { formatMoney, fromMinor, toMinor } from '@/lib/finance/money';
 import type { Transaction, TransactionCategory, TxDirection } from '@/lib/finance/transactions';
 import {
@@ -171,133 +171,146 @@ function ModalBody({ transaction, onDone, onCancel }: ModalBodyProps) {
       }}
       className="flex flex-col gap-4"
     >
-      <Form.Item name="direction" className="!mb-0">
-        <Segmented
-          block
-          onChange={(value) => handleDirectionChange(value as TxDirection)}
-          options={[
-            { label: 'Money in', value: 'in' },
-            { label: 'Money out', value: 'out' },
-          ]}
-        />
-      </Form.Item>
-
-      <div className="grid grid-cols-2 gap-3">
-        <Form.Item
-          label="Amount"
-          name="amount"
-          rules={amountRules({ label: 'Amount' })}
-          className="!mb-0"
-        >
-          <InputNumber
-            id="tx-amount"
-            className="w-full"
-            min={0}
-            step={1}
-            precision={2}
-            prefix="৳"
-          />
-        </Form.Item>
-        <Form.Item
-          label="Date"
-          name="date"
-          rules={[{ required: true, message: 'Pick a date' }]}
-          className="!mb-0"
-        >
-          <DatePicker id="tx-date" className="w-full" format="D MMM YYYY" />
-        </Form.Item>
-      </div>
-
-      <Form.Item label="Category" name="category" className="!mb-0">
-        <Select id="tx-category" options={categoryOptions} />
-      </Form.Item>
-
-      <Form.Item
-        label="Description"
-        name="description"
-        rules={textFieldRules({ label: 'Description', max: TRANSACTION_DESCRIPTION_MAX })}
-        className="!mb-0"
+      {/* Fields and write buttons are fenced; Cancel stays live so a reader
+       * can still back out of a row they opened to look at. */}
+      <ReadOnly
+        resource="transaction"
+        action={transaction ? 'update' : 'create'}
+        display="block"
+        className="flex flex-col gap-4"
       >
-        <Input
-          id="tx-description"
-          placeholder="What was this for?"
-          maxLength={TRANSACTION_DESCRIPTION_MAX}
-          showCount
-        />
-      </Form.Item>
-
-      <div className="grid grid-cols-2 gap-3">
-        <Form.Item label="Method" name="method" className="!mb-0">
-          <Select
-            id="tx-method"
-            options={PAYMENT_METHODS.map((value) => ({ value, label: METHOD_LABELS[value] }))}
+        <Form.Item name="direction" className="!mb-0">
+          <Segmented
+            block
+            onChange={(value) => handleDirectionChange(value as TxDirection)}
+            options={[
+              { label: 'Money in', value: 'in' },
+              { label: 'Money out', value: 'out' },
+            ]}
           />
         </Form.Item>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Form.Item
+            label="Amount"
+            name="amount"
+            rules={amountRules({ label: 'Amount' })}
+            className="!mb-0"
+          >
+            <InputNumber
+              id="tx-amount"
+              className="w-full"
+              min={0}
+              step={1}
+              precision={2}
+              prefix="৳"
+            />
+          </Form.Item>
+          <Form.Item
+            label="Date"
+            name="date"
+            rules={[{ required: true, message: 'Pick a date' }]}
+            className="!mb-0"
+          >
+            <DatePicker id="tx-date" className="w-full" format="D MMM YYYY" />
+          </Form.Item>
+        </div>
+
+        <Form.Item label="Category" name="category" className="!mb-0">
+          <Select id="tx-category" options={categoryOptions} />
+        </Form.Item>
+
         <Form.Item
-          label="Payee / payer"
-          name="counterparty"
+          label="Description"
+          name="description"
+          rules={textFieldRules({ label: 'Description', max: TRANSACTION_DESCRIPTION_MAX })}
+          className="!mb-0"
+        >
+          <Input
+            id="tx-description"
+            placeholder="What was this for?"
+            maxLength={TRANSACTION_DESCRIPTION_MAX}
+            showCount
+          />
+        </Form.Item>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Form.Item label="Method" name="method" className="!mb-0">
+            <Select
+              id="tx-method"
+              options={PAYMENT_METHODS.map((value) => ({ value, label: METHOD_LABELS[value] }))}
+            />
+          </Form.Item>
+          <Form.Item
+            label="Payee / payer"
+            name="counterparty"
+            rules={[
+              {
+                max: TRANSACTION_COUNTERPARTY_MAX,
+                message: `Keep it under ${TRANSACTION_COUNTERPARTY_MAX} characters`,
+              },
+            ]}
+            className="!mb-0"
+          >
+            <Input
+              id="tx-counterparty"
+              placeholder="Optional"
+              maxLength={TRANSACTION_COUNTERPARTY_MAX}
+            />
+          </Form.Item>
+        </div>
+
+        <Form.Item
+          label="Reference (optional)"
+          name="reference"
           rules={[
             {
-              max: TRANSACTION_COUNTERPARTY_MAX,
-              message: `Keep it under ${TRANSACTION_COUNTERPARTY_MAX} characters`,
+              max: TRANSACTION_REFERENCE_MAX,
+              message: `Keep it under ${TRANSACTION_REFERENCE_MAX} characters`,
             },
           ]}
           className="!mb-0"
         >
           <Input
-            id="tx-counterparty"
-            placeholder="Optional"
-            maxLength={TRANSACTION_COUNTERPARTY_MAX}
+            id="tx-reference"
+            placeholder="Receipt number, cheque number, transfer id…"
+            maxLength={TRANSACTION_REFERENCE_MAX}
           />
         </Form.Item>
-      </div>
 
-      <Form.Item
-        label="Reference (optional)"
-        name="reference"
-        rules={[
-          {
-            max: TRANSACTION_REFERENCE_MAX,
-            message: `Keep it under ${TRANSACTION_REFERENCE_MAX} characters`,
-          },
-        ]}
-        className="!mb-0"
-      >
-        <Input
-          id="tx-reference"
-          placeholder="Receipt number, cheque number, transfer id…"
-          maxLength={TRANSACTION_REFERENCE_MAX}
-        />
-      </Form.Item>
-
-      {amount > 0 ? (
-        <p className="text-xs text-ink-muted">
-          This will record {formatMoney(toMinor(amount))} {direction === 'in' ? 'in' : 'out'}.
-        </p>
-      ) : null}
+        {amount > 0 ? (
+          <p className="text-xs text-ink-muted">
+            This will record {formatMoney(toMinor(amount))} {direction === 'in' ? 'in' : 'out'}.
+          </p>
+        ) : null}
+      </ReadOnly>
 
       <div className="flex items-center justify-between gap-2">
         {transaction ? (
-          <Popconfirm
-            title="Delete this transaction?"
-            description="This cannot be undone."
-            okText="Delete"
-            okButtonProps={{ danger: true, loading: isDeleting }}
-            cancelText="Cancel"
-            onConfirm={handleDelete}
-          >
-            <Button danger disabled={busy || isDeleting}>
-              Delete
-            </Button>
-          </Popconfirm>
+          <ReadOnly resource="transaction" action="delete">
+            <Popconfirm
+              title="Delete this transaction?"
+              description="This cannot be undone."
+              okText="Delete"
+              okButtonProps={{ danger: true, loading: isDeleting }}
+              cancelText="Cancel"
+              onConfirm={handleDelete}
+            >
+              <Button danger disabled={busy || isDeleting}>
+                Delete
+              </Button>
+            </Popconfirm>
+          </ReadOnly>
         ) : (
           <span />
         )}
         <div className="flex gap-2">
           <Button onClick={onCancel}>Cancel</Button>
-          <Button type="primary" loading={isCreating || isUpdating} onClick={handleSave}>
-            {transaction ? 'Save' : 'Add'}
-          </Button>
+          <ReadOnly resource="transaction" action={transaction ? 'update' : 'create'}>
+            <Button type="primary" loading={isCreating || isUpdating} onClick={handleSave}>
+              {transaction ? 'Save' : 'Add'}
+            </Button>
+          </ReadOnly>
         </div>
       </div>
     </Form>

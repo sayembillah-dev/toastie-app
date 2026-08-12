@@ -14,6 +14,7 @@ import { StaggerList } from '@/components/motion/stagger-list';
 import { AddGuestDrawer } from '@/components/people/add-guest-drawer';
 import { GuestCard } from '@/components/people/guest-card';
 import { GuestKanban } from '@/components/people/guest-kanban';
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { Guest } from '@/lib/people/guests';
 import { GUEST_STAGES } from '@/lib/people/guests';
 import { useGetGuestsQuery } from '@/store/api';
@@ -94,14 +95,16 @@ export function GuestsDirectory() {
           Visitors who have dropped in to a meeting — keep in touch and invite them back.
         </p>
         <div className="flex w-full items-center gap-2 sm:w-auto">
-          <Button
-            type="primary"
-            size="middle"
-            icon={<UserPlus size={16} weight="bold" />}
-            onClick={() => setAddOpen(true)}
-          >
-            Add guest
-          </Button>
+          <ReadOnly resource="guest" action="create">
+            <Button
+              type="primary"
+              size="middle"
+              icon={<UserPlus size={16} weight="bold" />}
+              onClick={() => setAddOpen(true)}
+            >
+              Add guest
+            </Button>
+          </ReadOnly>
           <div className="min-w-0 flex-1 sm:w-72 sm:flex-none">
             <Input
               allowClear

@@ -15,9 +15,9 @@ import { DocumentIcon } from '@/components/library/document-icon';
 import { DocumentPreviewModal } from '@/components/library/document-preview-modal';
 import { DocumentUploadModal } from '@/components/library/document-upload-modal';
 import { StaggerItem, StaggerList } from '@/components/motion/stagger-list';
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { LibraryDocument } from '@/lib/library/documents';
 import { documentTypeLabel } from '@/lib/library/documents';
-import { useCan } from '@/lib/permissions/use-can';
 import { useListDocumentsQuery } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -40,8 +40,6 @@ interface DocumentsTabProps {
  * IntersectionObserver on a sentinel so the body keeps fetching as long as
  * the sentinel is on-screen. */
 export function DocumentsTab({ className }: DocumentsTabProps) {
-  const { can } = useCan();
-  const canMutate = can('update', 'library');
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [offset, setOffset] = useState(0);
@@ -133,14 +131,11 @@ export function DocumentsTab({ className }: DocumentsTabProps) {
               },
             ]}
           />
-          <Button
-            type="primary"
-            icon={<Plus size={14} />}
-            disabled={!canMutate}
-            onClick={() => setUploadOpen(true)}
-          >
-            Upload
-          </Button>
+          <ReadOnly resource="library" action="create">
+            <Button type="primary" icon={<Plus size={14} />} onClick={() => setUploadOpen(true)}>
+              Upload
+            </Button>
+          </ReadOnly>
         </div>
       </div>
 
@@ -212,16 +207,17 @@ export function DocumentsTab({ className }: DocumentsTabProps) {
               <p className="mt-1 text-xs text-ink-muted">
                 Upload minutes, agendas or handouts to get started.
               </p>
-              <Button
-                type="primary"
-                size="small"
-                icon={<Plus size={14} />}
-                className="mt-4"
-                disabled={!canMutate}
-                onClick={() => setUploadOpen(true)}
-              >
-                Upload document
-              </Button>
+              <ReadOnly resource="library" action="create">
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<Plus size={14} />}
+                  className="mt-4"
+                  onClick={() => setUploadOpen(true)}
+                >
+                  Upload document
+                </Button>
+              </ReadOnly>
             </>
           )}
         </div>

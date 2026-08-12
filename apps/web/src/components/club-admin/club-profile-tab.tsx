@@ -3,7 +3,7 @@
 import { Buildings, MapPin, Plus, Trash, WarningCircle } from '@phosphor-icons/react/dist/ssr';
 import { App, Button, Form, Input, Select, Space } from 'antd';
 import { useEffect, useMemo } from 'react';
-
+import { ReadOnly } from '@/components/permissions/read-only';
 import {
   CLUB_SOCIAL_PLATFORMS,
   type ClubProfile,
@@ -153,130 +153,137 @@ function ClubProfileForm({ club }: { club: ClubProfile }) {
         </p>
       </header>
 
-      <Form
-        form={form}
-        layout="vertical"
-        initialValues={initialValues}
-        requiredMark="optional"
-        disabled={isLoading}
-      >
-        <div className="rounded-xl border border-line bg-canvas p-5">
-          <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-            <Form.Item label="Club name" name="name" rules={nameRules('Club name')}>
-              <Input placeholder="Club name" />
-            </Form.Item>
+      <ReadOnly resource="club" display="block">
+        <Form
+          form={form}
+          layout="vertical"
+          initialValues={initialValues}
+          requiredMark="optional"
+          disabled={isLoading}
+        >
+          <div className="rounded-xl border border-line bg-canvas p-5">
+            <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+              <Form.Item label="Club name" name="name" rules={nameRules('Club name')}>
+                <Input placeholder="Club name" />
+              </Form.Item>
+              <Form.Item
+                label="Club number"
+                name="clubNumber"
+                rules={textFieldRules({ label: 'Club number', required: false, max: 20 })}
+              >
+                <Input placeholder="e.g. 1234567" />
+              </Form.Item>
+            </div>
+
             <Form.Item
-              label="Club number"
-              name="clubNumber"
-              rules={textFieldRules({ label: 'Club number', required: false, max: 20 })}
+              label="Motto"
+              name="motto"
+              rules={textFieldRules({ label: 'Motto', required: false, max: 300 })}
             >
-              <Input placeholder="e.g. 1234567" />
+              <Input.TextArea rows={2} maxLength={300} showCount placeholder="Your club's motto" />
             </Form.Item>
           </div>
 
-          <Form.Item
-            label="Motto"
-            name="motto"
-            rules={textFieldRules({ label: 'Motto', required: false, max: 300 })}
-          >
-            <Input.TextArea rows={2} maxLength={300} showCount placeholder="Your club's motto" />
-          </Form.Item>
-        </div>
+          <div className="mt-4 rounded-xl border border-line bg-canvas p-5">
+            <Form.Item
+              label="Venue address"
+              name="venueAddress"
+              rules={textFieldRules({ label: 'Venue address', required: false, max: 500 })}
+            >
+              <Input.TextArea
+                rows={2}
+                maxLength={500}
+                showCount
+                placeholder="Where the club meets"
+              />
+            </Form.Item>
 
-        <div className="mt-4 rounded-xl border border-line bg-canvas p-5">
-          <Form.Item
-            label="Venue address"
-            name="venueAddress"
-            rules={textFieldRules({ label: 'Venue address', required: false, max: 500 })}
-          >
-            <Input.TextArea rows={2} maxLength={500} showCount placeholder="Where the club meets" />
-          </Form.Item>
+            <Form.Item
+              label="Google Maps link"
+              name="venueMapUrl"
+              rules={urlRules('Google Maps link')}
+            >
+              <Input placeholder="https://maps.google.com/…" />
+            </Form.Item>
 
-          <Form.Item
-            label="Google Maps link"
-            name="venueMapUrl"
-            rules={urlRules('Google Maps link')}
-          >
-            <Input placeholder="https://maps.google.com/…" />
-          </Form.Item>
-
-          <Form.Item
-            label="Contact phone"
-            name="contactPhone"
-            className="!mb-0"
-            rules={phoneRules({ required: false })}
-          >
-            <Input placeholder="01568286512" type="tel" inputMode="tel" />
-          </Form.Item>
-        </div>
-
-        <div className="mt-4 rounded-xl border border-line bg-canvas p-5">
-          <Form.Item label="Official social links" className="!mb-0">
-            <Form.List name="socials">
-              {(fields, { add, remove }) => (
-                <div className="flex flex-col gap-2">
-                  {fields.map(({ key, name, ...restField }) => (
-                    <Space.Compact key={key ?? name} className="w-full items-start !gap-2" block>
-                      <Form.Item
-                        {...restField}
-                        name={[name, 'platform']}
-                        noStyle
-                        rules={[{ required: true, message: 'Pick a platform' }]}
-                      >
-                        <Select<ClubSocialPlatform>
-                          options={SOCIAL_OPTIONS}
-                          placeholder="Platform"
-                          className="!w-40 shrink-0"
-                        />
-                      </Form.Item>
-                      <Form.Item
-                        {...restField}
-                        name={[name, 'url']}
-                        noStyle
-                        rules={[
-                          { required: true, message: 'URL is required' },
-                          ...urlRules('Link'),
-                        ]}
-                      >
-                        <Input placeholder="https://…" className="!flex-1" />
-                      </Form.Item>
-                      <Button
-                        type="text"
-                        onClick={() => remove(name)}
-                        aria-label="Remove this social link"
-                        icon={<Trash size={14} weight="bold" />}
-                        className="!shrink-0 !text-ink-muted"
-                      />
-                    </Space.Compact>
-                  ))}
-                  <Button
-                    type="dashed"
-                    onClick={() => add({ platform: 'website', url: '' })}
-                    icon={<Plus size={14} weight="bold" />}
-                    block
-                  >
-                    Add social link
-                  </Button>
-                </div>
-              )}
-            </Form.List>
-          </Form.Item>
-        </div>
-
-        <div className="mt-4 rounded-xl border border-line bg-canvas p-5">
-          <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-ink-muted">
-            <Buildings size={14} weight="bold" />
-            Organization
+            <Form.Item
+              label="Contact phone"
+              name="contactPhone"
+              className="!mb-0"
+              rules={phoneRules({ required: false })}
+            >
+              <Input placeholder="01568286512" type="tel" inputMode="tel" />
+            </Form.Item>
           </div>
-          <OrganizationSummary club={club} />
-        </div>
 
-        <div className="mt-6 flex justify-end">
-          <Button type="primary" size="large" loading={isLoading} onClick={handleSave}>
-            Save changes
-          </Button>
-        </div>
-      </Form>
+          <div className="mt-4 rounded-xl border border-line bg-canvas p-5">
+            <Form.Item label="Official social links" className="!mb-0">
+              <Form.List name="socials">
+                {(fields, { add, remove }) => (
+                  <div className="flex flex-col gap-2">
+                    {fields.map(({ key, name, ...restField }) => (
+                      <Space.Compact key={key ?? name} className="w-full items-start !gap-2" block>
+                        <Form.Item
+                          {...restField}
+                          name={[name, 'platform']}
+                          noStyle
+                          rules={[{ required: true, message: 'Pick a platform' }]}
+                        >
+                          <Select<ClubSocialPlatform>
+                            options={SOCIAL_OPTIONS}
+                            placeholder="Platform"
+                            className="!w-40 shrink-0"
+                          />
+                        </Form.Item>
+                        <Form.Item
+                          {...restField}
+                          name={[name, 'url']}
+                          noStyle
+                          rules={[
+                            { required: true, message: 'URL is required' },
+                            ...urlRules('Link'),
+                          ]}
+                        >
+                          <Input placeholder="https://…" className="!flex-1" />
+                        </Form.Item>
+                        <Button
+                          type="text"
+                          onClick={() => remove(name)}
+                          aria-label="Remove this social link"
+                          icon={<Trash size={14} weight="bold" />}
+                          className="!shrink-0 !text-ink-muted"
+                        />
+                      </Space.Compact>
+                    ))}
+                    <Button
+                      type="dashed"
+                      onClick={() => add({ platform: 'website', url: '' })}
+                      icon={<Plus size={14} weight="bold" />}
+                      block
+                    >
+                      Add social link
+                    </Button>
+                  </div>
+                )}
+              </Form.List>
+            </Form.Item>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-line bg-canvas p-5">
+            <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-ink-muted">
+              <Buildings size={14} weight="bold" />
+              Organization
+            </div>
+            <OrganizationSummary club={club} />
+          </div>
+
+          <div className="mt-6 flex justify-end">
+            <Button type="primary" size="large" loading={isLoading} onClick={handleSave}>
+              Save changes
+            </Button>
+          </div>
+        </Form>
+      </ReadOnly>
     </div>
   );
 }

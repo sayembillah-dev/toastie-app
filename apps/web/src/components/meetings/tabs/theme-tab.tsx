@@ -10,7 +10,7 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 import { App, Button, Input, Select } from 'antd';
 import { useMemo } from 'react';
-
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { WordOfTheDay } from '@/lib/meetings/draft';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { useUpdateMeetingMutation } from '@/store/api';
@@ -122,7 +122,7 @@ export function ThemeTab({ meeting }: ThemeTabProps) {
         </p>
       </div>
 
-      <div className="flex flex-col gap-4">
+      <ReadOnly resource="meeting" display="block" className="flex flex-col gap-4">
         <Field id="theme-of-the-day" label="Theme of the day" Icon={Palette}>
           <Input
             id="theme-of-the-day"
@@ -215,7 +215,7 @@ export function ThemeTab({ meeting }: ThemeTabProps) {
             showCount
           />
         </Field>
-      </div>
+      </ReadOnly>
 
       {/* Full-width on phones so the button is an easy thumb target, and
        * right-aligned from sm up where the card has room. */}
@@ -223,18 +223,20 @@ export function ThemeTab({ meeting }: ThemeTabProps) {
         <span aria-live="polite" className="text-xs text-ink-muted sm:mr-auto">
           {dirty ? 'Unsaved changes' : 'All changes saved'}
         </span>
-        <Button
-          type="primary"
-          size="middle"
-          icon={<FloppyDisk size={14} weight="bold" />}
-          disabled={!dirty}
-          loading={isSaving}
-          onClick={() => {
-            void handleSave();
-          }}
-        >
-          Save
-        </Button>
+        <ReadOnly resource="meeting">
+          <Button
+            type="primary"
+            size="middle"
+            icon={<FloppyDisk size={14} weight="bold" />}
+            disabled={!dirty}
+            loading={isSaving}
+            onClick={() => {
+              void handleSave();
+            }}
+          >
+            Save
+          </Button>
+        </ReadOnly>
       </div>
     </section>
   );

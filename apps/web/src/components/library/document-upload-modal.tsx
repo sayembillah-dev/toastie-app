@@ -6,6 +6,7 @@ import { App, Button, Input, Modal, Upload } from 'antd';
 import { useState } from 'react';
 
 import { DocumentIcon } from '@/components/library/document-icon';
+import { ReadOnly } from '@/components/permissions/read-only';
 import {
   DOCUMENT_FILE_MAX_BYTES,
   DOCUMENT_MIME_TYPES,
@@ -190,9 +191,16 @@ function UploadBody({ onDone, onCancel }: UploadBodyProps) {
 
       <div className="flex justify-end gap-2">
         <Button onClick={onCancel}>Cancel</Button>
-        <Button type="primary" disabled={!canSave} loading={isSaving || busy} onClick={handleSave}>
-          Upload
-        </Button>
+        <ReadOnly resource="library" action="create">
+          <Button
+            type="primary"
+            disabled={!canSave}
+            loading={isSaving || busy}
+            onClick={handleSave}
+          >
+            Upload
+          </Button>
+        </ReadOnly>
       </div>
     </div>
   );

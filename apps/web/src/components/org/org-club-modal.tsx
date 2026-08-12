@@ -1,6 +1,7 @@
 'use client';
 
 import { App, Button, Form, Input, Modal, Popconfirm, Select } from 'antd';
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { OrgClub, OrgClubStatus } from '@/lib/org/types';
 import {
   CLUB_NUMBER_MAX,
@@ -175,9 +176,11 @@ function ModalBody({ areaId, club, canDelete, onDone, onCancel }: ModalBodyProps
         )}
         <div className="flex gap-2">
           <Button onClick={onCancel}>Cancel</Button>
-          <Button type="primary" loading={busy} onClick={handleSave}>
-            {club ? 'Save' : 'Add'}
-          </Button>
+          <ReadOnly resource="club" action={club ? 'update' : 'create'}>
+            <Button type="primary" loading={busy} onClick={handleSave}>
+              {club ? 'Save' : 'Add'}
+            </Button>
+          </ReadOnly>
         </div>
       </div>
     </Form>

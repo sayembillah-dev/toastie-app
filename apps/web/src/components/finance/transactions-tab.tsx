@@ -12,6 +12,7 @@ import { Button, Input, Segmented, Select, Skeleton, Tag } from 'antd';
 import { useMemo, useState } from 'react';
 
 import { TransactionModal } from '@/components/finance/transaction-modal';
+import { ReadOnly } from '@/components/permissions/read-only';
 import { formatMoney, formatMoneySigned } from '@/lib/finance/money';
 import type { Transaction, TxDirection } from '@/lib/finance/transactions';
 import {
@@ -112,14 +113,11 @@ export function TransactionsTab() {
             popupMatchSelectWidth={false}
           />
         </div>
-        <Button
-          type="primary"
-          icon={<Plus size={14} />}
-          disabled={!canMutate}
-          onClick={() => setAddOpen(true)}
-        >
-          Add transaction
-        </Button>
+        <ReadOnly resource="transaction" action="create">
+          <Button type="primary" icon={<Plus size={14} />} onClick={() => setAddOpen(true)}>
+            Add transaction
+          </Button>
+        </ReadOnly>
       </div>
 
       <div className="mb-4 grid grid-cols-3 gap-3">

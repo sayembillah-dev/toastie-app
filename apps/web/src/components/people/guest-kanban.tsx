@@ -5,7 +5,7 @@ import { App, Select } from 'antd';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
-
+import { ReadOnly, useReadOnly } from '@/components/permissions/read-only';
 import { PersonAvatar } from '@/components/ui/person-avatar';
 import type { Guest, GuestStage } from '@/lib/people/guests';
 import {
@@ -82,10 +82,14 @@ function KanbanCard({
   onMoveByOffset,
   onOpen,
 }: KanbanCardProps) {
+  /* Opening the profile is a read, so the card stays live and un-tooltipped —
+   * only the gestures that move a guest between stages go away. */
+  const locked = useReadOnly('guest');
+
   return (
     <button
       type="button"
-      draggable
+      draggable={!locked}
       aria-label={`${fullName(guest)} — press Enter to open, arrow keys to change stage`}
       onClick={onOpen}
       onDragStart={(event) => {
@@ -95,15 +99,16 @@ function KanbanCard({
       }}
       onDragEnd={onDragEnd}
       onKeyDown={(event) => {
+        if (locked) return;
         if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
         event.preventDefault();
         onMoveByOffset(event.key === 'ArrowLeft' ? -1 : 1);
       }}
       /* `guest-drag-source` is the WebKit opt-in that lets a form control start
        * a drag — see globals.css. */
-      className={`group guest-drag-source w-full cursor-grab rounded-lg border border-line bg-canvas px-2 py-1.5 text-left transition-all hover:border-line-strong hover:shadow-sm focus:outline-none focus-visible:border-ink focus-visible:ring-1 focus-visible:ring-ink active:cursor-grabbing ${
-        isDragging ? 'opacity-40' : ''
-      }`}
+      className={`group guest-drag-source w-full rounded-lg border border-line bg-canvas px-2 py-1.5 text-left transition-all hover:border-line-strong hover:shadow-sm focus:outline-none focus-visible:border-ink focus-visible:ring-1 focus-visible:ring-ink ${
+        locked ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
+      } ${isDragging ? 'opacity-40' : ''}`}
     >
       <div className="flex items-center gap-1.5">
         <GuestAvatar guest={guest} size="sm" />
@@ -351,14 +356,16 @@ function MobileBoard({ guests, onStageChange }: MobileBoardProps) {
                       </Link>
 
                       <div className="mt-2.5 border-t border-line pt-2">
-                        <Select
-                          size="small"
-                          className="w-full"
-                          aria-label={`Stage for ${fullName(guest)}`}
-                          value={guest.stage}
-                          options={options}
-                          onChange={(next: GuestStage) => onStageChange(guest, next)}
-                        />
+                        <ReadOnly resource="guest" display="block">
+                          <Select
+                            size="small"
+                            className="w-full"
+                            aria-label={`Stage for ${fullName(guest)}`}
+                            value={guest.stage}
+                            options={options}
+                            onChange={(next: GuestStage) => onStageChange(guest, next)}
+                          />
+                        </ReadOnly>
                       </div>
                     </article>
                   ))}

@@ -4,6 +4,7 @@ import { Paperclip, Plus, Trash } from '@phosphor-icons/react/dist/ssr';
 import type { UploadFile } from 'antd';
 import { App, Button, Input, Popconfirm, Select, Skeleton, Typography, Upload } from 'antd';
 import { useState } from 'react';
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { CreatePlannerIdeaInput, IdeaStatus, PlannerIdea } from '@/lib/library/planner';
 import {
   IDEA_STATUS_ORDER,
@@ -51,7 +52,6 @@ interface PlannerDayPanelProps {
   loading?: boolean;
   /** False for viewers with read-only `library` access: the Add button and
    * every per-card control disappear rather than failing with a 403. */
-  canMutate?: boolean;
   /* The form supplies the mutable fields; the parent stamps the day and
    * persists, so the panel stays agnostic of the endpoint. Resolves `true`
    * when the write landed — the form only collapses on success, so a failed
@@ -67,7 +67,6 @@ interface PlannerDayPanelProps {
 export function PlannerDayPanel({
   ideas,
   loading = false,
-  canMutate = true,
   onAdd,
   onRemove,
   onStatusChange,
@@ -76,8 +75,8 @@ export function PlannerDayPanel({
 
   return (
     <div className="flex flex-col gap-3">
-      {canMutate &&
-        (adding ? (
+      <ReadOnly resource="library" action="create" display="block">
+        {adding ? (
           <IdeaForm
             onSave={async (idea) => {
               const saved = await onAdd(idea);
@@ -89,12 +88,12 @@ export function PlannerDayPanel({
           <Button block icon={<Plus size={14} />} onClick={() => setAdding(true)}>
             Add idea
           </Button>
-        ))}
+        )}
+      </ReadOnly>
 
       <IdeasList
         ideas={ideas}
         loading={loading}
-        canMutate={canMutate}
         onRemove={onRemove}
         onStatusChange={onStatusChange}
       />
@@ -201,12 +200,11 @@ function IdeaForm({ onSave, onCancel }: IdeaFormProps) {
 interface IdeasListProps {
   ideas: PlannerIdea[];
   loading: boolean;
-  canMutate: boolean;
   onRemove: (id: string) => void;
   onStatusChange: (id: string, status: IdeaStatus) => void;
 }
 
-function IdeasList({ ideas, loading, canMutate, onRemove, onStatusChange }: IdeasListProps) {
+function IdeasList({ ideas, loading, onRemove, onStatusChange }: IdeasListProps) {
   if (loading && ideas.length === 0) {
     return (
       <div className="rounded-lg border border-line p-3">
@@ -227,7 +225,7 @@ function IdeasList({ ideas, loading, canMutate, onRemove, onStatusChange }: Idea
         <li key={idea.id} className="rounded-lg border border-line p-3">
           <div className="flex items-start justify-between gap-2">
             <h3 className="text-sm font-medium text-ink">{idea.title}</h3>
-            {canMutate ? (
+            <ReadOnly resource="library" action="delete">
               <Popconfirm
                 title="Delete this idea?"
                 description="This cannot be undone."
@@ -243,7 +241,7 @@ function IdeasList({ ideas, loading, canMutate, onRemove, onStatusChange }: Idea
                   icon={<Trash size={14} className="text-ink-muted" />}
                 />
               </Popconfirm>
-            ) : null}
+            </ReadOnly>
           </div>
           {idea.body ? (
             /* `!mb-0` cancels antd Typography's default paragraph margin so the
@@ -291,16 +289,17 @@ function IdeasList({ ideas, loading, canMutate, onRemove, onStatusChange }: Idea
             ) : (
               <span className="flex-1" />
             )}
-            <Select<IdeaStatus>
-              size="small"
-              variant="filled"
-              value={idea.status}
-              onChange={(next) => onStatusChange(idea.id, next)}
-              options={STATUS_OPTIONS}
-              aria-label={`Status for ${idea.title}`}
-              popupMatchSelectWidth={false}
-              disabled={!canMutate}
-            />
+            <ReadOnly resource="library">
+              <Select<IdeaStatus>
+                size="small"
+                variant="filled"
+                value={idea.status}
+                onChange={(next) => onStatusChange(idea.id, next)}
+                options={STATUS_OPTIONS}
+                aria-label={`Status for ${idea.title}`}
+                popupMatchSelectWidth={false}
+              />
+            </ReadOnly>
           </div>
         </li>
       ))}

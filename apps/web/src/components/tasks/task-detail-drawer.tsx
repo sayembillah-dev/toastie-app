@@ -4,6 +4,7 @@ import { CheckCircle, PencilSimple, TrashSimple } from '@phosphor-icons/react/di
 import { App, Button, Drawer, Form, Input, Popconfirm, Segmented, Select, Skeleton } from 'antd';
 import { useMemo, useState } from 'react';
 
+import { ReadOnlyWhen } from '@/components/permissions/read-only';
 import { useCurrentMemberId } from '@/lib/me/current-member';
 import { useCan } from '@/lib/permissions/use-can';
 import { officerOptions, PRIORITY_STYLES, personInitials, personSwatch } from '@/lib/tasks/task-ui';
@@ -162,7 +163,7 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
       footer={
         task && !editing ? (
           <div className="flex items-center justify-between gap-2">
-            {canDelete ? (
+            <ReadOnlyWhen readOnly={!canDelete}>
               <Popconfirm
                 title="Delete this task?"
                 description="This can't be undone."
@@ -174,16 +175,14 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
                   Delete
                 </Button>
               </Popconfirm>
-            ) : (
-              <span />
-            )}
+            </ReadOnlyWhen>
             <div className="flex items-center gap-2">
-              {canEditStructure ? (
+              <ReadOnlyWhen readOnly={!canEditStructure}>
                 <Button icon={<PencilSimple size={15} weight="bold" />} onClick={startEditing}>
                   Edit
                 </Button>
-              ) : null}
-              {canToggleDone ? (
+              </ReadOnlyWhen>
+              <ReadOnlyWhen readOnly={!canToggleDone}>
                 <Button
                   type="primary"
                   icon={<CheckCircle size={15} weight="bold" />}
@@ -192,7 +191,7 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
                 >
                   {task.done ? 'Reopen' : 'Mark done'}
                 </Button>
-              ) : null}
+              </ReadOnlyWhen>
             </div>
           </div>
         ) : editing ? (
@@ -344,8 +343,8 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
               <p className="mt-1.5 text-sm italic text-ink-muted">No notes yet.</p>
             )}
 
-            {canAddNote ? (
-              <div className="mt-3 flex flex-col gap-2">
+            <ReadOnlyWhen readOnly={!canAddNote} display="block">
+              <div className="mt-3 flex w-full flex-col gap-2">
                 <TextArea
                   rows={2}
                   maxLength={TASK_NOTE_MAX}
@@ -363,7 +362,7 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
                   Add note
                 </Button>
               </div>
-            ) : null}
+            </ReadOnlyWhen>
           </div>
         </div>
       ) : null}

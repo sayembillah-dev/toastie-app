@@ -4,6 +4,7 @@ import { Check, DownloadSimple, PencilSimple, Trash, X } from '@phosphor-icons/r
 import { App, Button, Input, Modal, Popconfirm, Space, Typography } from 'antd';
 import NextImage from 'next/image';
 import { useState } from 'react';
+import { ReadOnly } from '@/components/permissions/read-only';
 
 import { ASSET_TITLE_MAX, type Asset } from '@/lib/library/assets';
 import { useDeleteAssetMutation, useUpdateAssetMutation } from '@/store/api';
@@ -145,13 +146,15 @@ function PreviewBody({ asset, onClose }: PreviewBodyProps) {
             <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-ink">
               {asset.title}
             </h2>
-            <Button
-              type="text"
-              size="small"
-              aria-label="Edit title"
-              icon={<PencilSimple size={16} className="text-ink-soft" />}
-              onClick={() => setIsEditing(true)}
-            />
+            <ReadOnly resource="library">
+              <Button
+                type="text"
+                size="small"
+                aria-label="Edit title"
+                icon={<PencilSimple size={16} className="text-ink-soft" />}
+                onClick={() => setIsEditing(true)}
+              />
+            </ReadOnly>
           </>
         )}
       </header>
@@ -180,18 +183,20 @@ function PreviewBody({ asset, onClose }: PreviewBodyProps) {
           {asset.width} × {asset.height} · {formatBytes(asset.sizeBytes)}
         </Text>
         <Space size="small">
-          <Popconfirm
-            title="Delete this asset?"
-            description="This cannot be undone."
-            okText="Delete"
-            okButtonProps={{ danger: true, loading: isDeleting }}
-            cancelText="Cancel"
-            onConfirm={handleDelete}
-          >
-            <Button danger size="small" icon={<Trash size={14} />}>
-              Delete
-            </Button>
-          </Popconfirm>
+          <ReadOnly resource="library" action="delete">
+            <Popconfirm
+              title="Delete this asset?"
+              description="This cannot be undone."
+              okText="Delete"
+              okButtonProps={{ danger: true, loading: isDeleting }}
+              cancelText="Cancel"
+              onConfirm={handleDelete}
+            >
+              <Button danger size="small" icon={<Trash size={14} />}>
+                Delete
+              </Button>
+            </Popconfirm>
+          </ReadOnly>
           <Button
             type="primary"
             size="small"

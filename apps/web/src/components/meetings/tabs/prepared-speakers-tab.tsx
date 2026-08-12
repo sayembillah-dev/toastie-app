@@ -12,6 +12,7 @@ import {
 import { App, Button, Input, InputNumber, Modal, Popconfirm, QRCode, Select, Tooltip } from 'antd';
 import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { AssigneeSelect } from '@/components/education/assignee-select';
+import { ReadOnly } from '@/components/permissions/read-only';
 import type { Member, Pathway } from '@/lib/education/members';
 import { PATHWAYS } from '@/lib/education/members';
 import type { ProjectDefinition } from '@/lib/education/pathways';
@@ -632,46 +633,48 @@ export function PreparedSpeakersTab({ meeting }: PreparedSpeakersTabProps) {
           </span>
         </header>
 
-        {isLoading && list.length === 0 ? null : list.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-line-strong px-6 py-10 text-center">
-            <p className="text-sm font-medium text-ink">No speakers yet</p>
-            <p className="mt-1 text-xs text-ink-muted">
-              Use the button below to add the first prepared speaker.
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {list.map((speaker, index) => (
-              <SpeakerCard
-                key={speaker.id}
-                index={index + 1}
-                meetingId={meeting.id}
-                shareToken={meeting.shareToken}
-                speaker={speaker}
-                members={members ?? []}
-                guests={guests ?? []}
-                expanded={expandedIds.has(speaker.id)}
-                onToggle={() => toggle(speaker.id)}
-                onPatch={(patch) => handlePatch(speaker.id, patch)}
-                onDelete={() => handleDelete(speaker.id)}
-              />
-            ))}
-          </div>
-        )}
+        <ReadOnly resource="meeting" display="block">
+          {isLoading && list.length === 0 ? null : list.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-line-strong px-6 py-10 text-center">
+              <p className="text-sm font-medium text-ink">No speakers yet</p>
+              <p className="mt-1 text-xs text-ink-muted">
+                Use the button below to add the first prepared speaker.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {list.map((speaker, index) => (
+                <SpeakerCard
+                  key={speaker.id}
+                  index={index + 1}
+                  meetingId={meeting.id}
+                  shareToken={meeting.shareToken}
+                  speaker={speaker}
+                  members={members ?? []}
+                  guests={guests ?? []}
+                  expanded={expandedIds.has(speaker.id)}
+                  onToggle={() => toggle(speaker.id)}
+                  onPatch={(patch) => handlePatch(speaker.id, patch)}
+                  onDelete={() => handleDelete(speaker.id)}
+                />
+              ))}
+            </div>
+          )}
 
-        <div className="mt-4">
-          <Button
-            block
-            size="large"
-            type="dashed"
-            icon={<Plus size={16} weight="bold" />}
-            loading={isCreating}
-            disabled={!canAdd}
-            onClick={handleAdd}
-          >
-            Add speaker ({list.length}/{MAX_SPEAKERS})
-          </Button>
-        </div>
+          <div className="mt-4">
+            <Button
+              block
+              size="large"
+              type="dashed"
+              icon={<Plus size={16} weight="bold" />}
+              loading={isCreating}
+              disabled={!canAdd}
+              onClick={handleAdd}
+            >
+              Add speaker ({list.length}/{MAX_SPEAKERS})
+            </Button>
+          </div>
+        </ReadOnly>
       </div>
     </section>
   );
