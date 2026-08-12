@@ -11,6 +11,7 @@ import type { Guest, GuestStage } from '@/lib/people/guests';
 import {
   GUEST_STAGE_IDS,
   GUEST_STAGES,
+  getGuestFullName,
   getGuestInitials,
   getGuestSwatch,
   groupGuestsByStage,
@@ -28,7 +29,7 @@ function formatShortDate(iso: string): string {
 }
 
 function fullName(guest: Guest): string {
-  return `${guest.firstName} ${guest.lastName}`;
+  return getGuestFullName(guest);
 }
 
 function columnLabel(label: string, count: number): string {

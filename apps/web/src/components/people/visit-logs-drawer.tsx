@@ -14,6 +14,7 @@ import { useMemo, useState } from 'react';
 
 import type { Meeting } from '@/lib/meetings/meetings';
 import type { Guest } from '@/lib/people/guests';
+import { getGuestFullName } from '@/lib/people/guests';
 import type { VisitLog } from '@/lib/people/visit-logs';
 import {
   COMMON_VISIT_ROLES,
@@ -82,7 +83,7 @@ export function VisitLogsDrawer({ guest, open, onClose }: VisitLogsDrawerProps) 
     onClose();
   };
 
-  const fullName = `${guest.firstName} ${guest.lastName}`;
+  const fullName = getGuestFullName(guest);
 
   return (
     <Drawer

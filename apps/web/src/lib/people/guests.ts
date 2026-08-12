@@ -71,6 +71,9 @@ export interface Guest {
   /** Tenant boundary — the club this guest is in the pipeline for. */
   clubId: string;
   firstName: string;
+  /** Empty string when the club never captured one — the quick-add drawer only
+   * requires a first name. Kept non-nullable so display code can stay simple;
+   * use `getGuestFullName` rather than interpolating both halves. */
   lastName: string;
   email?: string;
   /** E.164-ish phone number (leading `+`, digits only). Feeds tel: and wa.me
@@ -142,11 +145,11 @@ export type UpdateGuestInput = Partial<
   >
 >;
 
-/** Fields the "Add guest" drawer can write. `firstName`/`lastName` are
- * required — everything else (avatar, socials, bio, notes) can be filled in
+/** Fields the "Add guest" drawer can write. Only `firstName` is required —
+ * everything else (last name, avatar, socials, bio, notes) can be filled in
  * afterward via the edit panel. No `stage`: every guest starts at `new`. */
-export type CreateGuestInput = Pick<Guest, 'firstName' | 'lastName'> &
-  Partial<Pick<Guest, 'email' | 'phone' | 'whatsapp' | 'invitedBy'>>;
+export type CreateGuestInput = Pick<Guest, 'firstName'> &
+  Partial<Pick<Guest, 'lastName' | 'email' | 'phone' | 'whatsapp' | 'invitedBy'>>;
 
 /** Buckets guests into one list per stage, in board order. Guests carrying a
  * stage we no longer ship fall back to New rather than vanishing. */
@@ -246,6 +249,13 @@ export const SEED_GUESTS: Omit<Guest, 'clubId'>[] = [
     stage: 'not-interested',
   },
 ];
+
+/** Display name. A last name is optional — the quick-add drawer only insists on
+ * a first name — so join rather than interpolating, which would leave a
+ * dangling space (and a visible double space mid-sentence). */
+export function getGuestFullName(guest: Pick<Guest, 'firstName' | 'lastName'>): string {
+  return [guest.firstName, guest.lastName].filter(Boolean).join(' ').trim();
+}
 
 export function getGuestInitials(guest: Pick<Guest, 'firstName' | 'lastName'>): string {
   return `${guest.firstName.charAt(0)}${guest.lastName.charAt(0)}`.toUpperCase();

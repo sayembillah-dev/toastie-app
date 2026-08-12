@@ -3,6 +3,7 @@
 import { App, Button, Drawer, Form, Input } from 'antd';
 import { useRouter } from 'next/navigation';
 
+import { getGuestFullName } from '@/lib/people/guests';
 import { emailRules, normalizePhone, phoneRules, shortNameRules } from '@/lib/validation/rules';
 import { useCreateGuestMutation } from '@/store/api';
 import { getApiErrorMessage, getFieldErrors } from '@/store/api-error';
@@ -14,7 +15,7 @@ interface AddGuestDrawerProps {
 
 interface FormValues {
   firstName: string;
-  lastName: string;
+  lastName?: string;
   email?: string;
   phone?: string;
   whatsapp?: string;
@@ -46,13 +47,13 @@ export function AddGuestDrawer({ open, onClose }: AddGuestDrawerProps) {
     try {
       const guest = await createGuest({
         firstName: values.firstName.trim(),
-        lastName: values.lastName.trim(),
+        lastName: values.lastName?.trim() || undefined,
         email: values.email?.trim() || undefined,
         phone: values.phone ? normalizePhone(values.phone) : undefined,
         whatsapp: values.whatsapp ? normalizePhone(values.whatsapp) : undefined,
         invitedBy: values.invitedBy?.trim() || undefined,
       }).unwrap();
-      message.success(`${guest.firstName} ${guest.lastName} added to the guest list`);
+      message.success(`${getGuestFullName(guest)} added to the guest list`);
       form.resetFields();
       onClose();
       router.push(`/people/${guest.id}`);
@@ -105,7 +106,11 @@ export function AddGuestDrawer({ open, onClose }: AddGuestDrawerProps) {
           <Form.Item label="First name" name="firstName" rules={shortNameRules('First name')}>
             <Input placeholder="First name" autoFocus />
           </Form.Item>
-          <Form.Item label="Last name" name="lastName" rules={shortNameRules('Last name')}>
+          <Form.Item
+            label="Last name"
+            name="lastName"
+            rules={shortNameRules('Last name', { required: false })}
+          >
             <Input placeholder="Last name" />
           </Form.Item>
         </div>

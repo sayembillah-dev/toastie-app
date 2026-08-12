@@ -1,5 +1,6 @@
 import type { Assignee } from '@/lib/education/planner';
 import type { RoleHolder } from '@/lib/meetings/draft';
+import { getGuestFullName } from '@/lib/people/guests';
 
 /** Who's assigned to each meeting role. `roleKey` matches `RoleDef.key` in
  * `./roles.ts` — kept as a plain string on the wire since the role list is
@@ -27,7 +28,7 @@ export function toRoleHolderMap(
       const guest = guests.find((g) => g.id === row.guestId);
       map[row.roleKey] = {
         guestId: row.guestId,
-        name: guest ? `${guest.firstName} ${guest.lastName}` : 'Unknown guest',
+        name: guest ? getGuestFullName(guest) : 'Unknown guest',
       };
     }
   }
@@ -51,7 +52,7 @@ export function toAssigneeMap(
       map[row.roleKey] = {
         kind: 'guest',
         guestId: row.guestId,
-        name: guest ? `${guest.firstName} ${guest.lastName}` : 'Unknown guest',
+        name: guest ? getGuestFullName(guest) : 'Unknown guest',
       };
     }
   }

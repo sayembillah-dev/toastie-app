@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
 import { getPrimaryRole } from '@/lib/education/members';
+import { getGuestFullName } from '@/lib/people/guests';
 import {
   useCreateAttendanceGuestMutation,
   useDeleteAttendanceGuestMutation,
@@ -192,7 +193,7 @@ export function AttendanceTab({ meetingId }: AttendanceTabProps) {
       (members ?? [])
         .map((member) => ({
           id: member.id,
-          name: `${member.firstName} ${member.lastName}`,
+          name: getGuestFullName(member),
           role: getPrimaryRole(member),
           present: presentById[member.id] ?? false,
           isGuest: false,
@@ -217,7 +218,7 @@ export function AttendanceTab({ meetingId }: AttendanceTabProps) {
     const alreadyLinked = new Set((guests ?? []).map((guest) => guest.guestId).filter(Boolean));
     return (pipelineGuests ?? [])
       .filter((guest) => !alreadyLinked.has(guest.id))
-      .map((guest) => ({ value: guest.id, label: `${guest.firstName} ${guest.lastName}` }))
+      .map((guest) => ({ value: guest.id, label: getGuestFullName(guest) }))
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [pipelineGuests, guests]);
 

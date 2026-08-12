@@ -54,9 +54,10 @@ export class UpdateGuestDto {
   @MaxLength(60)
   firstName?: string;
 
+  // No `@MinLength` — a guest may have no last name on record, and an empty
+  // string is how the edit panel clears one.
   @IsOptional()
   @IsString()
-  @MinLength(1)
   @MaxLength(60)
   lastName?: string;
 
@@ -131,10 +132,12 @@ export class CreateGuestDto {
   @MaxLength(60)
   firstName!: string;
 
+  // Optional: the quick-add drawer only insists on a first name. Stored as an
+  // empty string rather than null so `Prospect.lastName` stays non-nullable.
+  @IsOptional()
   @IsString()
-  @MinLength(1)
   @MaxLength(60)
-  lastName!: string;
+  lastName?: string;
 
   @IsOptional()
   @IsEmail()

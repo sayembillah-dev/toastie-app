@@ -3,7 +3,12 @@ import Link from 'next/link';
 
 import { PersonAvatar } from '@/components/ui/person-avatar';
 import type { Guest } from '@/lib/people/guests';
-import { getGuestInitials, getGuestStage, getGuestSwatch } from '@/lib/people/guests';
+import {
+  getGuestFullName,
+  getGuestInitials,
+  getGuestStage,
+  getGuestSwatch,
+} from '@/lib/people/guests';
 
 interface GuestCardProps {
   guest: Guest;
@@ -20,7 +25,7 @@ function formatVisitDate(iso: string): string {
 }
 
 export function GuestCard({ guest }: GuestCardProps) {
-  const fullName = `${guest.firstName} ${guest.lastName}`;
+  const fullName = getGuestFullName(guest);
   const initials = getGuestInitials(guest);
   const swatch = getGuestSwatch(guest.id);
 

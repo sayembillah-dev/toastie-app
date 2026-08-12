@@ -82,7 +82,11 @@ async function toAssigneeJson(
       select: { firstName: true, lastName: true },
     });
     if (!guest) return null;
-    return { kind: 'guest', name: `${guest.firstName} ${guest.lastName}`, guestId };
+    return {
+      kind: 'guest',
+      name: [guest.firstName, guest.lastName].filter(Boolean).join(' '),
+      guestId,
+    };
   }
   return null;
 }

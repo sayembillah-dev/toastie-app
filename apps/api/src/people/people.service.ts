@@ -103,7 +103,7 @@ export class PeopleService {
       data: {
         clubId,
         firstName: dto.firstName.trim(),
-        lastName: dto.lastName.trim(),
+        lastName: dto.lastName?.trim() ?? '',
         email: dto.email?.trim() || null,
         phone: dto.phone ?? null,
         whatsapp: dto.whatsapp ?? null,
@@ -248,7 +248,7 @@ export class PeopleService {
     // separate step; if this fails, the membership still exists (today's
     // pre-fix behavior) and the admin can create an invite by hand instead.
     const invite = await this.invites.create(subject, existing.clubId, actorUserId, {
-      inviteeName: `${existing.firstName} ${existing.lastName}`,
+      inviteeName: [existing.firstName, existing.lastName].filter(Boolean).join(' '),
       roles: officerRoles,
       membershipId: membership.id,
     });

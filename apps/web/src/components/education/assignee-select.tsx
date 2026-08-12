@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react';
 
 import type { Member } from '@/lib/education/members';
 import type { Assignee } from '@/lib/education/planner';
+import { getGuestFullName } from '@/lib/people/guests';
 
 interface GuestOption {
   id: string;
@@ -61,7 +62,7 @@ export function AssigneeSelect({
 
   const groupedOptions = useMemo(() => {
     const memberOptions = members
-      .filter((m) => !needle || `${m.firstName} ${m.lastName}`.toLowerCase().includes(needle))
+      .filter((m) => !needle || getGuestFullName(m).toLowerCase().includes(needle))
       .map((m) => ({
         value: `m:${m.id}`,
         label: (
@@ -73,7 +74,7 @@ export function AssigneeSelect({
       }));
 
     const guestOptions = guests
-      .filter((g) => !needle || `${g.firstName} ${g.lastName}`.toLowerCase().includes(needle))
+      .filter((g) => !needle || getGuestFullName(g).toLowerCase().includes(needle))
       .map((g) => ({
         value: `gid:${g.id}`,
         label: (
@@ -156,7 +157,7 @@ export function AssigneeSelect({
           onChange({
             kind: 'guest',
             guestId,
-            name: guest ? `${guest.firstName} ${guest.lastName}` : 'Unknown guest',
+            name: guest ? getGuestFullName(guest) : 'Unknown guest',
           });
           return;
         }

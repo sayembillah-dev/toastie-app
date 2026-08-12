@@ -64,13 +64,20 @@ export function nameRules(label = 'Name'): Rule[] {
   ];
 }
 
-/** Required first/last name half of a two-column row where "Required" is
- * implied by the section header. */
-export function shortNameRules(label: string): Rule[] {
-  return [
-    requiredText(`Enter a ${label.toLowerCase()}`),
-    { max: NAME_MAX, message: `Keep it under ${NAME_MAX} characters` },
-  ];
+/** First/last name half of a two-column row. `required: true` uses antd's own
+ * required rule (with `whitespace` so a spaces-only entry still fails) rather
+ * than `requiredText`, so `requiredMark` renders the field as required instead
+ * of tagging it "(optional)". Pass `required: false` where only one half of
+ * the pair is mandatory — the guest drawer takes a first name alone. */
+export function shortNameRules(
+  label: string,
+  { required = true }: { required?: boolean } = {},
+): Rule[] {
+  const rules: Rule[] = [{ max: NAME_MAX, message: `Keep it under ${NAME_MAX} characters` }];
+  if (required) {
+    rules.unshift({ required: true, whitespace: true, message: `Enter a ${label.toLowerCase()}` });
+  }
+  return rules;
 }
 
 export function phoneRules({ required = true }: { required?: boolean } = {}): Rule[] {

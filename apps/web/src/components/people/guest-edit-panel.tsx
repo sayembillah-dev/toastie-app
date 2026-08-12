@@ -6,7 +6,12 @@ import { App, Button, Checkbox, Drawer, Form, Input, Select, Space, Upload } fro
 import { useEffect, useMemo, useState } from 'react';
 
 import type { Guest, GuestSocial, SocialPlatform } from '@/lib/people/guests';
-import { getGuestInitials, getGuestSwatch, SOCIAL_PLATFORMS } from '@/lib/people/guests';
+import {
+  getGuestFullName,
+  getGuestInitials,
+  getGuestSwatch,
+  SOCIAL_PLATFORMS,
+} from '@/lib/people/guests';
 import { uploadFile } from '@/lib/uploads';
 import { emailRules, normalizePhone, phoneRules, shortNameRules } from '@/lib/validation/rules';
 import { useUpdateGuestMutation } from '@/store/api';
@@ -20,7 +25,7 @@ interface GuestEditPanelProps {
 
 interface FormValues {
   firstName: string;
-  lastName: string;
+  lastName?: string;
   email?: string;
   phone?: string;
   whatsappSameAsPhone: boolean;
@@ -73,10 +78,9 @@ interface AvatarFieldProps {
  * and never through our API. */
 function AvatarField({ firstName, lastName, guestId, value, onChange, onError }: AvatarFieldProps) {
   const swatch = getGuestSwatch(guestId);
-  const initials = getGuestInitials({
-    firstName: firstName || '?',
-    lastName: lastName || '?',
-  });
+  // A guest can have a first name only, so fall back to `?` on the joined
+  // result rather than per-half — otherwise "Sayem" would render as "S?".
+  const initials = getGuestInitials({ firstName, lastName }) || '?';
 
   return (
     <div className="flex items-center gap-4">
@@ -188,7 +192,7 @@ export function GuestEditPanel({ guest, open, onClose }: GuestEditPanelProps) {
   const shownAvatar = avatarPending?.previewUrl ?? (avatarCleared ? undefined : guest.avatarUrl);
   const sameAsPhone = Form.useWatch('whatsappSameAsPhone', form);
 
-  const fullName = `${guest.firstName} ${guest.lastName}`;
+  const fullName = getGuestFullName(guest);
 
   async function handleSave() {
     let values: FormValues;
@@ -218,7 +222,7 @@ export function GuestEditPanel({ guest, open, onClose }: GuestEditPanelProps) {
       await updateGuest({
         guestId: guest.id,
         firstName: values.firstName.trim(),
-        lastName: values.lastName.trim(),
+        lastName: values.lastName?.trim() ?? '',
         email: values.email?.trim() || undefined,
         phone: values.phone ? normalizePhone(values.phone) : undefined,
         whatsapp: values.whatsappSameAsPhone
@@ -315,7 +319,11 @@ export function GuestEditPanel({ guest, open, onClose }: GuestEditPanelProps) {
           <Form.Item label="First name" name="firstName" rules={shortNameRules('First name')}>
             <Input placeholder="First name" />
           </Form.Item>
-          <Form.Item label="Last name" name="lastName" rules={shortNameRules('Last name')}>
+          <Form.Item
+            label="Last name"
+            name="lastName"
+            rules={shortNameRules('Last name', { required: false })}
+          >
             <Input placeholder="Last name" />
           </Form.Item>
         </div>

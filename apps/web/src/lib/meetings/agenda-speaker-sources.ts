@@ -1,7 +1,7 @@
 import type { Member, Pathway } from '@/lib/education/members';
 import { getProjectDuration } from '@/lib/education/pathways';
 import type { Guest } from '@/lib/people/guests';
-
+import { getGuestFullName } from '@/lib/people/guests';
 import type { PreparedSpeakerWire } from './prepared-speakers';
 import type { RoleAssignment } from './role-assignments';
 
@@ -34,12 +34,12 @@ function personName(
     const member = members.find((m) => m.id === membershipId);
     return {
       memberId: membershipId,
-      name: member ? `${member.firstName} ${member.lastName}` : 'Unknown member',
+      name: member ? getGuestFullName(member) : 'Unknown member',
     };
   }
   if (guestId) {
     const guest = guests.find((g) => g.id === guestId);
-    return { guestId, name: guest ? `${guest.firstName} ${guest.lastName}` : 'Unknown guest' };
+    return { guestId, name: guest ? getGuestFullName(guest) : 'Unknown guest' };
   }
   return undefined;
 }

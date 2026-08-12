@@ -22,6 +22,7 @@ import {
   getContactMethod,
 } from '@/lib/people/contact-logs';
 import type { Guest } from '@/lib/people/guests';
+import { getGuestFullName } from '@/lib/people/guests';
 import {
   useCreateContactLogMutation,
   useDeleteContactLogMutation,
@@ -110,7 +111,7 @@ export function ContactLogsDrawer({ guest, open, onClose }: ContactLogsDrawerPro
     onClose();
   };
 
-  const fullName = `${guest.firstName} ${guest.lastName}`;
+  const fullName = getGuestFullName(guest);
 
   return (
     <Drawer

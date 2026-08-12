@@ -17,7 +17,12 @@ import { GuestInfo } from '@/components/people/guest-info';
 import { AccessGate } from '@/components/permissions/access-gate';
 import { PersonAvatar } from '@/components/ui/person-avatar';
 import type { Guest } from '@/lib/people/guests';
-import { getGuestInitials, getGuestStage, getGuestSwatch } from '@/lib/people/guests';
+import {
+  getGuestFullName,
+  getGuestInitials,
+  getGuestStage,
+  getGuestSwatch,
+} from '@/lib/people/guests';
 import { useGetGuestQuery } from '@/store/api';
 import { getApiErrorMessage, isNotFoundError } from '@/store/api-error';
 
@@ -87,7 +92,7 @@ function StageBadge({ stage }: { stage: Guest['stage'] }) {
 }
 
 function ProfileHeader({ guest }: { guest: Guest }) {
-  const fullName = `${guest.firstName} ${guest.lastName}`;
+  const fullName = getGuestFullName(guest);
   const initials = getGuestInitials(guest);
   const swatch = getGuestSwatch(guest.id);
   const visitLabel =
@@ -262,7 +267,7 @@ export function GuestProfileScreen() {
 
   return (
     <>
-      <PageBreadcrumb label={`${guest.firstName} ${guest.lastName}`} />
+      <PageBreadcrumb label={getGuestFullName(guest)} />
       <AccessGate resource="guest">
         <ProfileContent guest={guest} />
       </AccessGate>

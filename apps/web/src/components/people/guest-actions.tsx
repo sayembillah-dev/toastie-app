@@ -19,7 +19,7 @@ import { ContactLogsDrawer } from '@/components/people/contact-logs-drawer';
 import { GuestEditPanel } from '@/components/people/guest-edit-panel';
 import { VisitLogsDrawer } from '@/components/people/visit-logs-drawer';
 import type { Guest, GuestStage } from '@/lib/people/guests';
-import { GUEST_STAGES } from '@/lib/people/guests';
+import { GUEST_STAGES, getGuestFullName } from '@/lib/people/guests';
 import { useDeleteGuestMutation, useUpdateGuestMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -58,7 +58,7 @@ function eligibleStages(current: GuestStage): (typeof GUEST_STAGES)[number][] {
 }
 
 function MoveStageMenu({ guest, onSelectStage, onConvert, onClose }: MoveStageMenuProps) {
-  const fullName = `${guest.firstName} ${guest.lastName}`;
+  const fullName = getGuestFullName(guest);
   const canConvert = Boolean(guest.email);
   const stages = eligibleStages(guest.stage);
 
@@ -231,7 +231,7 @@ export function GuestActions({ guest }: GuestActionsProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteGuest, { isLoading: isDeleting }] = useDeleteGuestMutation();
 
-  const fullName = `${guest.firstName} ${guest.lastName}`;
+  const fullName = getGuestFullName(guest);
 
   /* Runs the delete inside the confirm modal's `onOk` so the dialog stays open
    * with its own spinner while the request is in flight — the user gets a

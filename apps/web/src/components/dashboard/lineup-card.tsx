@@ -6,6 +6,7 @@ import type { Meeting } from '@/lib/meetings/meetings';
 import type { RoleAssignment } from '@/lib/meetings/role-assignments';
 import { buildRoles } from '@/lib/meetings/roles';
 import type { Guest } from '@/lib/people/guests';
+import { getGuestFullName } from '@/lib/people/guests';
 
 function initialsOf(name: string): string {
   const parts = name.split(' ').filter(Boolean);
@@ -61,11 +62,7 @@ export function LineupCard({
           const assignment = assignmentByRole.get(role.key);
           const member = assignment?.membershipId ? membersById.get(assignment.membershipId) : null;
           const guest = assignment?.guestId ? guestsById.get(assignment.guestId) : null;
-          const name = member
-            ? `${member.firstName} ${member.lastName}`
-            : guest
-              ? `${guest.firstName} ${guest.lastName}`
-              : '';
+          const name = member ? getGuestFullName(member) : guest ? getGuestFullName(guest) : '';
           const isMe = Boolean(member && currentMemberId && member.id === currentMemberId);
 
           return (

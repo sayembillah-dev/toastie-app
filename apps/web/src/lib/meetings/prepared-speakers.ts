@@ -1,6 +1,7 @@
 import type { Pathway } from '@/lib/education/members';
 import type { Assignee } from '@/lib/education/planner';
 import type { DraftSpeaker } from '@/lib/meetings/draft';
+import { getGuestFullName } from '@/lib/people/guests';
 
 /** A prepared speech slot on a meeting — backed by `MeetingSpeaker` on the
  * API, one row per order (1–3), matching the planner's Speaker 1–3 columns
@@ -54,7 +55,7 @@ function resolveAssignee(
     return {
       kind: 'guest',
       guestId,
-      name: guest ? `${guest.firstName} ${guest.lastName}` : 'Unknown guest',
+      name: guest ? getGuestFullName(guest) : 'Unknown guest',
     };
   }
   return null;
@@ -85,7 +86,7 @@ export function toDraftSpeakers(
   const guestName = (guestId: string | null): string | undefined => {
     if (!guestId) return undefined;
     const guest = guests.find((g) => g.id === guestId);
-    return guest ? `${guest.firstName} ${guest.lastName}` : undefined;
+    return guest ? getGuestFullName(guest) : undefined;
   };
 
   return [...speakers]

@@ -9,6 +9,7 @@ import { InviteLinkResult } from '@/components/club-admin/invite-modal';
 import type { OfficerRole } from '@/lib/education/members';
 import { OFFICER_ROLES } from '@/lib/education/members';
 import type { ConvertGuestResult } from '@/lib/people/guests';
+import { getGuestFullName } from '@/lib/people/guests';
 import {
   useCheckGuestMatchQuery,
   useConvertGuestToMemberMutation,
@@ -68,7 +69,7 @@ function ModalBody({
         .filter((guest) => guest.stage !== 'joined-club')
         .map((guest) => ({
           value: guest.id,
-          label: `${guest.firstName} ${guest.lastName}`,
+          label: getGuestFullName(guest),
         })),
     [guests],
   );
@@ -110,7 +111,7 @@ function ModalBody({
         <div className="flex flex-col gap-1.5">
           <span className="text-sm font-medium text-ink">Guest</span>
           <p className="text-sm text-ink-soft">
-            {fixedGuest ? `${fixedGuest.firstName} ${fixedGuest.lastName}` : 'Loading…'}
+            {fixedGuest ? getGuestFullName(fixedGuest) : 'Loading…'}
           </p>
         </div>
       ) : (
