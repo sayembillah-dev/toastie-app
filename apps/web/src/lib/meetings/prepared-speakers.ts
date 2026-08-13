@@ -27,6 +27,9 @@ export interface PreparedSpeakerWire {
   pathway: string | null;
   project: string | null;
   notes: string | null;
+  /** Count of public evaluation submissions received on this speaker's
+   * shareable link. */
+  evaluationCount: number;
 }
 
 /** Every field independently omittable — the tab saves whichever fields

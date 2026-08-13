@@ -13,6 +13,8 @@ export const STORAGE_SURFACES = [
   'inventory',
   'avatar',
   'guestAvatar',
+  'evaluationAudio',
+  'evaluationImage',
 ] as const;
 export type StorageSurface = (typeof STORAGE_SURFACES)[number];
 
@@ -21,6 +23,17 @@ export function isStorageSurface(value: string): value is StorageSurface {
 }
 
 const IMAGE_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const;
+
+/** `MediaRecorder`-produced audio, plus the common formats a file picker
+ * (the `accept="audio/*"` fallback in `AudioTab`) might hand back. */
+const AUDIO_MIME_TYPES = [
+  'audio/webm',
+  'audio/mp4',
+  'audio/ogg',
+  'audio/mpeg',
+  'audio/wav',
+  'audio/aac',
+] as const;
 
 const MB = 1024 * 1024;
 
@@ -93,6 +106,24 @@ export const SURFACE_RULES: Record<StorageSurface, SurfaceRule> = {
     mimeTypes: IMAGE_MIME_TYPES,
     maxBytes: 5 * MB,
   },
+  // Not reachable via the authenticated `/uploads/sign` endpoint — see the
+  // explicit rejection in `UploadsService.sign`. Signed only by
+  // `PublicEvaluationsController`, gated by the meeting's share token rather
+  // than a permission grant, since the caller is anonymous.
+  evaluationAudio: {
+    resource: null,
+    actions: [],
+    scope: 'club',
+    mimeTypes: AUDIO_MIME_TYPES,
+    maxBytes: 25 * MB,
+  },
+  evaluationImage: {
+    resource: null,
+    actions: [],
+    scope: 'club',
+    mimeTypes: IMAGE_MIME_TYPES,
+    maxBytes: 12 * MB,
+  },
 };
 
 /** Ceiling for a file on the `local-db` backend, where the bytes become a
@@ -124,10 +155,24 @@ const EXTENSIONS: Record<string, string> = {
   'text/plain': 'txt',
   'text/csv': 'csv',
   'application/zip': 'zip',
+  'audio/webm': 'webm',
+  'audio/mp4': 'm4a',
+  'audio/ogg': 'ogg',
+  'audio/mpeg': 'mp3',
+  'audio/wav': 'wav',
+  'audio/aac': 'aac',
 };
 
+/** `MediaRecorder.mimeType` carries a codecs parameter (e.g.
+ * `audio/webm;codecs=opus`) that a plain-string mime-type list or extension
+ * lookup won't match — strip it before comparing against either. */
+export function stripCodecs(mimeType: string): string {
+  const idx = mimeType.indexOf(';');
+  return idx === -1 ? mimeType : mimeType.slice(0, idx);
+}
+
 export function extensionFor(mimeType: string): string {
-  return EXTENSIONS[mimeType] ?? 'bin';
+  return EXTENSIONS[stripCodecs(mimeType)] ?? 'bin';
 }
 
 /** True when a stored column value is a legacy inline data-URL rather than an

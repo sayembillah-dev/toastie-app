@@ -15,12 +15,13 @@ type SignResponse =
   | { mode: 's3'; url: string; key: string; expiresInSeconds: number }
   | { mode: 'inline' };
 
-/** Reads a file into a `data:` URL.
+/** Reads a file (or any `Blob` — e.g. a `MediaRecorder` audio recording,
+ * which never has a `File` wrapper) into a `data:` URL.
  *
  * Still exported because it is the `local-db` backend's entire storage
  * strategy — see the `inline` branch of `uploadFile`. On the `s3` backend
  * nothing calls it. */
-export function fileToDataUrl(file: File): Promise<string> {
+export function fileToDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(reader.error ?? new Error('Could not read the file'));

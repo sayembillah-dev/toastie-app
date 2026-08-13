@@ -35,6 +35,7 @@ export class PreparedSpeakersService {
     const rows = await this.prisma.meetingSpeaker.findMany({
       where: { clubId: meeting.clubId, meetingId: meeting.id },
       orderBy: { order: 'asc' },
+      include: { _count: { select: { evaluationSubmissions: true } } },
     });
     return rows.map(toPreparedSpeakerWire);
   }

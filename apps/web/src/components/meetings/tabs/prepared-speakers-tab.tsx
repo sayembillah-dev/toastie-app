@@ -10,14 +10,13 @@ import {
   TrashSimple,
 } from '@phosphor-icons/react/dist/ssr';
 import { App, Button, Input, InputNumber, Modal, Popconfirm, QRCode, Select, Tooltip } from 'antd';
-import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { AssigneeSelect } from '@/components/education/assignee-select';
 import { ReadOnly } from '@/components/permissions/read-only';
 import type { Member, Pathway } from '@/lib/education/members';
 import { PATHWAYS } from '@/lib/education/members';
 import type { ProjectDefinition } from '@/lib/education/pathways';
 import { findProject, getProjectDuration, getProjectsForPathway } from '@/lib/education/pathways';
-import { readSubmissions, subscribeToSubmissions } from '@/lib/evaluation/storage';
 import type { Meeting } from '@/lib/meetings/meetings';
 import {
   evaluatorAssignee,
@@ -210,20 +209,10 @@ function EvaluationQrModal({
 }
 
 /** Small pill shown next to the status/QR cluster once at least one public
- * evaluation has landed for a speaker. Reads localStorage via
- * `useSyncExternalStore` so a submission from the shared link — or from a
- * phone using the same-origin browser — updates the count without a reload. */
-function FeedbackBadge({ meetingId, speakerId }: { meetingId: string; speakerId: string }) {
-  const subscribe = useCallback(
-    (notify: () => void) => subscribeToSubmissions(meetingId, speakerId, notify),
-    [meetingId, speakerId],
-  );
-  const submissions = useSyncExternalStore(
-    subscribe,
-    () => readSubmissions(meetingId, speakerId),
-    () => [],
-  );
-  const count = submissions.length;
+ * evaluation has landed for a speaker. `count` comes straight off the
+ * `getPreparedSpeakers` list response — refetches on its own schedule like
+ * the rest of the tab, no separate subscription needed. */
+function FeedbackBadge({ count }: { count: number }) {
   if (count === 0) return null;
   return (
     <Tooltip title={`${count} evaluation${count === 1 ? '' : 's'} received — see the Me page`}>
@@ -376,7 +365,7 @@ function SpeakerCard({
         >
           {status.label}
         </span>
-        <FeedbackBadge meetingId={meetingId} speakerId={speaker.id} />
+        <FeedbackBadge count={speaker.evaluationCount} />
         <Tooltip title="Show evaluation QR">
           <Button
             type="text"

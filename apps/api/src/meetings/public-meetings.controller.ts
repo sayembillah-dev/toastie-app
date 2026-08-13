@@ -22,6 +22,32 @@ export interface PublicAgendaRoleWire {
   name: string;
 }
 
+/** Wire shape for `/public/meetings/:id/speakers/:speakerId` — backs the
+ * anonymous evaluation form's header. Gated by the same share token as the
+ * meeting lookup (not `published` status like the agenda endpoint below),
+ * since a speech evaluation link is meant to work while the meeting is
+ * still a draft. */
+export interface PublicSpeakerWire {
+  id: string;
+  title: string;
+  pathway: string | null;
+  project: string | null;
+  duration: number | null;
+  speakerName: string;
+  evaluatorName: string;
+}
+
+/** Wire shape for `/public/meetings/:id/roles/:role` — backs the public
+ * Ah Counter/Timer/Grammarian pages' identity gate. Same (id, token) gate as
+ * `getSpeaker` above. `name` is `''` when nobody is assigned to that role
+ * yet — the client treats that the same as "no known name" (generic
+ * "confirm who you are" prompt), not a 404, since the role page itself is
+ * still valid before anyone's been assigned. */
+export interface PublicRoleAssignmentWire {
+  roleKey: string;
+  name: string;
+}
+
 export interface PublicAgendaSpeakerWire {
   order: number;
   title: string;
@@ -102,6 +128,91 @@ export class PublicMeetingsController {
       dateTime: row.dateTime.toISOString(),
       theme: row.theme,
       clubName: row.club.name,
+    };
+  }
+
+  /** Backs the evaluation form's header — same (id, token) gate as `get()`
+   * above, plus confirming the speaker slot belongs to this meeting. */
+  @Get(':meetingId/speakers/:speakerId')
+  async getSpeaker(
+    @Param('meetingId') meetingId: string,
+    @Param('speakerId') speakerId: string,
+    @Query('t') token: string | undefined,
+  ): Promise<PublicSpeakerWire> {
+    if (!token) {
+      throw new NotFoundException('No meeting matches that share link');
+    }
+    const meeting = await this.prisma.meeting.findFirst({
+      where: { id: meetingId, shareToken: token },
+      select: { clubId: true },
+    });
+    if (!meeting) {
+      throw new NotFoundException('No meeting matches that share link');
+    }
+
+    const speaker = await this.prisma.meetingSpeaker.findFirst({
+      where: { id: speakerId, clubId: meeting.clubId, meetingId },
+      select: {
+        id: true,
+        title: true,
+        pathway: true,
+        project: true,
+        duration: true,
+        membership: { select: { firstName: true, lastName: true } },
+        guest: { select: { firstName: true, lastName: true } },
+        evaluatorMembership: { select: { firstName: true, lastName: true } },
+        evaluatorGuest: { select: { firstName: true, lastName: true } },
+      },
+    });
+    if (!speaker) {
+      throw new NotFoundException('No speaker matches this meeting');
+    }
+
+    return {
+      id: speaker.id,
+      title: speaker.title,
+      pathway: speaker.pathway,
+      project: speaker.project,
+      duration: speaker.duration,
+      speakerName: fullName(speaker.membership ?? speaker.guest),
+      evaluatorName: fullName(speaker.evaluatorMembership ?? speaker.evaluatorGuest),
+    };
+  }
+
+  /** Backs the Ah Counter/Timer/Grammarian pages' identity gate — same
+   * (id, token) gate as `getSpeaker`. `role` is the `RoleKind` slug
+   * (`ah-counter`/`timer`/`grammarian`), which is string-identical to
+   * `MeetingRoleAssignment.roleKey` for these roles (see `lib/meetings/roles.ts`
+   * on the client). */
+  @Get(':meetingId/roles/:role')
+  async getRoleAssignment(
+    @Param('meetingId') meetingId: string,
+    @Param('role') role: string,
+    @Query('t') token: string | undefined,
+  ): Promise<PublicRoleAssignmentWire> {
+    if (!token) {
+      throw new NotFoundException('No meeting matches that share link');
+    }
+    const meeting = await this.prisma.meeting.findFirst({
+      where: { id: meetingId, shareToken: token },
+      select: { clubId: true },
+    });
+    if (!meeting) {
+      throw new NotFoundException('No meeting matches that share link');
+    }
+
+    const assignment = await this.prisma.meetingRoleAssignment.findFirst({
+      where: { meetingId, clubId: meeting.clubId, roleKey: role },
+      select: {
+        roleKey: true,
+        membership: { select: { firstName: true, lastName: true } },
+        guest: { select: { firstName: true, lastName: true } },
+      },
+    });
+
+    return {
+      roleKey: role,
+      name: assignment ? fullName(assignment.membership ?? assignment.guest) : '',
     };
   }
 

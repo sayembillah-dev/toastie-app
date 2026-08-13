@@ -551,15 +551,16 @@ model Meeting {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
-  club                Club                     @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  visitLogs           VisitLog[]
-  checklistItems      ChecklistItem[]          @relation("MeetingChecklist")
-  roleAssignments     MeetingRoleAssignment[]  @relation("MeetingRoles")
-  speakers            MeetingSpeaker[]         @relation("MeetingSpeakers")
-  tableTopicQuestions TableTopicQuestion[]     @relation("MeetingTableTopics")
-  attendanceRecords   MeetingAttendance[]      @relation("MeetingAttendance")
-  guestAttendance     MeetingGuestAttendance[] @relation("MeetingGuestAttendance")
-  plannerRows         PlannerRow[]
+  club                  Club                     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  visitLogs             VisitLog[]
+  checklistItems        ChecklistItem[]          @relation("MeetingChecklist")
+  roleAssignments       MeetingRoleAssignment[]  @relation("MeetingRoles")
+  speakers              MeetingSpeaker[]         @relation("MeetingSpeakers")
+  tableTopicQuestions   TableTopicQuestion[]     @relation("MeetingTableTopics")
+  attendanceRecords     MeetingAttendance[]      @relation("MeetingAttendance")
+  guestAttendance       MeetingGuestAttendance[] @relation("MeetingGuestAttendance")
+  plannerRows           PlannerRow[]
+  evaluationSubmissions EvaluationSubmission[]   @relation("MeetingEvaluationSubmissions")
 
   @@unique([clubId, id])
   @@unique([clubId, meetingNumber])
@@ -616,13 +617,44 @@ model MeetingSpeaker {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
-  meeting             Meeting     @relation("MeetingSpeakers", fields: [clubId, meetingId], references: [clubId, id], onDelete: Cascade)
-  membership          Membership? @relation("MeetingSpeakerAsSpeaker", fields: [clubId, membershipId], references: [clubId, id], onDelete: SetNull)
-  guest               Prospect?   @relation("MeetingSpeakerGuestAsSpeaker", fields: [clubId, guestId], references: [clubId, id], onDelete: SetNull)
-  evaluatorMembership Membership? @relation("MeetingSpeakerAsEvaluator", fields: [clubId, evaluatorMembershipId], references: [clubId, id], onDelete: SetNull)
-  evaluatorGuest      Prospect?   @relation("MeetingSpeakerGuestAsEvaluator", fields: [clubId, evaluatorGuestId], references: [clubId, id], onDelete: SetNull)
+  meeting               Meeting                @relation("MeetingSpeakers", fields: [clubId, meetingId], references: [clubId, id], onDelete: Cascade)
+  membership            Membership?            @relation("MeetingSpeakerAsSpeaker", fields: [clubId, membershipId], references: [clubId, id], onDelete: SetNull)
+  guest                 Prospect?              @relation("MeetingSpeakerGuestAsSpeaker", fields: [clubId, guestId], references: [clubId, id], onDelete: SetNull)
+  evaluatorMembership   Membership?            @relation("MeetingSpeakerAsEvaluator", fields: [clubId, evaluatorMembershipId], references: [clubId, id], onDelete: SetNull)
+  evaluatorGuest        Prospect?              @relation("MeetingSpeakerGuestAsEvaluator", fields: [clubId, evaluatorGuestId], references: [clubId, id], onDelete: SetNull)
+  evaluationSubmissions EvaluationSubmission[] @relation("MeetingSpeakerEvaluationSubmissions")
 
   @@unique([clubId, meetingId, order])
+  @@unique([clubId, id])
+  @@index([clubId, meetingId])
+}
+
+/// One evaluator's feedback on a prepared speech, submitted through the
+/// anonymous public evaluation link (`/meetings/:id/evaluate/:speakerId`).
+/// Deliberately separate from `Evaluation` above — that model is an
+/// unrelated, already-shipped feature (self-logged speech history), and its
+/// shape (`strengths`/`improvement`/`overallRating`) doesn't fit free-form
+/// audio/image/text feedback from an anonymous evaluator.
+model EvaluationSubmission {
+  id                  String   @id @default(cuid())
+  clubId              String
+  meetingId           String
+  meetingSpeakerId    String
+  evaluatorName       String
+  isAssignedEvaluator Boolean  @default(false)
+  text                String?  @db.Text
+  /// S3 object key, or (on the `local-db` backend) an inline `data:` URL —
+  /// same dual-read convention as every other converted upload surface.
+  audioKey            String?
+  audioMimeType       String?
+  audioDurationSec    Int?
+  imageKeys           String[] @default([])
+  submittedAt         DateTime @default(now())
+
+  meeting        Meeting        @relation("MeetingEvaluationSubmissions", fields: [clubId, meetingId], references: [clubId, id], onDelete: Cascade)
+  meetingSpeaker MeetingSpeaker @relation("MeetingSpeakerEvaluationSubmissions", fields: [clubId, meetingSpeakerId], references: [clubId, id], onDelete: Cascade)
+
+  @@index([clubId, meetingSpeakerId])
   @@index([clubId, meetingId])
 }
 

@@ -18,6 +18,12 @@ import type {
   SpeechSlotRequest,
 } from '@/lib/education/speech-slot-requests';
 import type {
+  EvaluationSubmissionWire,
+  SignEvaluationUploadInput,
+  SignedEvaluationUpload,
+  SubmitEvaluationInput,
+} from '@/lib/evaluation/api-types';
+import type {
   BudgetLine,
   CreateBudgetLineInput,
   UpdateBudgetLineInput,
@@ -64,6 +70,8 @@ import type {
   CreateMeetingInput,
   Meeting,
   PublicMeeting,
+  PublicRoleAssignment,
+  PublicSpeaker,
   UpdateMeetingInput,
 } from '@/lib/meetings/meetings';
 import type {
@@ -188,6 +196,7 @@ export const toastlyApi = createApi({
     'OrgAssignment',
     'Profile',
     'ClubProfile',
+    'ReceivedEvaluation',
   ],
   endpoints: (build) => ({
     /* `includeRemoved` opts into seeing soft-removed members — the Club Admin
@@ -522,12 +531,67 @@ export const toastlyApi = createApi({
       }),
     }),
 
+    /* Backs the evaluation form's header. Same no-auth routing and token
+     * gate as `getPublicMeeting` — works while the meeting is still a draft. */
+    getPublicSpeaker: build.query<
+      PublicSpeaker,
+      { meetingId: string; speakerId: string; token: string }
+    >({
+      query: ({ meetingId, speakerId, token }) => ({
+        url: `/public/meetings/${meetingId}/speakers/${speakerId}?t=${encodeURIComponent(token)}`,
+        method: 'GET',
+      }),
+    }),
+
+    /* Backs the Ah Counter/Timer/Grammarian pages' identity gate. Same
+     * no-auth routing and token gate as `getPublicMeeting`. */
+    getPublicRoleAssignment: build.query<
+      PublicRoleAssignment,
+      { meetingId: string; role: string; token: string }
+    >({
+      query: ({ meetingId, role, token }) => ({
+        url: `/public/meetings/${meetingId}/roles/${role}?t=${encodeURIComponent(token)}`,
+        method: 'GET',
+      }),
+    }),
+
     /* Public agenda endpoint — matched by `isPublicUrl` the same as
      * `getPublicMeeting`, but gated by the meeting's `published` status
      * rather than a share token: anyone with the meeting id can view it
      * once it's published. A draft meeting 404s the same as an unknown id. */
     getPublicMeetingAgenda: build.query<PublicMeetingAgenda, string>({
       query: (meetingId) => ({ url: `/public/meetings/${meetingId}/agenda`, method: 'GET' }),
+    }),
+
+    /* Mints a presigned PUT for the evaluator's audio/image before `submit`.
+     * `/public/*` — same no-auth routing as `getPublicMeeting`. */
+    signPublicEvaluationUpload: build.mutation<SignedEvaluationUpload, SignEvaluationUploadInput>({
+      query: ({ meetingId, speakerId, token, ...body }) => ({
+        url: `/public/meetings/${meetingId}/speakers/${speakerId}/evaluations/sign?t=${encodeURIComponent(token)}`,
+        method: 'POST',
+        body,
+      }),
+    }),
+
+    /* Re-validates the share token server-side on every call — see
+     * `PublicEvaluationsController`. Not tagged/invalidated: the submitter
+     * has no cache entry of their own to refresh (they're anonymous), and
+     * the officer-facing badge count comes from `getPreparedSpeakers`
+     * instead, refetched on its own schedule. */
+    submitPublicEvaluation: build.mutation<{ id: string }, SubmitEvaluationInput>({
+      query: ({ meetingId, speakerId, token, ...body }) => ({
+        url: `/public/meetings/${meetingId}/speakers/${speakerId}/evaluations?t=${encodeURIComponent(token)}`,
+        method: 'POST',
+        body,
+      }),
+    }),
+
+    /* Feeds the Me page's "Peer feedback" section — evaluations this member
+     * received through their shareable evaluation link. Authenticated: a
+     * member sees their own (own-scope grant), officers see the club's. */
+    getReceivedEvaluations: build.query<EvaluationSubmissionWire[], string>({
+      query: (memberId) => ({ url: `/members/${memberId}/received-evaluations`, method: 'GET' }),
+      providesTags: (_rows, _error, memberId) => [{ type: 'ReceivedEvaluation', id: memberId }],
     }),
 
     /* Only the roster changes — a brand-new meeting has no detail cache entry
@@ -2418,7 +2482,12 @@ export const {
   useGetMeetingsQuery,
   useGetMeetingQuery,
   useGetPublicMeetingQuery,
+  useGetPublicSpeakerQuery,
+  useGetPublicRoleAssignmentQuery,
   useGetPublicMeetingAgendaQuery,
+  useSignPublicEvaluationUploadMutation,
+  useSubmitPublicEvaluationMutation,
+  useGetReceivedEvaluationsQuery,
   useCreateMeetingMutation,
   useUpdateMeetingMutation,
   useDeleteMeetingMutation,

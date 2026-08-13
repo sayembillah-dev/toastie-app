@@ -8,11 +8,11 @@ import {
   TextAa,
   User,
 } from '@phosphor-icons/react/dist/ssr';
-import { Modal } from 'antd';
-import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
+import { Modal, Spin } from 'antd';
+import { useMemo, useState } from 'react';
 
-import type { StoredEvaluationSubmission } from '@/lib/evaluation/storage';
-import { readSubmissionsForMember, subscribeToAllSubmissions } from '@/lib/evaluation/storage';
+import type { EvaluationSubmissionWire } from '@/lib/evaluation/api-types';
+import { useGetReceivedEvaluationsQuery } from '@/store/api';
 
 interface PublicFeedbackFeedProps {
   memberId: string;
@@ -20,10 +20,10 @@ interface PublicFeedbackFeedProps {
 
 interface SlotGroup {
   meetingId: string;
-  speakerId: string;
-  meetingNumber?: number;
-  speechTitle?: string;
-  submissions: StoredEvaluationSubmission[];
+  meetingSpeakerId: string;
+  meetingNumber: number;
+  speechTitle: string;
+  submissions: EvaluationSubmissionWire[];
 }
 
 const SUBMITTED_AT_FMT = new Intl.DateTimeFormat('en-GB', {
@@ -50,30 +50,23 @@ function formatDuration(sec: number | undefined): string {
   return `${mm}:${String(ss).padStart(2, '0')}`;
 }
 
-/** Groups the flat submission list by (meetingId, speakerId) — a single
- * speech slot may have received feedback from several evaluators. Latest
- * slot first (by newest submission), latest submission first inside. */
-function groupSubmissions(list: StoredEvaluationSubmission[]): SlotGroup[] {
+/** Groups the flat submission list by (meetingId, meetingSpeakerId) — a
+ * single speech slot may have received feedback from several evaluators.
+ * Latest slot first (by newest submission), latest submission first inside. */
+function groupSubmissions(list: EvaluationSubmissionWire[]): SlotGroup[] {
   const grouped = new Map<string, SlotGroup>();
   for (const entry of list) {
-    const key = `${entry.meetingId}:${entry.speakerId}`;
+    const key = `${entry.meetingId}:${entry.meetingSpeakerId}`;
     let group = grouped.get(key);
     if (!group) {
       group = {
         meetingId: entry.meetingId,
-        speakerId: entry.speakerId,
+        meetingSpeakerId: entry.meetingSpeakerId,
         meetingNumber: entry.meetingNumber,
         speechTitle: entry.speechTitle,
         submissions: [],
       };
       grouped.set(key, group);
-    } else {
-      /* If a later submission carries a fresher title/meetingNumber (early
-       * writes may have missed the stamp) prefer that one. */
-      if (!group.speechTitle && entry.speechTitle) group.speechTitle = entry.speechTitle;
-      if (group.meetingNumber == null && entry.meetingNumber != null) {
-        group.meetingNumber = entry.meetingNumber;
-      }
     }
     group.submissions.push(entry);
   }
@@ -90,15 +83,15 @@ function groupSubmissions(list: StoredEvaluationSubmission[]): SlotGroup[] {
 }
 
 interface SubmissionCardProps {
-  submission: StoredEvaluationSubmission;
-  onOpenImage: (dataUrl: string) => void;
+  submission: EvaluationSubmissionWire;
+  onOpenImage: (url: string) => void;
 }
 
 function SubmissionCard({ submission, onOpenImage }: SubmissionCardProps) {
   const [expanded, setExpanded] = useState(true);
 
-  const hasAudio = !!submission.audioDataUrl;
-  const hasImages = submission.imageDataUrls.length > 0;
+  const hasAudio = !!submission.audioUrl;
+  const hasImages = submission.imageUrls.length > 0;
   const hasText = !!submission.text && submission.text.length > 0;
 
   const chips: { icon: React.ReactNode; label: string }[] = [];
@@ -112,7 +105,7 @@ function SubmissionCard({ submission, onOpenImage }: SubmissionCardProps) {
   if (hasImages) {
     chips.push({
       icon: <ImageSquare size={11} weight="fill" />,
-      label: `${submission.imageDataUrls.length} image${submission.imageDataUrls.length === 1 ? '' : 's'}`,
+      label: `${submission.imageUrls.length} image${submission.imageUrls.length === 1 ? '' : 's'}`,
     });
   }
   if (hasText) {
@@ -135,8 +128,8 @@ function SubmissionCard({ submission, onOpenImage }: SubmissionCardProps) {
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-xs font-semibold text-ink">
-            {submission.evaluator.name || 'Anonymous'}
-            {submission.evaluator.isAssignedEvaluator ? (
+            {submission.evaluatorName || 'Anonymous'}
+            {submission.isAssignedEvaluator ? (
               <span className="ml-1.5 inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 align-middle text-[9px] font-semibold uppercase tracking-wider text-emerald-700">
                 Assigned
               </span>
@@ -169,23 +162,23 @@ function SubmissionCard({ submission, onOpenImage }: SubmissionCardProps) {
 
       {expanded ? (
         <div className="flex flex-col gap-3 border-t border-line px-3 py-3">
-          {hasAudio && submission.audioDataUrl ? (
+          {hasAudio && submission.audioUrl ? (
             // biome-ignore lint/a11y/useMediaCaption: user-recorded spoken feedback — no caption track exists.
-            <audio controls src={submission.audioDataUrl} className="w-full" preload="metadata" />
+            <audio controls src={submission.audioUrl} className="w-full" preload="metadata" />
           ) : null}
 
           {hasImages ? (
             <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {submission.imageDataUrls.map((dataUrl, index) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: images are content-addressed by their data URL; index is stable per submission.
+              {submission.imageUrls.map((url, index) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: images are positional within one submission, which never reorders.
                 <li key={index} className="overflow-hidden rounded-md border border-line bg-fill">
                   <button
                     type="button"
-                    onClick={() => onOpenImage(dataUrl)}
+                    onClick={() => onOpenImage(url)}
                     className="block w-full transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700"
                     aria-label={`Open image ${index + 1} in full size`}
                   >
-                    <Thumb src={dataUrl} alt={`Image ${index + 1}`} />
+                    <Thumb src={url} alt={`Image ${index + 1}`} />
                   </button>
                 </li>
               ))}
@@ -204,7 +197,8 @@ function SubmissionCard({ submission, onOpenImage }: SubmissionCardProps) {
 }
 
 /** Extracted so the biome/next-img suppression applies to a single, obvious
- * line — thumbnails come from data URLs that next/image can't optimise. */
+ * line — thumbnails come from presigned S3 URLs (or, on `local-db`, data
+ * URLs) that next/image can't optimise. */
 function Thumb({ src, alt }: { src: string; alt: string }) {
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={src} alt={alt} className="aspect-square w-full object-cover" />;
@@ -236,26 +230,24 @@ function ImagePreview({ src, onClose }: { src: string | null; onClose: () => voi
 
 /** Public evaluations the current member has received via the shareable
  * evaluation link. Grouped per speech slot; each card lists the individual
- * submissions with inline audio / image / text viewers.
- *
- * Reads from localStorage via `useSyncExternalStore` so a submission made in
- * the same tab (e.g. a phone open next to the desk browser via the same URL
- * origin) refreshes this feed without a manual reload. */
+ * submissions with inline audio / image / text viewers. */
 export function PublicFeedbackFeed({ memberId }: PublicFeedbackFeedProps) {
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
 
-  const subscribe = useCallback((notify: () => void) => subscribeToAllSubmissions(notify), []);
-  const submissions = useSyncExternalStore(
-    subscribe,
-    () => readSubmissionsForMember(memberId),
-    () => [] as StoredEvaluationSubmission[],
-  );
+  const { data: submissions, isLoading } = useGetReceivedEvaluationsQuery(memberId);
 
-  const groups = useMemo(() => groupSubmissions(submissions), [submissions]);
+  const groups = useMemo(() => groupSubmissions(submissions ?? []), [submissions]);
 
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-6">
+        <Spin />
+      </div>
+    );
+  }
   if (groups.length === 0) return null;
 
-  const total = submissions.length;
+  const total = submissions?.length ?? 0;
 
   return (
     <section className="flex flex-col gap-4">
@@ -275,14 +267,12 @@ export function PublicFeedbackFeed({ memberId }: PublicFeedbackFeedProps) {
       <div className="flex flex-col gap-4">
         {groups.map((group) => (
           <article
-            key={`${group.meetingId}:${group.speakerId}`}
+            key={`${group.meetingId}:${group.meetingSpeakerId}`}
             className="rounded-xl border border-line bg-sidebar p-4 sm:p-5"
           >
             <header className="mb-3">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
-                {group.meetingNumber != null
-                  ? `Meeting #${group.meetingNumber}`
-                  : 'Speech feedback'}
+                Meeting #{group.meetingNumber}
               </p>
               <h3 className="mt-0.5 truncate text-sm font-semibold text-ink">
                 {group.speechTitle && group.speechTitle.length > 0

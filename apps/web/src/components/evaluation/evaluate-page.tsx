@@ -18,20 +18,24 @@ import { IdentityGate } from '@/components/evaluation/identity-gate';
 import { ImageTab } from '@/components/evaluation/image-tab';
 import { SpeakerHeader } from '@/components/evaluation/speaker-header';
 import { TextTab } from '@/components/evaluation/text-tab';
+import type { Pathway } from '@/lib/education/members';
 import { findProject, getProjectDuration } from '@/lib/education/pathways';
 import type { EvaluatorIdentity } from '@/lib/evaluation/storage';
 import {
   clearIdentity,
   parseIdentity,
   readIdentityRaw,
-  submitEvaluation,
   subscribeToIdentity,
   writeIdentity,
 } from '@/lib/evaluation/storage';
+import { uploadEvaluationFile } from '@/lib/evaluation/upload';
 import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
-import { useGetPublicMeetingQuery } from '@/store/api';
-import { useAppSelector } from '@/store/hooks';
-import { selectMeetingDraft } from '@/store/meeting-draft-slice';
+import {
+  useGetPublicMeetingQuery,
+  useGetPublicSpeakerQuery,
+  useSignPublicEvaluationUploadMutation,
+  useSubmitPublicEvaluationMutation,
+} from '@/store/api';
 
 const MEETING_DATE_FMT = new Intl.DateTimeFormat('en-GB', {
   weekday: 'long',
@@ -55,18 +59,19 @@ export function EvaluatePage() {
     { meetingId, token },
     { skip: !meetingId || !token },
   );
-  // Speakers/roster live in a per-browser draft — anonymous evaluators
-  // never have them populated. The name lookups gracefully degrade so
-  // the header renders with empty strings and the identity gate falls
-  // back to a generic "tell us who you are" prompt.
-  const draft = useAppSelector((state) => selectMeetingDraft(state, meetingId));
+  const { data: speaker, isLoading: speakerLoading } = useGetPublicSpeakerQuery(
+    { meetingId, speakerId, token },
+    { skip: !meetingId || !speakerId || !token },
+  );
+  const [signUpload] = useSignPublicEvaluationUploadMutation();
+  const [submitEvaluation] = useSubmitPublicEvaluationMutation();
 
-  const speaker = draft.speakers.find((entry) => entry.id === speakerId);
-  const speakerName = '';
-  const evaluatorName = '';
+  const speakerName = speaker?.speakerName ?? '';
+  const evaluatorName = speaker?.evaluatorName ?? '';
 
-  const project = speaker?.project ? findProject(speaker.project, speaker.pathway) : undefined;
-  const duration = speaker ? getProjectDuration(project?.name, speaker.pathway) : undefined;
+  const pathway = (speaker?.pathway ?? undefined) as Pathway | undefined;
+  const project = speaker?.project ? findProject(speaker.project, pathway) : undefined;
+  const duration = speaker ? getProjectDuration(project?.name, pathway) : undefined;
 
   const meetingLabel = meeting
     ? `Meeting #${meeting.meetingNumber} · ${MEETING_DATE_FMT.format(new Date(meeting.dateTime))}`
@@ -98,7 +103,7 @@ export function EvaluatePage() {
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
 
   const hasContent = !!audio || images.length > 0 || text.trim().length > 0;
-  const isLoading = meetingLoading;
+  const isLoading = meetingLoading || speakerLoading;
 
   function handleIdentityConfirmed(next: Omit<EvaluatorIdentity, 'confirmedAt'>) {
     writeIdentity(meetingId, speakerId, next);
@@ -112,18 +117,37 @@ export function EvaluatePage() {
     if (!identity || !hasContent || !meeting || !speaker) return;
     setSubmitState('submitting');
     try {
+      const [audioKey, imageKeys] = await Promise.all([
+        audio
+          ? uploadEvaluationFile(
+              audio,
+              { meetingId, speakerId, token, surface: 'evaluationAudio' },
+              (input) => signUpload(input).unwrap(),
+            )
+          : Promise.resolve(undefined),
+        Promise.all(
+          images.map((image) =>
+            uploadEvaluationFile(
+              image,
+              { meetingId, speakerId, token, surface: 'evaluationImage' },
+              (input) => signUpload(input).unwrap(),
+            ),
+          ),
+        ),
+      ]);
+
       await submitEvaluation({
         meetingId,
         speakerId,
-        speakerMemberId: speaker.memberId,
-        meetingNumber: meeting.meetingNumber,
-        speechTitle: speaker.title.trim(),
-        evaluator: identity,
-        audio: audio ?? undefined,
+        token,
+        evaluatorName: identity.name,
+        isAssignedEvaluator: identity.isAssignedEvaluator,
+        text: text.trim() ? text.trim() : undefined,
+        audioKey,
+        audioMimeType: audio?.type,
         audioDurationSec: audioDurationSec ?? undefined,
-        images,
-        text,
-      });
+        imageKeys,
+      }).unwrap();
       setSubmitState('submitted');
     } catch {
       setSubmitState('idle');
@@ -199,7 +223,7 @@ export function EvaluatePage() {
         meetingLabel={meetingLabel}
         speakerName={speakerName}
         speechTitle={speaker.title.trim()}
-        pathway={speaker.pathway}
+        pathway={pathway}
         project={project}
         duration={duration}
       />

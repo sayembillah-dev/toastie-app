@@ -37,6 +37,29 @@ export interface PublicMeeting {
   clubName: string;
 }
 
+/** Minimal projection served by
+ * `/public/meetings/:id/speakers/:speakerId?t=<token>` — backs the
+ * evaluation form's header. Gated by the same share token as `PublicMeeting`
+ * rather than `published` status, since the evaluation link is meant to
+ * work while the meeting is still a draft. */
+export interface PublicSpeaker {
+  id: string;
+  title: string;
+  pathway: string | null;
+  project: string | null;
+  duration: number | null;
+  speakerName: string;
+  evaluatorName: string;
+}
+
+/** Minimal projection served by `/public/meetings/:id/roles/:role?t=<token>`
+ * — backs the Ah Counter/Timer/Grammarian pages' identity gate. `name` is
+ * `''` when nobody is assigned to that role yet. */
+export interface PublicRoleAssignment {
+  roleKey: string;
+  name: string;
+}
+
 /** Everything the create form collects. The id is minted by the API, not the
  * client, so it is deliberately absent here — and so is `status`: a meeting is
  * born a draft and only leaves that state from the Publish action on its own

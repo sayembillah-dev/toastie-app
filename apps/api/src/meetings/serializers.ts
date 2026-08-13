@@ -83,9 +83,15 @@ export interface PreparedSpeakerWire {
   pathway: string | null;
   project: string | null;
   notes: string | null;
+  /** Count of public evaluation submissions received on this speaker's
+   * shareable link — just a badge count, so the list endpoint carries it
+   * rather than the client fetching a separate endpoint per speaker card. */
+  evaluationCount: number;
 }
 
-export function toPreparedSpeakerWire(row: MeetingSpeakerRow): PreparedSpeakerWire {
+export function toPreparedSpeakerWire(
+  row: MeetingSpeakerRow & { _count?: { evaluationSubmissions: number } },
+): PreparedSpeakerWire {
   return {
     id: row.id,
     order: row.order,
@@ -99,6 +105,7 @@ export function toPreparedSpeakerWire(row: MeetingSpeakerRow): PreparedSpeakerWi
     pathway: row.pathway,
     project: row.project,
     notes: row.notes,
+    evaluationCount: row._count?.evaluationSubmissions ?? 0,
   };
 }
 

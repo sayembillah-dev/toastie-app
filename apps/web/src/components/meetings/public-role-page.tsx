@@ -17,9 +17,7 @@ import {
   writeRoleIdentity,
 } from '@/lib/meetings/role-identity';
 import type { RoleKind } from '@/lib/meetings/role-state';
-import { useGetPublicMeetingQuery } from '@/store/api';
-import { useAppSelector } from '@/store/hooks';
-import { selectMeetingDraft } from '@/store/meeting-draft-slice';
+import { useGetPublicMeetingQuery, useGetPublicRoleAssignmentQuery } from '@/store/api';
 
 const MEETING_DATE_FMT = new Intl.DateTimeFormat('en-GB', {
   weekday: 'long',
@@ -38,12 +36,10 @@ interface PublicRolePageProps {
   kind: RoleKind;
 }
 
-/** Public page for shared role modules. Fetches the meeting via the public
- * share endpoint (auth-free, token-gated), then hands off to the same
- * interactive view the authed tab uses. The assigned-holder name that
- * used to personalise the identity gate lived in a per-browser Redux
- * draft — anonymous visitors never had it, so the gate degrades cleanly
- * to a generic "confirm who you are" prompt. */
+/** Public page for shared role modules. Fetches the meeting and the role's
+ * assigned-holder name via the public share endpoints (auth-free,
+ * token-gated), then hands off to the same interactive view the authed tab
+ * uses. */
 export function PublicRolePage({ kind }: PublicRolePageProps) {
   const params = useParams<{ meetingId: string }>();
   const search = useSearchParams();
@@ -55,14 +51,11 @@ export function PublicRolePage({ kind }: PublicRolePageProps) {
     { meetingId, token },
     { skip: !meetingId || !token },
   );
-  const draft = useAppSelector((state) => selectMeetingDraft(state, meetingId));
-  // Draft is per-browser client state — only the authoring officer has it
-  // filled in. For an anonymous visitor it's the empty default, so
-  // `assignedHolderName` stays undefined and the gate skips the "are you
-  // [name]?" branch. Kept threaded through so a same-browser preview
-  // (organiser opens their own share link) still personalises.
-  void draft;
-  const assignedHolderName: string | undefined = undefined;
+  const { data: roleAssignment, isLoading: roleLoading } = useGetPublicRoleAssignmentQuery(
+    { meetingId, role: kind, token },
+    { skip: !meetingId || !token },
+  );
+  const assignedHolderName = roleAssignment?.name || undefined;
 
   const meetingLabel = meeting
     ? `Meeting #${meeting.meetingNumber} · ${MEETING_DATE_FMT.format(new Date(meeting.dateTime))}`
@@ -76,7 +69,7 @@ export function PublicRolePage({ kind }: PublicRolePageProps) {
   );
   const identity = parseRoleIdentity(identityRaw);
 
-  const isLoading = meetingLoading;
+  const isLoading = meetingLoading || roleLoading;
 
   function handleConfirmed(next: Omit<RoleHolderIdentity, 'confirmedAt'>) {
     writeRoleIdentity(kind, meetingId, next);

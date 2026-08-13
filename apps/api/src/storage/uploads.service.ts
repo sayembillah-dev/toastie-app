@@ -22,6 +22,17 @@ export class UploadsService {
     clubId: string | null,
     dto: SignUploadDto,
   ): Promise<SignedUpload> {
+    // These two surfaces are signed by `PublicEvaluationsController` for
+    // anonymous evaluators, gated by the meeting's share token rather than a
+    // permission grant. Rejecting them here explicitly — rather than relying
+    // on `resource: null` making the permission check below always fail —
+    // keeps that boundary a deliberate decision instead of an accident.
+    if (dto.surface === 'evaluationAudio' || dto.surface === 'evaluationImage') {
+      throw new ForbiddenException(
+        `"${dto.surface}" is only available via the public evaluation flow`,
+      );
+    }
+
     const rule = SURFACE_RULES[dto.surface];
 
     if (!rule.mimeTypes.includes(dto.mimeType)) {

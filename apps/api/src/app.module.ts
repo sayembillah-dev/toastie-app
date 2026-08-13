@@ -14,6 +14,7 @@ import { AuthModule } from './auth';
 import { ClubsModule } from './clubs';
 import { validateEnv } from './config';
 import { EducationModule } from './education';
+import { EvaluationsModule } from './evaluations';
 import { FinanceModule } from './finance';
 import { HealthController } from './health/health.controller';
 import { InventoryModule } from './inventory';
@@ -69,6 +70,7 @@ import { UsersModule } from './users';
     JoinRequestsModule,
     MeetingsModule,
     EducationModule,
+    EvaluationsModule,
     PeopleModule,
     LibraryModule,
     InventoryModule,
