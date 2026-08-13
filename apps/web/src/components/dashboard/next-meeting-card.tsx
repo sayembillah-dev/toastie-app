@@ -126,7 +126,7 @@ export function NextMeetingCard({ meeting, myRole }: NextMeetingCardProps) {
 
         <Link
           href={`/meetings/${meeting.id}`}
-          className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-white px-3.5 py-2 text-sm font-medium text-slate-900 no-underline transition-opacity hover:opacity-90"
+          className="ml-auto inline-flex items-center gap-1.5 rounded-lg text-white px-3.5 py-2 text-sm font-medium no-underline transition-colors hover:bg-white/15"
         >
           View agenda
           <ArrowRight size={14} weight="bold" />
