@@ -17,6 +17,7 @@ import {
   useGetMemberStatsQuery,
   useGetMembersQuery,
   useGetMemberTimerEntriesQuery,
+  useGetReceivedEvaluationsQuery,
 } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -24,7 +25,6 @@ import { ClubStandingCard } from './club-standing-card';
 import { FinanceCard } from './finance-card';
 import { PathwayCard } from './pathway-card';
 import { ProfileHero } from './profile-hero';
-import { PublicFeedbackFeed } from './public-feedback-feed';
 import { RequestSpeechSlotModal } from './request-speech-slot-modal';
 import { SpeechSlotCard } from './speech-slot-card';
 import { SpeechesFeed } from './speeches-feed';
@@ -73,6 +73,7 @@ function MeContent({ memberId }: { memberId: string }) {
   const { data: evaluations } = useGetMemberEvaluationsQuery(memberId);
   const { data: timerEntries } = useGetMemberTimerEntriesQuery(memberId);
   const { data: ahCounterEntries } = useGetMemberAhCounterEntriesQuery(memberId);
+  const { data: submissions } = useGetReceivedEvaluationsQuery(memberId);
 
   if (!member || !stats || !history || !meetings) return <MeSkeleton />;
 
@@ -114,8 +115,8 @@ function MeContent({ memberId }: { memberId: string }) {
             timerEntries={timerEntries ?? []}
             ahCounterEntries={ahCounterEntries ?? []}
             membersById={membersById}
+            submissions={submissions ?? []}
           />
-          <PublicFeedbackFeed memberId={memberId} />
         </div>
 
         <div className="flex flex-col gap-4">

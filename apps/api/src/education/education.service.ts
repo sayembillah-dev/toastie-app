@@ -14,6 +14,7 @@ import type { CreateSpeechSlotRequestDto, StartPathwayDto } from './dto/educatio
 import {
   type AhCounterEntryWire,
   computeMemberStats,
+  type DeliveredSpeakerRow,
   type EvaluationWire,
   type HistoryEventWire,
   type MemberStatsWire,
@@ -22,6 +23,8 @@ import {
   toAhCounterEntryWire,
   toEvaluationWire,
   toHistoryEventWire,
+  toSpeechGivenHistoryRow,
+  toSpeechGivenWire,
   toSpeechSlotRequestWire,
   toTimerEntryWire,
 } from './serializers';
@@ -41,24 +44,54 @@ export class EducationService {
 
   async listHistory(subject: PermissionSubject, memberId: string): Promise<HistoryEventWire[]> {
     const member = await this.assertEducationRead(subject, memberId);
-    const rows = await this.prisma.historyEvent.findMany({
-      where: { clubId: member.clubId, membershipId: member.id },
-      orderBy: [{ date: 'desc' }, { id: 'desc' }],
-    });
-    return rows.map(toHistoryEventWire);
+    const [rows, speeches] = await Promise.all([
+      this.prisma.historyEvent.findMany({
+        where: { clubId: member.clubId, membershipId: member.id },
+        orderBy: [{ date: 'desc' }, { id: 'desc' }],
+      }),
+      this.loadDeliveredSpeeches(member.clubId, member.id),
+    ]);
+    const events = [...rows.map(toHistoryEventWire), ...speeches.map(toSpeechGivenWire)];
+    events.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+    return events;
   }
 
   async getStats(subject: PermissionSubject, memberId: string): Promise<MemberStatsWire> {
     const member = await this.assertEducationRead(subject, memberId);
-    const events = await this.prisma.historyEvent.findMany({
-      where: { clubId: member.clubId, membershipId: member.id },
-      orderBy: [{ date: 'desc' }, { id: 'desc' }],
-    });
+    const [events, speeches] = await Promise.all([
+      this.prisma.historyEvent.findMany({
+        where: { clubId: member.clubId, membershipId: member.id },
+        orderBy: [{ date: 'desc' }, { id: 'desc' }],
+      }),
+      this.loadDeliveredSpeeches(member.clubId, member.id),
+    ]);
     // Meetings-attended is a baseline counter the club maintains; no route
     // increments it yet, so it falls back to the derived count of visit
     // logs bearing this member's user id. Missing → 0.
     const meetingsAttended = 0;
-    return computeMemberStats(member, events, meetingsAttended);
+    const combined = [...events, ...speeches.map(toSpeechGivenHistoryRow)];
+    return computeMemberStats(member, combined, meetingsAttended);
+  }
+
+  /** `MeetingSpeaker` rows for this member that count as a delivered speech
+   * — either explicitly marked `delivered`, or already carrying at least one
+   * evaluation submission (an evaluator wouldn't have anything to evaluate
+   * otherwise, and organisers don't reliably flip the status dropdown).
+   * Nothing currently writes a `speechGiven` `HistoryEvent` row, so this is
+   * the real source of truth for "speeches given" on the Me page. */
+  private async loadDeliveredSpeeches(
+    clubId: string,
+    membershipId: string,
+  ): Promise<DeliveredSpeakerRow[]> {
+    return this.prisma.meetingSpeaker.findMany({
+      where: {
+        clubId,
+        membershipId,
+        OR: [{ status: 'delivered' }, { evaluationSubmissions: { some: {} } }],
+      },
+      include: { meeting: { select: { meetingNumber: true, dateTime: true } } },
+      orderBy: { meeting: { dateTime: 'desc' } },
+    });
   }
 
   async startPathway(

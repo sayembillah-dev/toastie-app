@@ -37,6 +37,10 @@ export type HistoryEvent =
       title: string;
       meetingNumber: number;
       projectName?: string;
+      /** Present when this speech has a real `MeetingSpeaker` slot behind
+       * it — joins against `EvaluationSubmission.meetingSpeakerId` to show
+       * received feedback under this speech. */
+      meetingSpeakerId?: string;
     }
   | {
       id: string;

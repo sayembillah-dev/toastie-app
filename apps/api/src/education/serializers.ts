@@ -33,6 +33,11 @@ export type HistoryEventWire =
       title: string;
       meetingNumber: number;
       projectName?: string;
+      /** Set when this event is derived from a `MeetingSpeaker` row rather
+       * than a stored `HistoryEvent` — lets the client join it against
+       * `EvaluationSubmission.meetingSpeakerId` to show received feedback
+       * under the right speech. */
+      meetingSpeakerId?: string;
     }
   | {
       id: string;
@@ -108,6 +113,54 @@ export function toHistoryEventWire(row: HistoryEventRow): HistoryEventWire {
         meetingNumber: row.meetingNumber ?? 0,
       };
   }
+}
+
+/** Shape a `speechGiven` event derives from — the fields `EducationService`
+ * selects off `MeetingSpeaker` (plus its parent meeting) when a delivered
+ * speech has no matching `HistoryEvent` row. See `EducationService` for why
+ * this projection exists instead of a stored row. */
+export interface DeliveredSpeakerRow {
+  id: string;
+  clubId: string;
+  membershipId: string | null;
+  title: string;
+  project: string | null;
+  pathway: string | null;
+  updatedAt: Date;
+  meeting: { meetingNumber: number; dateTime: Date };
+}
+
+export function toSpeechGivenWire(
+  speaker: DeliveredSpeakerRow,
+): Extract<HistoryEventWire, { type: 'speech-given' }> {
+  const wire: Extract<HistoryEventWire, { type: 'speech-given' }> = {
+    id: `speech:${speaker.id}`,
+    memberId: speaker.membershipId ?? '',
+    date: isoDate(speaker.meeting.dateTime),
+    type: 'speech-given',
+    title: speaker.title,
+    meetingNumber: speaker.meeting.meetingNumber,
+    meetingSpeakerId: speaker.id,
+  };
+  if (speaker.project) wire.projectName = speaker.project;
+  return wire;
+}
+
+export function toSpeechGivenHistoryRow(speaker: DeliveredSpeakerRow): HistoryEventRow {
+  return {
+    id: `speech:${speaker.id}`,
+    clubId: speaker.clubId,
+    membershipId: speaker.membershipId ?? '',
+    type: 'speechGiven',
+    date: speaker.meeting.dateTime,
+    meetingNumber: speaker.meeting.meetingNumber,
+    role: null,
+    title: speaker.title,
+    projectName: speaker.project,
+    level: null,
+    pathway: speaker.pathway,
+    createdAt: speaker.updatedAt,
+  };
 }
 
 /** --------------------------------------------------------- reports -- */

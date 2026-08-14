@@ -6,6 +6,7 @@ import {
   ImageSquare,
   Microphone,
   PaperPlaneTilt,
+  Plus,
   TextAa,
   Warning,
 } from '@phosphor-icons/react/dist/ssr';
@@ -113,6 +114,14 @@ export function EvaluatePage() {
     clearIdentity(meetingId, speakerId);
   }
 
+  function handleSubmitAnother() {
+    setAudio(null);
+    setAudioDurationSec(null);
+    setImages([]);
+    setText('');
+    setSubmitState('idle');
+  }
+
   async function handleSubmit() {
     if (!identity || !hasContent || !meeting || !speaker) return;
     setSubmitState('submitting');
@@ -196,6 +205,15 @@ export function EvaluatePage() {
             {speakerName ? `${speakerName} ` : 'The speaker '}
             will receive your evaluation. You can close this tab safely.
           </p>
+          <Button
+            type="primary"
+            size="large"
+            icon={<Plus size={16} weight="bold" />}
+            onClick={handleSubmitAnother}
+            className="mt-5 w-full"
+          >
+            Add another evaluation
+          </Button>
         </section>
       </div>
     );
