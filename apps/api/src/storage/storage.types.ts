@@ -25,9 +25,12 @@ export function isStorageSurface(value: string): value is StorageSurface {
 const IMAGE_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const;
 
 /** `MediaRecorder`-produced audio, plus the common formats a file picker
- * (the `accept="audio/*"` fallback in `AudioTab`) might hand back. */
+ * (the `accept="audio/*"` fallback in `AudioTab`) might hand back.
+ * `video/webm` is included because some browsers (e.g. Android Chrome) tag
+ * an audio-only `MediaRecorder` blob as `video/webm` even without a video track. */
 const AUDIO_MIME_TYPES = [
   'audio/webm',
+  'video/webm',
   'audio/mp4',
   'audio/ogg',
   'audio/mpeg',
