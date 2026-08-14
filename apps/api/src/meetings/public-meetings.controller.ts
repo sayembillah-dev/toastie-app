@@ -48,6 +48,23 @@ export interface PublicRoleAssignmentWire {
   name: string;
 }
 
+/** Wire shape for `/public/meetings/:id/roles/agenda-speakers` — backs the
+ * public Ah Counter/Timer pages' "Take from agenda" seeding, mirroring what
+ * `buildAgendaSpeakerSources` (client, `lib/meetings/agenda-speaker-sources.ts`)
+ * computes from the authenticated `/members`, `/guests`, roles, and
+ * prepared-speakers endpoints — none of which an anonymous caller can reach
+ * (full roster with PII). This is the same computation done server-side
+ * instead, gated by the meeting's share token, exposing only what those
+ * tools actually need: a stable key, a display name, the role, and (for
+ * prepared speakers) the project/pathway used to compute timing brackets. */
+export interface PublicAgendaSpeakerSourceWire {
+  agendaKey: string;
+  name: string;
+  role: 'speaker' | 'evaluator' | 'general-evaluator' | 'tt-evaluator';
+  project: string | null;
+  pathway: string | null;
+}
+
 export interface PublicAgendaSpeakerWire {
   order: number;
   title: string;
@@ -214,6 +231,112 @@ export class PublicMeetingsController {
       roleKey: role,
       name: assignment ? fullName(assignment.membership ?? assignment.guest) : '',
     };
+  }
+
+  /** Backs the public Ah Counter/Timer "Take from agenda" button — same
+   * (id, token) gate as `getSpeaker`/`getRoleAssignment`. Order and field
+   * shape are chosen so `fromPublicAgendaSpeakerSources` on the client can
+   * turn this straight into the same `AgendaSpeakerSource[]` the authenticated
+   * tab builds from `buildAgendaSpeakerSources`, so both surfaces seed
+   * identically off this same query. */
+  @Get(':meetingId/roles/agenda-speakers')
+  async getAgendaSpeakerSources(
+    @Param('meetingId') meetingId: string,
+    @Query('t') token: string | undefined,
+  ): Promise<PublicAgendaSpeakerSourceWire[]> {
+    if (!token) {
+      throw new NotFoundException('No meeting matches that share link');
+    }
+    const meeting = await this.prisma.meeting.findFirst({
+      where: { id: meetingId, shareToken: token },
+      select: { clubId: true },
+    });
+    if (!meeting) {
+      throw new NotFoundException('No meeting matches that share link');
+    }
+
+    const [speakers, roleRows] = await Promise.all([
+      this.prisma.meetingSpeaker.findMany({
+        where: { clubId: meeting.clubId, meetingId },
+        orderBy: { order: 'asc' },
+        select: {
+          id: true,
+          project: true,
+          pathway: true,
+          membership: { select: { firstName: true, lastName: true } },
+          guest: { select: { firstName: true, lastName: true } },
+          evaluatorMembership: { select: { firstName: true, lastName: true } },
+          evaluatorGuest: { select: { firstName: true, lastName: true } },
+        },
+      }),
+      this.prisma.meetingRoleAssignment.findMany({
+        where: {
+          clubId: meeting.clubId,
+          meetingId,
+          roleKey: { in: ['general-evaluator', 'table-topic-evaluator'] },
+        },
+        select: {
+          roleKey: true,
+          membership: { select: { firstName: true, lastName: true } },
+          guest: { select: { firstName: true, lastName: true } },
+        },
+      }),
+    ]);
+
+    const sources: PublicAgendaSpeakerSourceWire[] = [];
+
+    for (const speaker of speakers) {
+      const speakerName = fullName(speaker.membership ?? speaker.guest);
+      if (speakerName) {
+        sources.push({
+          agendaKey: `speaker:${speaker.id}`,
+          name: speakerName,
+          role: 'speaker',
+          project: speaker.project,
+          pathway: speaker.pathway,
+        });
+      }
+      const evaluatorName = fullName(speaker.evaluatorMembership ?? speaker.evaluatorGuest);
+      if (evaluatorName) {
+        sources.push({
+          agendaKey: `speaker-evaluator:${speaker.id}`,
+          name: evaluatorName,
+          role: 'evaluator',
+          project: null,
+          pathway: null,
+        });
+      }
+    }
+
+    const generalEvaluator = roleRows.find((row) => row.roleKey === 'general-evaluator');
+    if (generalEvaluator) {
+      const name = fullName(generalEvaluator.membership ?? generalEvaluator.guest);
+      if (name) {
+        sources.push({
+          agendaKey: 'role:general-evaluator',
+          name,
+          role: 'general-evaluator',
+          project: null,
+          pathway: null,
+        });
+      }
+    }
+
+    const ttEvaluator = roleRows.find((row) => row.roleKey === 'table-topic-evaluator');
+    if (ttEvaluator) {
+      const name = fullName(ttEvaluator.membership ?? ttEvaluator.guest);
+      if (name) {
+        sources.push({
+          agendaKey: 'role:table-topic-evaluator',
+          name,
+          role: 'tt-evaluator',
+          project: null,
+          pathway: null,
+        });
+      }
+    }
+
+    return sources;
   }
 
   /** Public agenda endpoint — anonymous, gated by `status === 'published'`

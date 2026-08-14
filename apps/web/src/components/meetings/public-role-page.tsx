@@ -148,8 +148,12 @@ export function PublicRolePage({ kind }: PublicRolePageProps) {
           </button>
         </div>
 
-        {kind === 'ah-counter' ? <AhCounterView meetingId={meetingId} showShare={false} /> : null}
-        {kind === 'timer' ? <TimerView meetingId={meetingId} showShare={false} /> : null}
+        {kind === 'ah-counter' ? (
+          <AhCounterView meetingId={meetingId} showShare={false} token={token} />
+        ) : null}
+        {kind === 'timer' ? (
+          <TimerView meetingId={meetingId} showShare={false} token={token} />
+        ) : null}
         {kind === 'grammarian' ? <GrammarianView meetingId={meetingId} showShare={false} /> : null}
       </div>
     </div>

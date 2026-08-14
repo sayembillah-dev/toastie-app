@@ -112,3 +112,39 @@ export function buildAgendaSpeakerSources(
 
   return sources;
 }
+
+/** Wire shape from `GET /public/meetings/:id/roles/agenda-speakers` — the
+ * server-computed equivalent of `buildAgendaSpeakerSources` for callers who
+ * can't reach `/members`, `/guests`, or the authenticated roles/prepared-
+ * speakers endpoints (i.e. an anonymous public-page visitor). */
+export interface PublicAgendaSpeakerSource {
+  agendaKey: string;
+  name: string;
+  role: AgendaSpeakerRole;
+  project: string | null;
+  pathway: string | null;
+}
+
+/** Adapts the public wire shape into the same `AgendaSpeakerSource[]` the
+ * authenticated tab builds via `buildAgendaSpeakerSources`, so "Take from
+ * agenda" produces an identical roster regardless of which surface
+ * triggered it — `memberId`/`guestId` are simply absent (optional on
+ * `AgendaSpeakerSource`), since a public caller has no roster access and
+ * doesn't need them: agendaKey alone drives the merge-vs-create logic in
+ * each tool's `handleTakeFromAgenda`. */
+export function fromPublicAgendaSpeakerSources(
+  sources: PublicAgendaSpeakerSource[],
+): AgendaSpeakerSource[] {
+  return sources.map((source) => ({
+    agendaKey: source.agendaKey,
+    name: source.name,
+    role: source.role,
+    durationBounds:
+      source.role === 'speaker'
+        ? getProjectDuration(
+            source.project ?? undefined,
+            (source.pathway ?? undefined) as Pathway | undefined,
+          )
+        : undefined,
+  }));
+}

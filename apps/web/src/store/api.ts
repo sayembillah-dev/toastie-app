@@ -58,6 +58,7 @@ import type {
   PlannerIdea,
   UpdatePlannerIdeaInput,
 } from '@/lib/library/planner';
+import type { PublicAgendaSpeakerSource } from '@/lib/meetings/agenda-speaker-sources';
 import type { AhCounterEntry } from '@/lib/meetings/ah-counter-reports';
 import type {
   CreateGuestAttendanceInput,
@@ -551,6 +552,21 @@ export const toastlyApi = createApi({
     >({
       query: ({ meetingId, role, token }) => ({
         url: `/public/meetings/${meetingId}/roles/${role}?t=${encodeURIComponent(token)}`,
+        method: 'GET',
+      }),
+    }),
+
+    /* Backs the public Ah Counter/Timer "Take from agenda" button — same
+     * no-auth routing and token gate as `getPublicMeeting`. Server-computed
+     * equivalent of `buildAgendaSpeakerSources`, since an anonymous caller
+     * can't reach `/members`, `/guests`, or the authenticated roles/prepared-
+     * speakers endpoints that function normally reads from. */
+    getPublicAgendaSpeakerSources: build.query<
+      PublicAgendaSpeakerSource[],
+      { meetingId: string; token: string }
+    >({
+      query: ({ meetingId, token }) => ({
+        url: `/public/meetings/${meetingId}/roles/agenda-speakers?t=${encodeURIComponent(token)}`,
         method: 'GET',
       }),
     }),
@@ -2484,6 +2500,7 @@ export const {
   useGetPublicMeetingQuery,
   useGetPublicSpeakerQuery,
   useGetPublicRoleAssignmentQuery,
+  useGetPublicAgendaSpeakerSourcesQuery,
   useGetPublicMeetingAgendaQuery,
   useSignPublicEvaluationUploadMutation,
   useSubmitPublicEvaluationMutation,

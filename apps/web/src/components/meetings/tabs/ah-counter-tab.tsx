@@ -16,7 +16,10 @@ import { AssigneeSelect } from '@/components/education/assignee-select';
 import { ShareRoleButton } from '@/components/meetings/tabs/share-role-button';
 import type { Member } from '@/lib/education/members';
 import type { Assignee } from '@/lib/education/planner';
-import { buildAgendaSpeakerSources } from '@/lib/meetings/agenda-speaker-sources';
+import {
+  buildAgendaSpeakerSources,
+  fromPublicAgendaSpeakerSources,
+} from '@/lib/meetings/agenda-speaker-sources';
 import {
   type AhSpeakerCount,
   parseRoleState,
@@ -31,6 +34,7 @@ import {
   useGetMeetingRolesQuery,
   useGetMembersQuery,
   useGetPreparedSpeakersQuery,
+  useGetPublicAgendaSpeakerSourcesQuery,
 } from '@/store/api';
 
 /** Resolves an `AssigneeSelect` pick into the speaker draft this tab stores —
@@ -478,15 +482,27 @@ function ResultView({ speakers, categories }: ResultViewProps) {
 interface AhCounterViewProps {
   meetingId: string;
   showShare: boolean;
+  /** Share-link credential — only meaningful (and only provided) on the
+   * public page, where it stands in for the auth "Take from agenda" would
+   * otherwise need. */
+  token?: string;
 }
 
 /** Shared Ah Counter view — used by the in-app tab and the public share page.
  * State is persisted per meeting so both surfaces stay in sync. */
-export function AhCounterView({ meetingId, showShare }: AhCounterViewProps) {
-  const { data: members } = useGetMembersQuery();
-  const { data: guests } = useGetGuestsQuery();
+export function AhCounterView({ meetingId, showShare, token = '' }: AhCounterViewProps) {
+  const { data: members } = useGetMembersQuery(undefined, { skip: !showShare });
+  const { data: guests } = useGetGuestsQuery(undefined, { skip: !showShare });
   const { data: roleRows } = useGetMeetingRolesQuery(meetingId, { skip: !showShare });
   const { data: preparedSpeakers } = useGetPreparedSpeakersQuery(meetingId, { skip: !showShare });
+  // Public counterpart of the four queries above — an anonymous caller can't
+  // reach `/members`, `/guests`, or the authenticated roles/prepared-speakers
+  // endpoints (full roster, PII), so the server pre-computes the same
+  // sources those four feed into `buildAgendaSpeakerSources` below.
+  const { data: publicAgendaSpeakers } = useGetPublicAgendaSpeakerSourcesQuery(
+    { meetingId, token },
+    { skip: showShare || !meetingId || !token },
+  );
   const { activeKey, onChange } = usePersistentTab('ahc', 'speakers');
 
   const subscribe = useCallback(
@@ -534,12 +550,14 @@ export function AhCounterView({ meetingId, showShare }: AhCounterViewProps) {
   }
 
   function handleTakeFromAgenda() {
-    const sources = buildAgendaSpeakerSources(
-      preparedSpeakers ?? [],
-      roleRows ?? [],
-      members ?? [],
-      guests ?? [],
-    );
+    const sources = showShare
+      ? buildAgendaSpeakerSources(
+          preparedSpeakers ?? [],
+          roleRows ?? [],
+          members ?? [],
+          guests ?? [],
+        )
+      : fromPublicAgendaSpeakerSources(publicAgendaSpeakers ?? []);
     updateRoleState('ah-counter', meetingId, (previous) => {
       const manual = previous.speakers.filter((speaker) => !speaker.agendaKey);
       const byAgendaKey = new Map(
@@ -667,7 +685,7 @@ export function AhCounterView({ meetingId, showShare }: AhCounterViewProps) {
                 onToggle={handleToggle}
                 onAddCategory={handleAddCategory}
                 onRemoveCategory={handleRemoveCategory}
-                onTakeFromAgenda={showShare ? handleTakeFromAgenda : undefined}
+                onTakeFromAgenda={handleTakeFromAgenda}
                 shareSlot={shareSlot}
               />
             ),

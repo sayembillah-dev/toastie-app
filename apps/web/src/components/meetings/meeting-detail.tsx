@@ -164,8 +164,12 @@ function DetailContent({ meeting }: { meeting: Meeting }) {
     <div className="mx-auto max-w-6xl">
       <MeetingActions meeting={meeting} />
 
-      {/* antd Tabs already scrolls horizontally with arrow controls when the
-       * label row overflows — no extra wiring needed for the mobile case. */}
+      {/* antd's arrow-scroll controls only cover mouse/keyboard — the nav
+       * strip's own touch handler never calls preventDefault (see
+       * @rc-component/tabs's useTouchMove), so a swipe here falls through to
+       * whatever ancestor is horizontally scrollable. That ancestor is meant
+       * to be nothing: `main` in app-shell.tsx sets `overflow-x-hidden`
+       * precisely so a swipe on this strip has nowhere to leak into. */}
       <Tabs
         activeKey={activeKey}
         onChange={onChange}
