@@ -1,11 +1,15 @@
 -- DropForeignKey
-ALTER TABLE "PublicEvaluationSubmission" DROP CONSTRAINT "PublicEvaluationSubmission_clubId_meetingId_fkey";
+-- `IF EXISTS` guards: the migration that created "PublicEvaluationSubmission"
+-- was removed from the repo, so a fresh replay (shadow database, new
+-- environment) never creates the table — without the guards the drop aborts
+-- the whole replay with P1014.
+ALTER TABLE IF EXISTS "PublicEvaluationSubmission" DROP CONSTRAINT IF EXISTS "PublicEvaluationSubmission_clubId_meetingId_fkey";
 
 -- DropForeignKey
-ALTER TABLE "PublicEvaluationSubmission" DROP CONSTRAINT "PublicEvaluationSubmission_clubId_membershipId_fkey";
+ALTER TABLE IF EXISTS "PublicEvaluationSubmission" DROP CONSTRAINT IF EXISTS "PublicEvaluationSubmission_clubId_membershipId_fkey";
 
 -- DropTable
-DROP TABLE "PublicEvaluationSubmission";
+DROP TABLE IF EXISTS "PublicEvaluationSubmission";
 
 -- CreateTable
 CREATE TABLE "EvaluationSubmission" (
