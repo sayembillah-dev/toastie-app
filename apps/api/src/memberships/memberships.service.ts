@@ -124,11 +124,35 @@ export class MembershipsService {
       });
     }
     const clubRoles = normaliseRoles(dto.roles);
+
+    // A phone number turns the roster row into a claim key: when an account
+    // already exists with this number the row is born claimed; otherwise it
+    // waits unclaimed until registration claims it (see AuthService.register).
+    let userId: string | null = null;
+    if (dto.phone) {
+      const user = await this.findMatchingUser(dto.phone);
+      if (user) {
+        const claimedHere = await this.prisma.membership.findUnique({
+          where: { clubId_userId: { clubId, userId: user.id } },
+          select: { id: true },
+        });
+        if (claimedHere) {
+          throw new ConflictException({
+            code: 'MEMBER_ALREADY_ON_ROSTER',
+            message: 'The account with this phone number is already on this roster.',
+          });
+        }
+        userId = user.id;
+      }
+    }
+
     const row = await this.prisma.membership.create({
       data: {
         clubId,
+        userId,
         firstName: dto.firstName.trim(),
         lastName: dto.lastName.trim(),
+        phone: dto.phone ?? null,
         roles: clubRoles,
         isClubAdmin: false,
         status: 'active',
@@ -232,6 +256,29 @@ export class MembershipsService {
       const preserveAdmin = existing.roles.includes('ClubAdmin');
       const mapped = toClubRoles(dto.roles);
       data.roles = preserveAdmin ? [...mapped, 'ClubAdmin' as PrismaClubRole] : mapped;
+    }
+
+    // Backfilling a phone on an unclaimed row claims it immediately when a
+    // matching account already exists — the same rule as create(). Clearing
+    // is not supported: fixing a wrong number means typing the right one.
+    if (dto.phone !== undefined) {
+      data.phone = dto.phone;
+      if (!existing.userId) {
+        const user = await this.findMatchingUser(dto.phone);
+        if (user) {
+          const claimedHere = await this.prisma.membership.findUnique({
+            where: { clubId_userId: { clubId: existing.clubId, userId: user.id } },
+            select: { id: true },
+          });
+          if (claimedHere) {
+            throw new ConflictException({
+              code: 'MEMBER_ALREADY_ON_ROSTER',
+              message: 'The account with this phone number is already on this roster.',
+            });
+          }
+          data.user = { connect: { id: user.id } };
+        }
+      }
     }
 
     const updated = await this.prisma.membership.update({

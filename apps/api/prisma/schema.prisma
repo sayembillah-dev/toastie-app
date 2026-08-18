@@ -386,6 +386,13 @@ model Membership {
   firstName        String
   lastName         String
   email            String?
+  /// Normalised 11-digit phone (same form as `User.phone`) of the person
+  /// this roster row represents — the claim key. Nullable: an admin can
+  /// still roster someone by name alone. When a `User` registers (or already
+  /// exists) with this number the row is claimed automatically — and because
+  /// every agenda/attendance/history row keys off `membershipId`, not
+  /// `userId`, claiming "migrates" everything without moving a single row.
+  phone            String?
   roles            ClubRole[]
   isClubAdmin      Boolean          @default(false)
   status           MembershipStatus @default(active)
@@ -437,6 +444,8 @@ model Membership {
   @@index([clubId, status])
   @@index([userId])
   @@index([email])
+  /// Claim lookups: `WHERE phone = ? AND userId IS NULL` at registration.
+  @@index([phone])
 }
 
 model OrgAssignment {

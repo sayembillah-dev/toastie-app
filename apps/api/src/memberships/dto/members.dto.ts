@@ -1,3 +1,4 @@
+import { Transform } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
@@ -6,9 +7,12 @@ import {
   IsIn,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
+
+import { normalizePhone, PHONE_REGEX } from '@/common';
 
 import { OFFICER_ROLES, type OfficerRole } from '../role-mapping';
 
@@ -24,6 +28,18 @@ export class CreateMemberDto {
   @MinLength(1)
   @MaxLength(NAME_MAX)
   lastName!: string;
+
+  /** Optional, but it is the claim key: the moment a `User` registers (or
+   * already exists) with this number, this roster row — and every agenda,
+   * attendance and history row keyed to it — becomes theirs. Normalised
+   * exactly like the auth phone so the two always compare equal. Empty
+   * string is treated as absent so the web form can bind the input as-is. */
+  @IsOptional()
+  @Transform(({ value }) =>
+    value === undefined || value === null || value === '' ? undefined : normalizePhone(value),
+  )
+  @Matches(PHONE_REGEX, { message: 'Phone must be exactly 11 digits' })
+  phone?: string;
 
   /** Absent or empty → `['Member']`. The web form intentionally lets a Club
    * Admin add a plain member with no role picker on the "Add member" flow. */
@@ -45,6 +61,16 @@ export class UpdateMemberDto {
   @MinLength(1)
   @MaxLength(NAME_MAX)
   lastName?: string;
+
+  /** Backfill or correct the claim key on an existing row. Setting it on an
+   * unclaimed row claims that row immediately when a matching account
+   * already exists — the same rule as create. */
+  @IsOptional()
+  @Transform(({ value }) =>
+    value === undefined || value === null || value === '' ? undefined : normalizePhone(value),
+  )
+  @Matches(PHONE_REGEX, { message: 'Phone must be exactly 11 digits' })
+  phone?: string;
 
   @IsOptional()
   @IsArray()

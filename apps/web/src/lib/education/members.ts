@@ -41,6 +41,11 @@ export interface Member {
    * up. `undefined` for placeholder roster rows a Club Admin added by hand
    * before that person had an account. */
   userId?: string;
+  /** Normalised 11-digit phone — the claim key. When someone signs up with
+   * this number, this roster row (and every agenda/attendance/history row
+   * keyed to it) links to their account automatically. Absent for name-only
+   * roster rows. */
+  phone?: string;
   firstName: string;
   lastName: string;
   /** A member can hold more than one officer role at once (e.g. Secretary and
@@ -84,14 +89,14 @@ export interface Member {
 
 /** Fields the Club Admin "Add member" form writes. `roles` defaults to
  * `['Member']` server-side when omitted. */
-export type CreateMemberInput = Pick<Member, 'firstName' | 'lastName'> & {
+export type CreateMemberInput = Pick<Member, 'firstName' | 'lastName' | 'phone'> & {
   roles?: OfficerRole[];
 };
 
 /** Fields the Club Admin "Edit member" form can write. Status, admin flag and
  * permissions each have their own dedicated endpoint — this one is plain
  * profile/role editing. */
-export type UpdateMemberInput = Partial<Pick<Member, 'firstName' | 'lastName' | 'roles'>>;
+export type UpdateMemberInput = Partial<Pick<Member, 'firstName' | 'lastName' | 'roles' | 'phone'>>;
 
 export const SEED_MEMBERS: Member[] = [
   {

@@ -57,6 +57,21 @@ export class AuthService {
       throw err;
     }
 
+    // Claim every roster row a club added with this phone number before the
+    // person had an account. Meeting history keys off `membershipId`, never
+    // `userId`, so this single update is the entire "migration" — nothing
+    // moves, the rows simply gain an owner. Best-effort: a pathological
+    // duplicate (the same number rostered twice in one club) would trip the
+    // (clubId, userId) unique index, and that must never fail sign-up.
+    try {
+      await this.prisma.membership.updateMany({
+        where: { phone, userId: null },
+        data: { userId: user.id },
+      });
+    } catch {
+      // Officer tooling can relink the spare row by hand later.
+    }
+
     const now = new Date();
     const tokens = await this.tokens.issueTokens(user.id, now);
     const session = await this.subjectFactory.loadSession(user.id, now.getTime());

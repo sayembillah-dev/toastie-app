@@ -34,6 +34,10 @@ export interface MemberWire {
   firstName: string;
   lastName: string;
   email?: string;
+  /** Normalised phone of the person this row represents — the claim key an
+   * officer sets so a later sign-up auto-links the row and its history.
+   * Absent when the roster row was added by name alone. */
+  phone?: string;
   /** Signed, time-limited URL for the linked account's profile photo. Absent
    * when the roster row has no account yet, or that person never set one —
    * the UI falls back to initials. */
@@ -64,6 +68,7 @@ export async function toMemberWire(
   };
   if (row.userId) wire.userId = row.userId;
   if (row.email) wire.email = row.email;
+  if (row.phone) wire.phone = row.phone;
 
   const avatar = await storage.resolveOptional(row.user?.avatarUrl);
   if (avatar) wire.avatarUrl = avatar;

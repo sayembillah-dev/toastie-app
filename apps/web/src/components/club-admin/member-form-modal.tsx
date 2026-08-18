@@ -5,7 +5,7 @@ import { App, Button, Form, Input, Modal, Select } from 'antd';
 import { ReadOnly } from '@/components/permissions/read-only';
 import type { Member, OfficerRole } from '@/lib/education/members';
 import { OFFICER_ROLES } from '@/lib/education/members';
-import { NAME_MAX, requiredSelectRule, shortNameRules } from '@/lib/validation/rules';
+import { NAME_MAX, phoneRules, requiredSelectRule, shortNameRules } from '@/lib/validation/rules';
 import { useCreateMemberMutation, useUpdateMemberMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -23,6 +23,7 @@ interface MemberFormModalProps {
 interface FormValues {
   firstName: string;
   lastName: string;
+  phone?: string;
   roles: OfficerRole[];
 }
 
@@ -68,6 +69,7 @@ function ModalBody({ member, onDone, onCancel }: ModalBodyProps) {
           memberId: member.id,
           firstName: values.firstName.trim(),
           lastName: values.lastName.trim(),
+          phone: values.phone?.trim() || undefined,
           roles: values.roles,
         }).unwrap();
         message.success('Member updated');
@@ -75,6 +77,7 @@ function ModalBody({ member, onDone, onCancel }: ModalBodyProps) {
         await createMember({
           firstName: values.firstName.trim(),
           lastName: values.lastName.trim(),
+          phone: values.phone?.trim() || undefined,
           roles: values.roles,
         }).unwrap();
         message.success('Member added');
@@ -93,6 +96,7 @@ function ModalBody({ member, onDone, onCancel }: ModalBodyProps) {
       initialValues={{
         firstName: member?.firstName ?? '',
         lastName: member?.lastName ?? '',
+        phone: member?.phone ?? '',
         roles: member?.roles ?? ['Member'],
       }}
       className="flex flex-col gap-4"
@@ -113,6 +117,16 @@ function ModalBody({ member, onDone, onCancel }: ModalBodyProps) {
         className="!mb-0"
       >
         <Input id="member-last-name" placeholder="Patel" maxLength={NAME_MAX} />
+      </Form.Item>
+
+      <Form.Item
+        label="Phone"
+        name="phone"
+        rules={phoneRules({ required: false })}
+        extra="Optional — when they sign up with this number, this roster row and everything planned for them links to their account automatically."
+        className="!mb-0"
+      >
+        <Input id="member-phone" placeholder="01568286512" inputMode="tel" maxLength={14} />
       </Form.Item>
 
       <Form.Item
