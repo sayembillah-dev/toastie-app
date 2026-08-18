@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Calendar,
   CalendarCheck,
   CalendarDots,
   ClockCounterClockwise,
@@ -202,22 +203,33 @@ export function MeetingsTabs() {
             the club has already shipped.
           </p>
         </div>
-        {/* Hidden on phones — the FAB below takes over so the primary action
-         * stays reachable without stealing the header row's tight space.
-         * Wrapper carries the breakpoint because antd's Button CSS is
-         * unlayered and would beat Tailwind's `hidden`. */}
-        <span className="hidden shrink-0 sm:inline-flex">
-          <ReadOnly resource="meeting" action="create">
-            <Button
-              type="primary"
-              size="middle"
-              onClick={handleCreateMeeting}
-              icon={<Plus size={16} weight="bold" />}
-            >
-              New meeting
-            </Button>
-          </ReadOnly>
-        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          {/* Stays visible on phones — the FAB below only covers "New
+           * meeting", and nothing else on the page routes to the planner. */}
+          <Button
+            size="middle"
+            onClick={() => router.push('/meetings/planner')}
+            icon={<Calendar size={16} weight="bold" />}
+          >
+            Planner
+          </Button>
+          {/* Hidden on phones — the FAB below takes over so the primary action
+           * stays reachable without stealing the header row's tight space.
+           * Wrapper carries the breakpoint because antd's Button CSS is
+           * unlayered and would beat Tailwind's `hidden`. */}
+          <span className="hidden sm:inline-flex">
+            <ReadOnly resource="meeting" action="create">
+              <Button
+                type="primary"
+                size="middle"
+                onClick={handleCreateMeeting}
+                icon={<Plus size={16} weight="bold" />}
+              >
+                New meeting
+              </Button>
+            </ReadOnly>
+          </span>
+        </div>
       </header>
 
       <Tabs
