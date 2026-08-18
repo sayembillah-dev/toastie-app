@@ -132,29 +132,19 @@ export function getEvaluationFormUrl(projectName: string): string | undefined {
   return EVALUATION_FORM_URLS[projectName];
 }
 
-/** Downloads a project's evaluation form. Cross-origin CDN links ignore the
- * anchor `download` attribute, so PDFs are fetched into a blob and saved
- * under the CDN's own filename; any failure (CORS, network) falls back to
- * opening the file in a new tab — which is also where non-PDF links go
- * straight away. */
-export async function downloadEvaluationForm(url: string): Promise<void> {
-  if (!url.toLowerCase().endsWith('.pdf')) {
-    window.open(url, '_blank', 'noopener,noreferrer');
-    return;
-  }
-  try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
+/** Downloads a project's evaluation form. The CDN serves PDFs without CORS
+ * headers, so a browser-side blob download is impossible — PDFs instead go
+ * through the API's allowlisted proxy, which replies with
+ * `Content-Disposition: attachment` and the browser saves the file
+ * directly. Non-PDF links open in a new tab. */
+export function downloadEvaluationForm(url: string): void {
+  if (url.toLowerCase().endsWith('.pdf')) {
     const anchor = document.createElement('a');
-    anchor.href = objectUrl;
-    anchor.download = url.split('/').pop() ?? 'evaluation-form.pdf';
+    anchor.href = `/api/education/evaluation-forms/download?url=${encodeURIComponent(url)}`;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
-    URL.revokeObjectURL(objectUrl);
-  } catch {
-    window.open(url, '_blank', 'noopener,noreferrer');
+    return;
   }
+  window.open(url, '_blank', 'noopener,noreferrer');
 }

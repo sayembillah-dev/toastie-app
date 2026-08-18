@@ -2,7 +2,6 @@
 
 import {
   CaretRight,
-  CircleNotch,
   DownloadSimple,
   GraduationCap,
   Info,
@@ -104,7 +103,6 @@ function ProjectRow({
   pathwayName: string;
 }) {
   const formUrl = getEvaluationFormUrl(project.name);
-  const [downloading, setDownloading] = useState(false);
 
   return (
     <div
@@ -117,20 +115,12 @@ function ProjectRow({
         {formUrl ? (
           <button
             type="button"
-            disabled={downloading}
-            onClick={() => {
-              setDownloading(true);
-              void downloadEvaluationForm(formUrl).finally(() => setDownloading(false));
-            }}
+            onClick={() => downloadEvaluationForm(formUrl)}
             aria-label={`Download the evaluation form for ${project.name}`}
             title="Download evaluation form"
-            className="flex size-6 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-fill-strong hover:text-ink disabled:opacity-50"
+            className="flex size-6 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-fill-strong hover:text-ink"
           >
-            {downloading ? (
-              <CircleNotch size={14} weight="bold" className="animate-spin" />
-            ) : (
-              <DownloadSimple size={14} weight="bold" />
-            )}
+            <DownloadSimple size={14} weight="bold" />
           </button>
         ) : null}
         <a
