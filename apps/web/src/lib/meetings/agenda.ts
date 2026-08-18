@@ -4,8 +4,10 @@ import type { MeetingDraft, RoleHolder } from './draft';
 import type { Meeting } from './meetings';
 import { getToastmasterAbbrev, getToastmasterLabel } from './roles';
 
-/** Club identity printed on the agenda header. Hard-coded until club settings
- * exist — one place to change when they do. */
+/** Agenda header identity. `name`/org lineage are only the loading-state
+ * fallback — the live values come from the club profile (`useGetClubProfileQuery`
+ * in agenda-preview). `mission` is the standard Toastmasters club mission and
+ * still prints from here. */
 export const CLUB = {
   name: 'Nifty Toastmasters Club',
   district: '124',

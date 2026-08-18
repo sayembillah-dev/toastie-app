@@ -10,6 +10,7 @@ import { buildAgenda, CLUB, holderName, speakerPerson } from '@/lib/meetings/age
 import type { MeetingDraft } from '@/lib/meetings/draft';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { buildRoles } from '@/lib/meetings/roles';
+import { useGetClubProfileQuery } from '@/store/api';
 import { useAppSelector } from '@/store/hooks';
 import { selectMeetingDraft } from '@/store/meeting-draft-slice';
 
@@ -88,6 +89,13 @@ function HeaderRays() {
 }
 
 function SheetHeader({ meeting, theme }: { meeting: Meeting; theme: string }) {
+  // Banner identity comes from the club profile (name + org lineage);
+  // the hard-coded CLUB constants only cover the loading splash.
+  const { data: club } = useGetClubProfileQuery();
+  const lineage = club
+    ? [club.districtName, club.divisionName, club.areaName].filter(Boolean).join(' · ')
+    : `District ${CLUB.district} · Division ${CLUB.division} · Area ${CLUB.area}`;
+
   return (
     <>
       <div
@@ -134,11 +142,10 @@ function SheetHeader({ meeting, theme }: { meeting: Meeting; theme: string }) {
           }}
         >
           <div style={{ fontSize: 20, fontWeight: 'bold', color: 'white', letterSpacing: 0.5 }}>
-            {CLUB.name}
+            {club?.name ?? CLUB.name}
           </div>
           <div style={{ fontSize: 10, color: '#b8d4f0', letterSpacing: 1, marginTop: 2 }}>
-            District {CLUB.district} &nbsp;·&nbsp; Division {CLUB.division} &nbsp;·&nbsp; Area{' '}
-            {CLUB.area}
+            {lineage}
           </div>
         </div>
       </div>
