@@ -2,6 +2,8 @@
 
 import {
   CaretRight,
+  CircleNotch,
+  DownloadSimple,
   GraduationCap,
   Info,
   MagnifyingGlass,
@@ -11,6 +13,7 @@ import {
 import { Drawer, Input } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
+import { downloadEvaluationForm, getEvaluationFormUrl } from '@/lib/education/evaluation-forms';
 import type { CatalogLevel, CatalogProject, PathwayCatalogEntry } from '@/lib/education/pathways';
 import { PATHWAY_CATALOG } from '@/lib/education/pathways';
 
@@ -100,23 +103,47 @@ function ProjectRow({
   levelTitle: string;
   pathwayName: string;
 }) {
+  const formUrl = getEvaluationFormUrl(project.name);
+  const [downloading, setDownloading] = useState(false);
+
   return (
     <div
       id={`project-${slugify(project.name)}`}
-      className={`relative rounded-lg border px-3 py-2 pr-8 text-xs transition-colors sm:text-sm ${
-        highlighted ? 'border-ink bg-fill' : 'border-line bg-canvas'
-      }`}
+      className={`relative rounded-lg border px-3 py-2 text-xs transition-colors sm:text-sm ${
+        formUrl ? 'pr-14' : 'pr-8'
+      } ${highlighted ? 'border-ink bg-fill' : 'border-line bg-canvas'}`}
     >
-      <a
-        href={projectSearchUrl({ level, levelTitle, pathwayName, projectName: project.name })}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label={`Search for more about ${project.name}`}
-        title="Look this project up"
-        className="absolute right-1.5 top-1.5 flex size-6 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-fill-strong hover:text-ink"
-      >
-        <Info size={14} weight="bold" />
-      </a>
+      <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5">
+        {formUrl ? (
+          <button
+            type="button"
+            disabled={downloading}
+            onClick={() => {
+              setDownloading(true);
+              void downloadEvaluationForm(formUrl).finally(() => setDownloading(false));
+            }}
+            aria-label={`Download the evaluation form for ${project.name}`}
+            title="Download evaluation form"
+            className="flex size-6 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-fill-strong hover:text-ink disabled:opacity-50"
+          >
+            {downloading ? (
+              <CircleNotch size={14} weight="bold" className="animate-spin" />
+            ) : (
+              <DownloadSimple size={14} weight="bold" />
+            )}
+          </button>
+        ) : null}
+        <a
+          href={projectSearchUrl({ level, levelTitle, pathwayName, projectName: project.name })}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Search for more about ${project.name}`}
+          title="Look this project up"
+          className="flex size-6 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-fill-strong hover:text-ink"
+        >
+          <Info size={14} weight="bold" />
+        </a>
+      </div>
       <div className="pr-1 font-medium text-ink">{project.name}</div>
       <div className="mt-1 inline-block rounded-full bg-fill-strong px-2 py-0.5 text-[10px] font-medium text-ink-soft sm:text-[11px]">
         {project.speechTime}
