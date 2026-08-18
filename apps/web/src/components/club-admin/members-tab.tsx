@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Clock,
   MagnifyingGlass,
   ShieldCheck,
   UserPlus,
@@ -177,8 +178,20 @@ export function MembersTab() {
                           <ShieldCheck size={11} weight="bold" /> Admin
                         </Tag>
                       ) : null}
+                      {/* No account has claimed this roster row yet — the
+                          person can still be assigned everywhere, and the row
+                          links itself the moment they sign up (with a matching
+                          phone, if one is set). */}
+                      {!member.userId ? (
+                        <Tag className="inline-flex items-center gap-1">
+                          <Clock size={11} weight="bold" /> Not joined yet
+                        </Tag>
+                      ) : null}
                     </p>
-                    <p className="truncate text-xs text-ink-muted">{formatRoles(member)}</p>
+                    <p className="truncate text-xs text-ink-muted">
+                      {formatRoles(member)}
+                      {member.phone ? ` · ${member.phone}` : null}
+                    </p>
                   </div>
                 </div>
                 <ReadOnly resource="memberRole">
