@@ -9,7 +9,8 @@ export type UploadSurface =
   | 'planner'
   | 'inventory'
   | 'avatar'
-  | 'guestAvatar';
+  | 'guestAvatar'
+  | 'clubBanner';
 
 type SignResponse =
   | { mode: 's3'; url: string; key: string; expiresInSeconds: number }

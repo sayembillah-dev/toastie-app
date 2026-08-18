@@ -1,5 +1,7 @@
 import type { Club } from '@prisma/client';
 
+import type { StorageService } from '@/storage';
+
 import type { OrgClubStatus } from './dto/clubs.dto';
 
 /** Wire shape for `GET /org-clubs` — string-identical to the web
@@ -67,10 +69,15 @@ export interface ClubProfileWire {
   areaName?: string;
   divisionName?: string;
   districtName?: string;
+  bannerColor?: string;
+  /** Signed, time-limited URL for the custom agenda banner image — minted
+   * per response like `UserWire.avatarUrl`, so it is never sent back. */
+  bannerImageUrl?: string;
+  bannerImagePos?: { x: number; y: number; zoom: number; aspect?: number };
   updatedAt: string;
 }
 
-export function toClubProfileWire(
+export async function toClubProfileWire(
   row: Pick<
     Club,
     | 'id'
@@ -81,11 +88,15 @@ export function toClubProfileWire(
     | 'venueMapUrl'
     | 'contactPhone'
     | 'socials'
+    | 'bannerColor'
+    | 'bannerImage'
+    | 'bannerImagePos'
     | 'updatedAt'
   > & {
     area?: { name: string; division?: { name: string; district?: { name: string } } } | null;
   },
-): ClubProfileWire {
+  storage: StorageService,
+): Promise<ClubProfileWire> {
   const out: ClubProfileWire = {
     id: row.id,
     name: row.name,
@@ -97,6 +108,16 @@ export function toClubProfileWire(
   if (row.venueAddress) out.venueAddress = row.venueAddress;
   if (row.venueMapUrl) out.venueMapUrl = row.venueMapUrl;
   if (row.contactPhone) out.contactPhone = row.contactPhone;
+  if (row.bannerColor) out.bannerColor = row.bannerColor;
+  const bannerImageUrl = await storage.resolveOptional(row.bannerImage);
+  if (bannerImageUrl) out.bannerImageUrl = bannerImageUrl;
+  if (
+    row.bannerImagePos &&
+    typeof row.bannerImagePos === 'object' &&
+    !Array.isArray(row.bannerImagePos)
+  ) {
+    out.bannerImagePos = row.bannerImagePos as ClubProfileWire['bannerImagePos'];
+  }
   if (row.area) {
     out.areaName = row.area.name;
     if (row.area.division) {

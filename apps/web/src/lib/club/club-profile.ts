@@ -20,6 +20,18 @@ export interface ClubSocial {
   url: string;
 }
 
+/** How a custom agenda banner image sits inside the fixed banner strip:
+ * `x`/`y` are CSS background-position percentages, `zoom` multiplies the
+ * cover fit (1 = exactly cover), and `aspect` is the image's natural
+ * width / height — stored at upload time so the printed sheet can size the
+ * image without fetching it first. */
+export interface ClubBannerPos {
+  x: number;
+  y: number;
+  zoom: number;
+  aspect?: number;
+}
+
 /** The Club Admin-editable identity of their own club — served by
  * `GET /clubs/mine`. Area/division/district are read-only here: a
  * District/Division/Area Director sets club placement from the org
@@ -36,6 +48,12 @@ export interface ClubProfile {
   areaName: string | null;
   divisionName: string | null;
   districtName: string | null;
+  /** Hex colour for the printed agenda banner; null = default navy. */
+  bannerColor: string | null;
+  /** Signed, time-limited URL for the custom banner image — never sent
+   * back to the API (the write field is `UpdateClubProfileInput.bannerImage`). */
+  bannerImageUrl: string | null;
+  bannerImagePos: ClubBannerPos | null;
   updatedAt: string;
 }
 
@@ -44,6 +62,18 @@ export interface ClubProfile {
 export type UpdateClubProfileInput = Partial<
   Pick<
     ClubProfile,
-    'name' | 'clubNumber' | 'motto' | 'venueAddress' | 'venueMapUrl' | 'contactPhone' | 'socials'
+    | 'name'
+    | 'clubNumber'
+    | 'motto'
+    | 'venueAddress'
+    | 'venueMapUrl'
+    | 'contactPhone'
+    | 'socials'
+    | 'bannerColor'
+    | 'bannerImagePos'
   >
->;
+> & {
+  /** Write-only counterpart of `bannerImageUrl` — the storage key (or
+   * inline data-URL) returned by `uploadFile`. `null` removes the image. */
+  bannerImage?: string | null;
+};

@@ -11,6 +11,7 @@ import { can, type PermissionSubject, scopeFilter } from '@toastly/access';
 import { ClubLineageCache } from '@/access';
 import { ActivityService } from '@/activity';
 import { PrismaService } from '@/prisma';
+import { StorageService } from '@/storage';
 
 import {
   type CreateOrgClubDto,
@@ -37,6 +38,9 @@ const CLUB_PROFILE_SELECT = {
   venueMapUrl: true,
   contactPhone: true,
   socials: true,
+  bannerColor: true,
+  bannerImage: true,
+  bannerImagePos: true,
   updatedAt: true,
   area: {
     select: {
@@ -52,6 +56,7 @@ export class ClubsService {
     private readonly prisma: PrismaService,
     private readonly lineageCache: ClubLineageCache,
     private readonly activity: ActivityService,
+    private readonly storage: StorageService,
   ) {}
 
   /** Directory list, scoped to the caller's `club:read` reach. Unplaced
@@ -337,7 +342,7 @@ export class ClubsService {
       select: CLUB_PROFILE_SELECT,
     });
     if (!row) throw new NotFoundException(`No club with id "${clubId}"`);
-    return toClubProfileWire(row);
+    return toClubProfileWire(row, this.storage);
   }
 
   /** Write side of the Club Profile page — `PATCH /clubs/mine`. Unlike
@@ -351,7 +356,7 @@ export class ClubsService {
   ): Promise<ClubProfileWire> {
     const existing = await this.prisma.club.findUnique({
       where: { id: clubId },
-      select: { id: true },
+      select: { id: true, bannerImage: true },
     });
     if (!existing) throw new NotFoundException(`No club with id "${clubId}"`);
 
@@ -371,6 +376,32 @@ export class ClubsService {
     }
     if ('contactPhone' in dto && dto.contactPhone !== undefined) {
       data.contactPhone = dto.contactPhone === null ? null : dto.contactPhone.trim() || null;
+    }
+    if ('bannerColor' in dto && dto.bannerColor !== undefined) {
+      data.bannerColor =
+        dto.bannerColor === null ? null : dto.bannerColor.trim().toLowerCase() || null;
+    }
+    if ('bannerImage' in dto && dto.bannerImage !== undefined) {
+      // Club-scoped like every other club file column: the key must sit
+      // under `clubs/<clubId>/clubBanner/`, or one club could point its row
+      // at another club's object and have the API sign it for them.
+      if (dto.bannerImage) this.storage.assertOwnedKey(dto.bannerImage, 'clubBanner', clubId);
+      data.bannerImage = dto.bannerImage || null;
+      // Replacing or removing the image orphans the old object; drop it once
+      // the write below succeeds (see after the transaction).
+    }
+    if ('bannerImagePos' in dto && dto.bannerImagePos !== undefined) {
+      data.bannerImagePos =
+        dto.bannerImagePos === null
+          ? Prisma.DbNull
+          : {
+              x: dto.bannerImagePos.x,
+              y: dto.bannerImagePos.y,
+              zoom: dto.bannerImagePos.zoom,
+              ...(dto.bannerImagePos.aspect !== undefined
+                ? { aspect: dto.bannerImagePos.aspect }
+                : {}),
+            };
     }
     if (dto.socials !== undefined) {
       data.socials = dto.socials.map((social) => ({
@@ -400,7 +431,14 @@ export class ClubsService {
         );
         return updated;
       });
-      return toClubProfileWire(row);
+      if (
+        dto.bannerImage !== undefined &&
+        existing.bannerImage &&
+        existing.bannerImage !== row.bannerImage
+      ) {
+        await this.storage.remove(existing.bannerImage);
+      }
+      return toClubProfileWire(row, this.storage);
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         throw new ConflictException({

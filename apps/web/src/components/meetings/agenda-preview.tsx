@@ -5,6 +5,8 @@ import { Button } from 'antd';
 import Image from 'next/image';
 import { Fragment, useMemo } from 'react';
 
+import { bannerImageCss } from '@/lib/club/banner';
+import type { ClubBannerPos } from '@/lib/club/club-profile';
 import type { AgendaRow } from '@/lib/meetings/agenda';
 import { buildAgenda, CLUB, holderName, speakerPerson } from '@/lib/meetings/agenda';
 import type { MeetingDraft } from '@/lib/meetings/draft';
@@ -89,20 +91,33 @@ function HeaderRays() {
 }
 
 function SheetHeader({ meeting, theme }: { meeting: Meeting; theme: string }) {
-  // Banner identity comes from the club profile (name + org lineage);
-  // the hard-coded CLUB constants only cover the loading splash.
+  // Banner identity comes from the club profile (name + org lineage +
+  // banner colour/image); the hard-coded CLUB constants only cover the
+  // loading splash.
   const { data: club } = useGetClubProfileQuery();
   const lineage = club
     ? [club.districtName, club.divisionName, club.areaName].filter(Boolean).join(' · ')
     : `District ${CLUB.district} · Division ${CLUB.division} · Area ${CLUB.area}`;
 
+  /* Banner background precedence: a custom image (positioned exactly as the
+   * admin dragged it in club settings) wins over the picked colour, which
+   * wins over the default navy. The image keeps the picked colour (or navy)
+   * behind it so the strip is never blank while the file loads. */
+  const bannerBackground: React.CSSProperties = {
+    backgroundColor: club?.bannerColor?.trim() || NAVY,
+  };
+  if (club?.bannerImageUrl) {
+    const pos: ClubBannerPos = club.bannerImagePos ?? { x: 50, y: 50, zoom: 1 };
+    Object.assign(bannerBackground, bannerImageCss(club.bannerImageUrl, pos));
+  }
+
   return (
     <>
       <div
         style={{
+          ...bannerBackground,
           position: 'relative',
           overflow: 'hidden',
-          background: NAVY,
           height: 72,
           display: 'flex',
           alignItems: 'center',

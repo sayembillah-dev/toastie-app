@@ -4,10 +4,13 @@ import {
   IsArray,
   IsEnum,
   IsIn,
+  IsNumber,
   IsOptional,
   IsString,
   Matches,
+  Max,
   MaxLength,
+  Min,
   MinLength,
   ValidateNested,
 } from 'class-validator';
@@ -102,6 +105,34 @@ class ClubSocialDto {
   url!: string;
 }
 
+/** Position of a custom agenda banner image inside the fixed banner frame.
+ * `x`/`y` are CSS background-position percentages; `zoom` multiplies the
+ * cover fit (1 = exactly cover); `aspect` is the image's natural width /
+ * height, stored at upload time so the print renderer can size the image
+ * without fetching it. */
+class BannerImagePosDto {
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  x!: number;
+
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  y!: number;
+
+  @IsNumber()
+  @Min(1)
+  @Max(8)
+  zoom!: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  @Max(20)
+  aspect?: number;
+}
+
 /** Body for `PATCH /clubs/mine` — a Club Admin editing their own club's
  * profile. `null` explicitly clears a field; `undefined` leaves it alone,
  * same convention as `UpdateOrgClubDto.clubNumber`. */
@@ -140,6 +171,28 @@ export class UpdateClubProfileDto {
   @Transform(({ value }) => (value === undefined || value === null ? value : normalizePhone(value)))
   @Matches(PHONE_REGEX, { message: 'Phone must be exactly 11 digits' })
   contactPhone?: string | null;
+
+  /** Hex colour for the printed agenda banner strip — `#003366` style.
+   * `null` restores the default navy. */
+  @IsOptional()
+  @Matches(/^#[0-9a-fA-F]{6}$/, { message: 'Banner colour must be a hex code like #003366' })
+  bannerColor?: string | null;
+
+  /** Storage key (or inline data-URL on the local backend) for a custom
+   * agenda banner image — same convention as `UpdateProfileDto.avatarUrl`.
+   * `null` removes the image. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(200_000)
+  bannerImage?: string | null;
+
+  /** The crop the admin dragged into place, persisted alongside
+   * `bannerImage` so the printed sheet matches the settings preview.
+   * `null` resets it. */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BannerImagePosDto)
+  bannerImagePos?: BannerImagePosDto | null;
 
   @IsOptional()
   @IsArray()

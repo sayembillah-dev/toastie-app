@@ -13,6 +13,7 @@ export const STORAGE_SURFACES = [
   'inventory',
   'avatar',
   'guestAvatar',
+  'clubBanner',
   'evaluationAudio',
   'evaluationImage',
 ] as const;
@@ -108,6 +109,15 @@ export const SURFACE_RULES: Record<StorageSurface, SurfaceRule> = {
     scope: 'club',
     mimeTypes: IMAGE_MIME_TYPES,
     maxBytes: 5 * MB,
+  },
+  /** Custom printed-agenda banner image from the Club Profile page. Gated
+   * on the same `club:update` grant the page itself requires. */
+  clubBanner: {
+    resource: 'club',
+    actions: ['update'],
+    scope: 'club',
+    mimeTypes: IMAGE_MIME_TYPES,
+    maxBytes: 8 * MB,
   },
   // Not reachable via the authenticated `/uploads/sign` endpoint — see the
   // explicit rejection in `UploadsService.sign`. Signed only by

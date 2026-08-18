@@ -339,6 +339,17 @@ model Club {
   contactPhone    String?
   /// Same embedded-JSON shape as `User.socials` — see that field's comment.
   socials         Json                @default("[]")
+  /// Printed-agenda banner customisation. `bannerColor` is a hex code
+  /// (`#003366`); null falls back to the default Toastmasters navy at
+  /// render time. `bannerImage` holds a storage key (or legacy inline
+  /// data-URL) for a custom banner image, resolved to a signed URL on the
+  /// way out like `User.avatarUrl`. `bannerImagePos` is
+  /// `{ x, y, zoom, aspect }` — background-position percentages plus a
+  /// cover-fit zoom, with the image's natural w/h so renderers can size it
+  /// without loading the file.
+  bannerColor     String?
+  bannerImage     String?
+  bannerImagePos  Json?
   /// Short, out-of-band join credential — a Club Admin reads this off their
   /// own dashboard and hands it to someone directly (text, verbally, etc.).
   /// Deliberately separate from `slug`: the slug is public (it's in the

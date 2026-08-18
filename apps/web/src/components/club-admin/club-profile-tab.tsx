@@ -1,15 +1,28 @@
 'use client';
 
-import { Buildings, MapPin, Plus, Trash, WarningCircle } from '@phosphor-icons/react/dist/ssr';
-import { App, Button, Form, Input, Select, Space } from 'antd';
-import { useEffect, useMemo } from 'react';
+import {
+  Buildings,
+  Image as ImageIcon,
+  MapPin,
+  Plus,
+  Trash,
+  UploadSimple,
+  WarningCircle,
+} from '@phosphor-icons/react/dist/ssr';
+import { App, Button, ColorPicker, Form, Input, Select, Space, Upload } from 'antd';
+import { useEffect, useMemo, useState } from 'react';
+import { BannerImageFrame } from '@/components/club-admin/banner-image-frame';
 import { ReadOnly } from '@/components/permissions/read-only';
+import { DEFAULT_BANNER_POS } from '@/lib/club/banner';
 import {
   CLUB_SOCIAL_PLATFORMS,
+  type ClubBannerPos,
   type ClubProfile,
   type ClubSocial,
   type ClubSocialPlatform,
+  type UpdateClubProfileInput,
 } from '@/lib/club/club-profile';
+import { uploadFile } from '@/lib/uploads';
 import {
   nameRules,
   normalizePhone,
@@ -27,6 +40,7 @@ interface FormValues {
   venueAddress?: string;
   venueMapUrl?: string;
   contactPhone?: string;
+  bannerColor?: string | null;
   socials: ClubSocial[];
 }
 
@@ -38,8 +52,24 @@ function deserialize(club: ClubProfile): FormValues {
     venueAddress: club.venueAddress ?? '',
     venueMapUrl: club.venueMapUrl ?? '',
     contactPhone: club.contactPhone ?? '',
+    bannerColor: club.bannerColor ?? null,
     socials: club.socials.map((social) => ({ ...social })),
   };
+}
+
+/** Natural w/h of a picked image, decoded from its object URL. A failed
+ * decode resolves to 1 (square) rather than blocking the upload — the drag
+ * frame then just treats the image as a plain cover fit. */
+function readImageAspect(url: string): Promise<number> {
+  return new Promise((resolve) => {
+    const img = new window.Image();
+    img.onload = () =>
+      resolve(
+        img.naturalWidth > 0 && img.naturalHeight > 0 ? img.naturalWidth / img.naturalHeight : 1,
+      );
+    img.onerror = () => resolve(1);
+    img.src = url;
+  });
 }
 
 const SOCIAL_OPTIONS = CLUB_SOCIAL_PLATFORMS.map((platform) => ({
@@ -92,11 +122,48 @@ function ClubProfileForm({ club }: { club: ClubProfile }) {
   const [form] = Form.useForm<FormValues>();
   const [updateClubProfile, { isLoading }] = useUpdateClubProfileMutation();
 
+  /* Custom agenda banner: the picked file waits locally (same deferred
+   * pattern as the profile avatar) and only uploads when Save is pressed,
+   * so a discarded selection never touches storage. */
+  const [bannerPending, setBannerPending] = useState<{
+    file: File;
+    previewUrl: string;
+    aspect: number;
+  } | null>(null);
+  const [bannerCleared, setBannerCleared] = useState(false);
+  const [bannerPos, setBannerPos] = useState<ClubBannerPos | null>(club.bannerImagePos ?? null);
+  const [bannerPosDirty, setBannerPosDirty] = useState(false);
+
   const initialValues = useMemo(() => deserialize(club), [club]);
 
+  /* This component is keyed on `club.updatedAt` (see ClubProfileTab), so a
+   * post-save refetch remounts it: the pending upload clears itself and the
+   * wire's fresh signed URL shows — no reset effect needed. */
+
   useEffect(() => {
-    form.setFieldsValue(initialValues);
-  }, [form, initialValues]);
+    if (!bannerPending) return;
+    return () => URL.revokeObjectURL(bannerPending.previewUrl);
+  }, [bannerPending]);
+
+  const shownBanner =
+    bannerPending?.previewUrl ?? (bannerCleared ? null : (club.bannerImageUrl ?? null));
+  const framePos: ClubBannerPos | null = shownBanner
+    ? {
+        x: bannerPos?.x ?? 50,
+        y: bannerPos?.y ?? 50,
+        zoom: bannerPos?.zoom ?? 1,
+        aspect: bannerPending?.aspect ?? bannerPos?.aspect ?? club.bannerImagePos?.aspect,
+      }
+    : null;
+
+  async function handleBannerFile(file: File): Promise<boolean> {
+    const previewUrl = URL.createObjectURL(file);
+    const aspect = await readImageAspect(previewUrl);
+    setBannerPending({ file, previewUrl, aspect });
+    setBannerCleared(false);
+    setBannerPos((prev) => ({ ...(prev ?? DEFAULT_BANNER_POS), aspect }));
+    return false; // antd Upload: never auto-POST — Save uploads via uploadFile
+  }
 
   async function handleSave() {
     let values: FormValues;
@@ -114,6 +181,19 @@ function ClubProfileForm({ club }: { club: ClubProfile }) {
       }));
 
     try {
+      let banner: Pick<UpdateClubProfileInput, 'bannerImage' | 'bannerImagePos'> = {};
+      if (bannerPending) {
+        const key = await uploadFile(bannerPending.file, 'clubBanner');
+        banner = {
+          bannerImage: key,
+          bannerImagePos: { ...(bannerPos ?? DEFAULT_BANNER_POS), aspect: bannerPending.aspect },
+        };
+      } else if (bannerCleared) {
+        banner = { bannerImage: null, bannerImagePos: null };
+      } else if (bannerPosDirty && bannerPos) {
+        banner = { bannerImagePos: bannerPos };
+      }
+
       await updateClubProfile({
         name: values.name.trim(),
         clubNumber: values.clubNumber?.trim() || null,
@@ -121,7 +201,9 @@ function ClubProfileForm({ club }: { club: ClubProfile }) {
         venueAddress: values.venueAddress?.trim() || null,
         venueMapUrl: values.venueMapUrl?.trim() || null,
         contactPhone: values.contactPhone?.trim() ? normalizePhone(values.contactPhone) : null,
+        bannerColor: values.bannerColor?.trim() || null,
         socials: cleanedSocials,
+        ...banner,
       }).unwrap();
       message.success('Club profile saved');
     } catch (err) {
@@ -270,6 +352,82 @@ function ClubProfileForm({ club }: { club: ClubProfile }) {
           </div>
 
           <div className="mt-4 rounded-xl border border-line bg-canvas p-5">
+            <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-ink-muted">
+              <ImageIcon size={14} weight="bold" />
+              Agenda banner
+            </div>
+            <p className="mb-4 text-xs text-ink-muted">
+              Printed at the top of every meeting agenda PDF. Pick a colour, or upload a custom
+              image and drag it into place — when an image is set it wins over the colour.
+            </p>
+
+            <Form.Item
+              label="Banner colour"
+              name="bannerColor"
+              className="!mb-4"
+              getValueProps={(value: string | null | undefined) => ({ value: value || null })}
+              getValueFromEvent={(color: { cleared?: boolean; toHexString?: () => string }) =>
+                color?.cleared ? null : (color?.toHexString?.() ?? null)
+              }
+            >
+              <ColorPicker
+                format="hex"
+                showText
+                allowClear
+                disabledAlpha
+                onClear={() => form.setFieldValue('bannerColor', null)}
+              />
+            </Form.Item>
+
+            <Form.Item label="Custom banner image" className="!mb-0">
+              <div className="flex flex-col gap-3">
+                {shownBanner && framePos ? (
+                  <BannerImageFrame
+                    src={shownBanner}
+                    pos={framePos}
+                    disabled={isLoading}
+                    onChange={(next) => {
+                      setBannerPos(next);
+                      setBannerPosDirty(true);
+                    }}
+                  />
+                ) : null}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Upload
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    showUploadList={false}
+                    beforeUpload={handleBannerFile}
+                    disabled={isLoading}
+                  >
+                    <Button icon={<UploadSimple size={14} weight="bold" />}>
+                      {shownBanner ? 'Replace image' : 'Upload image'}
+                    </Button>
+                  </Upload>
+                  {shownBanner ? (
+                    <Button
+                      type="text"
+                      danger
+                      icon={<Trash size={14} weight="bold" />}
+                      onClick={() => {
+                        setBannerPending(null);
+                        setBannerCleared(true);
+                        setBannerPos(null);
+                        setBannerPosDirty(false);
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  ) : (
+                    <span className="text-xs text-ink-muted">
+                      Wide images work best — the strip spans the full page width.
+                    </span>
+                  )}
+                </div>
+              </div>
+            </Form.Item>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-line bg-canvas p-5">
             <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-ink-muted">
               <Buildings size={14} weight="bold" />
               Organization
@@ -320,5 +478,8 @@ export function ClubProfileTab() {
 
   if (!club) return <ClubProfileSkeleton />;
 
-  return <ClubProfileForm club={club} />;
+  // Keyed on `updatedAt`: the refetch after a successful save remounts the
+  // form with the fresh wire values (including the banner image's new signed
+  // URL) instead of layering reset effects on top.
+  return <ClubProfileForm key={club.updatedAt} club={club} />;
 }
