@@ -98,6 +98,26 @@ export type CreateMemberInput = Pick<Member, 'firstName' | 'lastName' | 'phone'>
  * profile/role editing. */
 export type UpdateMemberInput = Partial<Pick<Member, 'firstName' | 'lastName' | 'roles' | 'phone'>>;
 
+/** One row of a bulk-add submission that didn't make it onto the roster.
+ * `index` points at the row's position in the submitted array so the bulk-add
+ * table can line the failure back up with the right row. */
+export interface BulkCreateMemberFailure {
+  index: number;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+  code: string;
+  message: string;
+}
+
+/** Result of `POST /members/bulk` — best-effort per row: conflicts (phone
+ * already on the roster, duplicate phone inside the batch) are reported in
+ * `failed`, the rest are created. */
+export interface BulkCreateMembersResult {
+  created: Member[];
+  failed: BulkCreateMemberFailure[];
+}
+
 export const SEED_MEMBERS: Member[] = [
   {
     id: 'm-01',

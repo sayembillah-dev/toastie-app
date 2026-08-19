@@ -1,24 +1,28 @@
 'use client';
 
 import {
+  CaretDown,
   Clock,
   MagnifyingGlass,
+  PaperPlaneTilt,
   ShieldCheck,
+  Table as TableIcon,
   UserPlus,
   Users,
   WarningCircle,
 } from '@phosphor-icons/react/dist/ssr';
 import { App, Button, Dropdown, Input, Segmented, Skeleton, Tag } from 'antd';
 import { useMemo, useState } from 'react';
+import { BulkAddMembersModal } from '@/components/club-admin/bulk-add-members-modal';
 import { ConvertGuestModal } from '@/components/club-admin/convert-guest-modal';
 import { InvitePanel } from '@/components/club-admin/invite-panel';
 import { MemberFormModal } from '@/components/club-admin/member-form-modal';
+import { MemberInviteModal } from '@/components/club-admin/member-invite-modal';
 import { StaggerItem, StaggerList } from '@/components/motion/stagger-list';
 import { ReadOnly } from '@/components/permissions/read-only';
 import { PersonAvatar } from '@/components/ui/person-avatar';
 import type { Member } from '@/lib/education/members';
 import { formatRoles, getInitials } from '@/lib/education/members';
-import { useCan } from '@/lib/permissions/use-can';
 import {
   useGetMembersQuery,
   useSetMemberAdminMutation,
@@ -39,8 +43,6 @@ function matchesQuery(member: Member, needle: string): boolean {
  * changes all live here; per-module permission editing is its own tab. */
 export function MembersTab() {
   const { message } = App.useApp();
-  const { can } = useCan();
-  const canMutate = can('update', 'memberRole');
   const {
     data: members,
     isLoading,
@@ -51,8 +53,11 @@ export function MembersTab() {
 
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<RosterFilter>('active');
+  const [addOpen, setAddOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [convertOpen, setConvertOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [invitingMember, setInvitingMember] = useState<Member | null>(null);
 
   const [setStatus] = useSetMemberStatusMutation();
   const [setAdmin] = useSetMemberAdminMutation();
@@ -116,7 +121,24 @@ export function MembersTab() {
           </div>
           <ReadOnly resource="member" action="create">
             <div className="flex flex-wrap items-center gap-2">
-              <Button icon={<UserPlus size={14} />} onClick={() => setConvertOpen(true)}>
+              <Dropdown
+                trigger={['click']}
+                menu={{
+                  items: [
+                    { key: 'single', label: 'Single member', icon: <UserPlus size={14} /> },
+                    { key: 'bulk', label: 'Bulk members', icon: <TableIcon size={14} /> },
+                  ],
+                  onClick: ({ key }) => {
+                    if (key === 'single') setAddOpen(true);
+                    else if (key === 'bulk') setBulkOpen(true);
+                  },
+                }}
+              >
+                <Button type="primary" icon={<UserPlus size={14} />}>
+                  Add member <CaretDown size={12} />
+                </Button>
+              </Dropdown>
+              <Button icon={<Users size={14} />} onClick={() => setConvertOpen(true)}>
                 Add from guests
               </Button>
             </div>
@@ -194,31 +216,47 @@ export function MembersTab() {
                     </p>
                   </div>
                 </div>
-                <ReadOnly resource="memberRole">
-                  <Dropdown
-                    trigger={['click']}
-                    menu={{
-                      items: [
-                        { key: 'edit', label: 'Edit member' },
-                        {
-                          key: 'admin',
-                          label: member.isClubAdmin ? 'Remove as Club Admin' : 'Make Club Admin',
+                <div className="flex shrink-0 items-center gap-2">
+                  {/* Personal invite link — only meaningful while the roster
+                      row is unclaimed; once they hold an account the row is
+                      theirs already. */}
+                  {!member.userId && member.status === 'active' ? (
+                    <ReadOnly resource="invite" action="create">
+                      <Button
+                        size="small"
+                        icon={<PaperPlaneTilt size={13} />}
+                        onClick={() => setInvitingMember(member)}
+                      >
+                        Invite
+                      </Button>
+                    </ReadOnly>
+                  ) : null}
+                  <ReadOnly resource="memberRole">
+                    <Dropdown
+                      trigger={['click']}
+                      menu={{
+                        items: [
+                          { key: 'edit', label: 'Edit member' },
+                          {
+                            key: 'admin',
+                            label: member.isClubAdmin ? 'Remove as Club Admin' : 'Make Club Admin',
+                          },
+                          member.status === 'active'
+                            ? { key: 'remove', label: 'Remove member', danger: true }
+                            : { key: 'restore', label: 'Restore member' },
+                        ],
+                        onClick: ({ key }) => {
+                          if (key === 'edit') setEditingMember(member);
+                          else if (key === 'admin') void handleAdminToggle(member);
+                          else if (key === 'remove') void handleStatusChange(member, 'removed');
+                          else if (key === 'restore') void handleStatusChange(member, 'active');
                         },
-                        member.status === 'active'
-                          ? { key: 'remove', label: 'Remove member', danger: true }
-                          : { key: 'restore', label: 'Restore member' },
-                      ],
-                      onClick: ({ key }) => {
-                        if (key === 'edit') setEditingMember(member);
-                        else if (key === 'admin') void handleAdminToggle(member);
-                        else if (key === 'remove') void handleStatusChange(member, 'removed');
-                        else if (key === 'restore') void handleStatusChange(member, 'active');
-                      },
-                    }}
-                  >
-                    <Button size="small">Actions</Button>
-                  </Dropdown>
-                </ReadOnly>
+                      }}
+                    >
+                      <Button size="small">Actions</Button>
+                    </Dropdown>
+                  </ReadOnly>
+                </div>
               </StaggerItem>
             ))}
           </StaggerList>
@@ -227,11 +265,14 @@ export function MembersTab() {
 
       <InvitePanel />
 
+      <MemberFormModal open={addOpen} member={null} onClose={() => setAddOpen(false)} />
+      <BulkAddMembersModal open={bulkOpen} onClose={() => setBulkOpen(false)} />
       <MemberFormModal
         open={editingMember !== null}
         member={editingMember}
         onClose={() => setEditingMember(null)}
       />
+      <MemberInviteModal member={invitingMember} onClose={() => setInvitingMember(null)} />
       <ConvertGuestModal open={convertOpen} onClose={() => setConvertOpen(false)} />
     </div>
   );

@@ -12,6 +12,7 @@ import { PrismaService } from '@/prisma';
 import { StorageService } from '@/storage/storage.service';
 
 import type {
+  BulkCreateMembersDto,
   CreateMemberDto,
   SetMemberAdminDto,
   SetMemberStatusDto,
@@ -31,6 +32,40 @@ import {
 type OverridePatchValue = 'allow' | 'deny' | 'default';
 
 const OVERRIDE_KEY = /^[a-zA-Z]+:[a-zA-Z]+$/;
+
+/** One row of a bulk-add submission that didn't make it onto the roster.
+ * `index` points at the row's position in the submitted array so the client
+ * can line the failure back up with the right table row. */
+export interface BulkCreateFailure {
+  index: number;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+  code: string;
+  message: string;
+}
+
+export interface BulkCreateResult {
+  created: MemberWire[];
+  failed: BulkCreateFailure[];
+}
+
+/** Pulls `{ code, message }` back out of the HttpExceptions `create()`
+ * throws per row — those were constructed with that exact object body. */
+function rowFailure(err: ConflictException | BadRequestException): {
+  code: string;
+  message: string;
+} {
+  const body = err.getResponse();
+  if (typeof body === 'object' && body !== null) {
+    const { code, message } = body as { code?: unknown; message?: unknown };
+    return {
+      code: typeof code === 'string' ? code : 'CREATE_FAILED',
+      message: typeof message === 'string' ? message : 'Could not add this row',
+    };
+  }
+  return { code: 'CREATE_FAILED', message: String(body) };
+}
 
 /** Handles `/members` — the roster CRUD surface the Club Admin uses. Every
  * mutation runs the two-phase permission check (§2.5 of the plan): the coarse
@@ -161,6 +196,61 @@ export class MembershipsService {
       include: MEMBERSHIP_AVATAR_INCLUDE,
     });
     return toMemberWire(row, this.storage);
+  }
+
+  /** The bulk-add table's submit — one `create()` per row, but best-effort
+   * rather than all-or-nothing: a 100-row paste shouldn't fail outright
+   * because one phone number is already on the roster. Rows that conflict
+   * come back in `failed` with their submission index; the rest are created.
+   * Two rows carrying the same phone inside one submission would both land
+   * as unclaimed rows sharing a claim key, so repeats are rejected here. */
+  async bulkCreate(
+    subject: PermissionSubject,
+    clubId: string,
+    dto: BulkCreateMembersDto,
+  ): Promise<BulkCreateResult> {
+    if (!can(subject, 'create', 'member', { clubId })) {
+      throw new ForbiddenException({
+        code: 'PERMISSION_DENIED',
+        resource: 'member',
+        action: 'create',
+        reason: 'You do not manage this club',
+      });
+    }
+    const created: MemberWire[] = [];
+    const failed: BulkCreateFailure[] = [];
+    const phonesInBatch = new Set<string>();
+    for (const [index, row] of dto.members.entries()) {
+      if (row.phone && phonesInBatch.has(row.phone)) {
+        failed.push({
+          index,
+          firstName: row.firstName,
+          lastName: row.lastName,
+          phone: row.phone,
+          code: 'DUPLICATE_PHONE_IN_BATCH',
+          message: 'Another row in this batch already uses this phone number',
+        });
+        continue;
+      }
+      try {
+        created.push(await this.create(subject, clubId, row));
+        if (row.phone) phonesInBatch.add(row.phone);
+      } catch (err) {
+        if (err instanceof ConflictException || err instanceof BadRequestException) {
+          const failure: BulkCreateFailure = {
+            index,
+            firstName: row.firstName,
+            lastName: row.lastName,
+            ...rowFailure(err),
+          };
+          if (row.phone) failure.phone = row.phone;
+          failed.push(failure);
+          continue;
+        }
+        throw err;
+      }
+    }
+    return { created, failed };
   }
 
   /** Super Admin's "add this existing user to another club" action —

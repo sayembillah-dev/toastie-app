@@ -6,6 +6,7 @@ import type { CreateInviteInput, Invite } from '@/lib/club-admin/invites';
 import type { Evaluation } from '@/lib/education/evaluations';
 import type { HistoryEvent, MemberStats } from '@/lib/education/history';
 import type {
+  BulkCreateMembersResult,
   CreateMemberInput,
   Member,
   OfficerRole,
@@ -217,6 +218,16 @@ export const toastlyApi = createApi({
 
     createMember: build.mutation<Member, CreateMemberInput>({
       query: (body) => ({ url: '/members', method: 'POST', body }),
+      invalidatesTags: [
+        { type: 'Member', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
+    /* The bulk-add table's submit — one request for the whole grid. Rows
+     * that conflict come back in `failed`; the rest land on the roster. */
+    bulkCreateMembers: build.mutation<BulkCreateMembersResult, CreateMemberInput[]>({
+      query: (members) => ({ url: '/members/bulk', method: 'POST', body: { members } }),
       invalidatesTags: [
         { type: 'Member', id: 'LIST' },
         { type: 'ActivityLog', id: 'LIST' },
@@ -2491,6 +2502,7 @@ export const {
   useDeletePlannerRowMutation,
   useStartPathwayMutation,
   useCreateMemberMutation,
+  useBulkCreateMembersMutation,
   useUpdateMemberMutation,
   useSetMemberStatusMutation,
   useSetMemberAdminMutation,

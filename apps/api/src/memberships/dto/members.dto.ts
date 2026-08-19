@@ -1,5 +1,6 @@
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsBoolean,
@@ -10,6 +11,7 @@ import {
   Matches,
   MaxLength,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
 
 import { normalizePhone, PHONE_REGEX } from '@/common';
@@ -47,6 +49,22 @@ export class CreateMemberDto {
   @IsArray()
   @IsEnum(OFFICER_ROLES, { each: true })
   roles?: OfficerRole[];
+}
+
+/** Cap on one bulk submission — the bulk-add table in the web UI starts
+ * with a handful of rows and realistic club rosters are well under this. */
+const BULK_CREATE_MAX = 100;
+
+/** Body for `POST /members/bulk` — the bulk-add table submits every row at
+ * once. Rows are processed independently: ones that conflict (e.g. a phone
+ * already on this roster) come back in `failed`, the rest are created. */
+export class BulkCreateMembersDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(BULK_CREATE_MAX)
+  @ValidateNested({ each: true })
+  @Type(() => CreateMemberDto)
+  members!: CreateMemberDto[];
 }
 
 export class UpdateMemberDto {

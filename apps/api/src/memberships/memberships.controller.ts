@@ -12,12 +12,13 @@ import {
 import { CurrentContext, type RequestContext, Requires } from '@/access';
 
 import {
+  BulkCreateMembersDto,
   CreateMemberDto,
   SetMemberAdminDto,
   SetMemberStatusDto,
   UpdateMemberDto,
 } from './dto/members.dto';
-import { MembershipsService } from './memberships.service';
+import { type BulkCreateResult, MembershipsService } from './memberships.service';
 import { type MemberWire } from './serializers';
 
 /** URL kept as `/members` even though the DB model is `Membership` — the
@@ -55,6 +56,18 @@ export class MembershipsController {
   create(@CurrentContext() ctx: RequestContext, @Body() dto: CreateMemberDto): Promise<MemberWire> {
     const clubId = requireClubContext(ctx);
     return this.memberships.create(ctx.subject, clubId, dto);
+  }
+
+  /** Best-effort bulk add — each row is an independent `create()`; conflicts
+   * come back in `failed` rather than failing the whole submission. */
+  @Requires('member', 'create')
+  @Post('bulk')
+  bulkCreate(
+    @CurrentContext() ctx: RequestContext,
+    @Body() dto: BulkCreateMembersDto,
+  ): Promise<BulkCreateResult> {
+    const clubId = requireClubContext(ctx);
+    return this.memberships.bulkCreate(ctx.subject, clubId, dto);
   }
 
   @Requires('member', 'update')

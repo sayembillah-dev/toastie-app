@@ -22,6 +22,14 @@ export interface Invite {
   respondedAt?: string;
 }
 
-export type CreateInviteInput = { inviteeName: string; roles: OfficerRole[] };
+export type CreateInviteInput = {
+  inviteeName: string;
+  roles: OfficerRole[];
+  /** Targets the invite at one specific unclaimed roster row, so accepting it
+   * claims that exact record (and everything already tracked under it) rather
+   * than creating a fresh membership. Set by the per-member "Invite" action on
+   * the roster; omitted by the generic role-link modal. */
+  membershipId?: string;
+};
 
 export const SEED_INVITES: Omit<Invite, 'clubId'>[] = [];
