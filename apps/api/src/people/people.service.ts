@@ -1,11 +1,14 @@
+import { randomBytes } from 'node:crypto';
+
 import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import type { Prisma, ClubRole as PrismaClubRole, Prospect } from '@prisma/client';
+import { Prisma, type ClubRole as PrismaClubRole, type Prospect } from '@prisma/client';
 import { can, type PermissionSubject } from '@toastly/access';
 import { InvitesService } from '@/invites';
 import {
@@ -19,6 +22,7 @@ import {
 import { PrismaService } from '@/prisma';
 import { StorageService } from '@/storage';
 
+import type { SubmitGuestInviteDto } from './dto/guest-invite.dto';
 import type { ConvertGuestDto, CreateGuestDto, UpdateGuestDto } from './dto/guests.dto';
 import type {
   CreateContactLogDto,
@@ -116,6 +120,126 @@ export class PeopleService {
       },
     });
     return toGuestWire(row, this.storage);
+  }
+
+  /** ------------------------------------------- guest self-signup link -- */
+
+  /** The club's standing public signup link (`/guest-invite/<token>`), read
+   * from the Invite-guest dialog on People → Guests. Minted lazily on first
+   * read and reused until rotated. `guest:create` gated — the same grant as
+   * adding a guest by hand, since the link's whole purpose is adding guests. */
+  async getGuestInviteLink(subject: PermissionSubject, clubId: string): Promise<{ token: string }> {
+    this.assertCanCreateGuest(subject, clubId);
+
+    const existing = await this.prisma.club.findUnique({
+      where: { id: clubId },
+      select: { guestInviteToken: true },
+    });
+    if (!existing) throw new NotFoundException(`No club with id "${clubId}"`);
+    if (existing.guestInviteToken) return { token: existing.guestInviteToken };
+
+    // First read for this club — mint one. The `updateMany` is guarded on the
+    // token still being null so a concurrent first-read can't clobber the
+    // winner's token; every caller then re-reads whatever was stored.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const token = randomBytes(32).toString('base64url');
+      try {
+        await this.prisma.club.updateMany({
+          where: { id: clubId, guestInviteToken: null },
+          data: { guestInviteToken: token },
+        });
+        const stored = await this.prisma.club.findUniqueOrThrow({
+          where: { id: clubId },
+          select: { guestInviteToken: true },
+        });
+        if (stored.guestInviteToken) return { token: stored.guestInviteToken };
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') continue;
+        throw err;
+      }
+    }
+    throw new InternalServerErrorException('Could not mint a guest invite token');
+  }
+
+  /** Swaps the club's self-signup token for a fresh one — the previous link
+   * and every QR printed from it stop working immediately. */
+  async rotateGuestInviteLink(
+    subject: PermissionSubject,
+    clubId: string,
+  ): Promise<{ token: string }> {
+    this.assertCanCreateGuest(subject, clubId);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const token = randomBytes(32).toString('base64url');
+      try {
+        await this.prisma.club.update({ where: { id: clubId }, data: { guestInviteToken: token } });
+        return { token };
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') continue;
+        throw err;
+      }
+    }
+    throw new InternalServerErrorException('Could not rotate the guest invite token');
+  }
+
+  /** Public preview for `/guest-invite/:token` — just the club's name, so the
+   * anonymous form can greet the visitor by club. An unknown token 404s; the
+   * link has no expiry or use count. */
+  async previewGuestInvite(token: string): Promise<{ clubName: string }> {
+    const club = await this.prisma.club.findUnique({
+      where: { guestInviteToken: token },
+      select: { name: true },
+    });
+    if (!club) throw new NotFoundException('No guest invite matches that link');
+    return { clubName: club.name };
+  }
+
+  /** The public form's submit — drops a fresh `new`-stage `Prospect` into the
+   * club's pipeline. Deduped on phone per club so a double-tap (or a repeat
+   * signup months later) surfaces as a friendly "already on the list" rather
+   * than a second pipeline row. */
+  async submitGuestInvite(token: string, dto: SubmitGuestInviteDto): Promise<{ id: string }> {
+    const club = await this.prisma.club.findUnique({
+      where: { guestInviteToken: token },
+      select: { id: true },
+    });
+    if (!club) throw new NotFoundException('No guest invite matches that link');
+
+    const duplicate = await this.prisma.prospect.findFirst({
+      where: { clubId: club.id, phone: dto.phone },
+      select: { id: true },
+    });
+    if (duplicate) {
+      throw new ConflictException({
+        code: 'GUEST_ALREADY_ON_LIST',
+        message: 'This number is already on the guest list',
+      });
+    }
+
+    const [firstName = '', ...rest] = dto.name.split(/\s+/);
+    const row = await this.prisma.prospect.create({
+      data: {
+        clubId: club.id,
+        // A single-word name leaves lastName empty, same as the quick-add
+        // drawer; the caps mirror the authed guest DTOs.
+        firstName: firstName.slice(0, 60),
+        lastName: rest.join(' ').slice(0, 60),
+        phone: dto.phone,
+        invitedBy: 'Self-invite link',
+        stage: 'new',
+      },
+    });
+    return { id: row.id };
+  }
+
+  private assertCanCreateGuest(subject: PermissionSubject, clubId: string): void {
+    if (!can(subject, 'create', 'guest', { clubId })) {
+      throw new ForbiddenException({
+        code: 'PERMISSION_DENIED',
+        resource: 'guest',
+        action: 'create',
+        reason: 'You do not manage this club',
+      });
+    }
   }
 
   async updateGuest(

@@ -356,6 +356,12 @@ model Club {
   /// directory URL), this is not. Pasting it onto `/clubs/join-by-code`
   /// creates an active `Member` membership immediately, no approval step.
   joinCode        String              @unique
+  /// Public guest self-signup link token — whoever holds it can add
+  /// themselves to this club's guest pipeline via `/guest-invite/<token>`,
+  /// so it is secret like `joinCode`. Nullable: minted lazily the first
+  /// time an officer opens the Invite-guest dialog and rotatable from the
+  /// same place (rotation invalidates every previously shared link/QR).
+  guestInviteToken String?            @unique
   directoryStatus ClubDirectoryStatus @default(active)
   lifecycle       ClubLifecycle       @default(active)
   joinPolicy      ClubJoinPolicy      @default(request)

@@ -5,10 +5,11 @@ import { MembershipsModule } from '@/memberships';
 
 import { GuestsController } from './people.controller';
 import { PeopleService } from './people.service';
+import { PublicGuestInvitesController } from './public-guest-invites.controller';
 
 @Module({
   imports: [MembershipsModule, InvitesModule],
-  controllers: [GuestsController],
+  controllers: [GuestsController, PublicGuestInvitesController],
   providers: [PeopleService],
   exports: [PeopleService],
 })

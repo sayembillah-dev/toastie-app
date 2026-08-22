@@ -111,7 +111,10 @@ import type {
   ConvertGuestResult,
   CreateGuestInput,
   Guest,
+  GuestInviteLink,
   GuestMatch,
+  PublicGuestInvitePreview,
+  SubmitGuestInviteInput,
   UpdateGuestInput,
 } from '@/lib/people/guests';
 import type { CreateVisitLogInput, UpdateVisitLogInput, VisitLog } from '@/lib/people/visit-logs';
@@ -698,6 +701,50 @@ export const toastlyApi = createApi({
         { type: 'Guest', id: 'LIST' },
         { type: 'ActivityLog', id: 'LIST' },
       ],
+    }),
+
+    /* The club's standing guest self-signup link behind the "Invite guest"
+     * button — one token per club, minted lazily server-side on first read. */
+    getGuestInviteLink: build.query<GuestInviteLink, void>({
+      query: () => ({ url: '/guests/invite-link', method: 'GET' }),
+    }),
+
+    /* Rotation swaps the stored token (every previously shared QR/link dies).
+     * The open dialog's cached link is patched in place from the response so
+     * the fresh QR renders without a refetch spinner; a rejection just keeps
+     * the old one and the call site toasts. */
+    rotateGuestInviteLink: build.mutation<GuestInviteLink, void>({
+      query: () => ({ url: '/guests/invite-link/rotate', method: 'POST' }),
+      onQueryStarted: async (_arg, { dispatch, queryFulfilled }) => {
+        try {
+          const { data } = await queryFulfilled;
+          dispatch(toastlyApi.util.updateQueryData('getGuestInviteLink', undefined, () => data));
+        } catch {
+          /* handled at the call site */
+        }
+      },
+    }),
+
+    /* Anonymous preview for the public `/guest-invite/:token` page — matched
+     * by `isPublicUrl` in `routed-base-query.ts`, so no `Authorization` header
+     * goes out. Just resolves the token to a club name (or 404s). */
+    getPublicGuestInvite: build.query<PublicGuestInvitePreview, string>({
+      query: (token) => ({ url: `/public/guest-invites/${token}`, method: 'GET' }),
+    }),
+
+    /* Anonymous self-signup submit. Not tagged/invalidated: the submitter has
+     * no cache entry of their own to refresh, and the officers' guest list
+     * refetches on its own schedule — same reasoning as
+     * `submitPublicEvaluation`. */
+    submitPublicGuestInvite: build.mutation<
+      { id: string },
+      { token: string } & SubmitGuestInviteInput
+    >({
+      query: ({ token, ...body }) => ({
+        url: `/public/guest-invites/${token}`,
+        method: 'POST',
+        body,
+      }),
     }),
 
     /* Read-only preview for the convert-to-member dialog — tells it whether
@@ -2524,6 +2571,10 @@ export const {
   useLazyGetGuestsQuery,
   useGetGuestQuery,
   useCreateGuestMutation,
+  useGetGuestInviteLinkQuery,
+  useRotateGuestInviteLinkMutation,
+  useGetPublicGuestInviteQuery,
+  useSubmitPublicGuestInviteMutation,
   useCheckGuestMatchQuery,
   useUpdateGuestMutation,
   useDeleteGuestMutation,

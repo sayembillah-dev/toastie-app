@@ -45,6 +45,24 @@ export class GuestsController {
     return this.people.createGuest(ctx.subject, clubId, dto);
   }
 
+  /* Static segments declared ahead of `@Get(':guestId')` so Express matches
+   * `/guests/invite-link` literally instead of treating it as an id. The
+   * club's standing self-signup link — minted lazily on first read. */
+  @Requires('guest', 'create')
+  @Get('invite-link')
+  getInviteLink(@CurrentContext() ctx: RequestContext): Promise<{ token: string }> {
+    const clubId = requireClubContext(ctx);
+    return this.people.getGuestInviteLink(ctx.subject, clubId);
+  }
+
+  /** Rotating invalidates every previously shared copy of the link/QR. */
+  @Requires('guest', 'create')
+  @Post('invite-link/rotate')
+  rotateInviteLink(@CurrentContext() ctx: RequestContext): Promise<{ token: string }> {
+    const clubId = requireClubContext(ctx);
+    return this.people.rotateGuestInviteLink(ctx.subject, clubId);
+  }
+
   @Requires('guest', 'read')
   @Get(':guestId')
   get(

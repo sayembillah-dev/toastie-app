@@ -3,6 +3,7 @@
 import {
   Kanban,
   MagnifyingGlass,
+  QrCode,
   SquaresFour,
   UserPlus,
   WarningCircle,
@@ -14,6 +15,7 @@ import { StaggerList } from '@/components/motion/stagger-list';
 import { AddGuestDrawer } from '@/components/people/add-guest-drawer';
 import { GuestCard } from '@/components/people/guest-card';
 import { GuestKanban } from '@/components/people/guest-kanban';
+import { InviteGuestModal } from '@/components/people/invite-guest-modal';
 import { ReadOnly } from '@/components/permissions/read-only';
 import type { Guest } from '@/lib/people/guests';
 import { GUEST_STAGES } from '@/lib/people/guests';
@@ -81,6 +83,7 @@ export function GuestsDirectory() {
   const [query, setQuery] = useState('');
   const [view, setView] = useState<GuestView>('kanban');
   const [addOpen, setAddOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   const trimmed = query.trim().toLowerCase();
   const filtered = useMemo(() => {
@@ -103,6 +106,15 @@ export function GuestsDirectory() {
               onClick={() => setAddOpen(true)}
             >
               Add guest
+            </Button>
+          </ReadOnly>
+          <ReadOnly resource="guest" action="create">
+            <Button
+              size="middle"
+              icon={<QrCode size={16} weight="bold" />}
+              onClick={() => setInviteOpen(true)}
+            >
+              Invite guest
             </Button>
           </ReadOnly>
           <div className="min-w-0 flex-1 sm:w-72 sm:flex-none">
@@ -196,6 +208,7 @@ export function GuestsDirectory() {
       ) : null}
 
       <AddGuestDrawer open={addOpen} onClose={() => setAddOpen(false)} />
+      <InviteGuestModal open={inviteOpen} onClose={() => setInviteOpen(false)} />
     </div>
   );
 }

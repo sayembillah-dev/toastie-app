@@ -151,6 +151,26 @@ export type UpdateGuestInput = Partial<
 export type CreateGuestInput = Pick<Guest, 'firstName'> &
   Partial<Pick<Guest, 'lastName' | 'email' | 'phone' | 'whatsapp' | 'invitedBy'>>;
 
+/** The club's standing guest self-signup link — `GET /guests/invite-link`.
+ * One token per club, minted lazily on first read and reusable until rotated;
+ * rendered as `/guest-invite/<token>` plus a QR in the Invite-guest dialog. */
+export interface GuestInviteLink {
+  token: string;
+}
+
+/** Public preview for the `/guest-invite/:token` page — just the club's name,
+ * so the anonymous form can greet the visitor. `GET /public/guest-invites/:token`. */
+export interface PublicGuestInvitePreview {
+  clubName: string;
+}
+
+/** The public self-signup form's fields — deliberately just the two the page
+ * asks for. The API splits `name` into first/last and normalizes `phone`. */
+export interface SubmitGuestInviteInput {
+  name: string;
+  phone: string;
+}
+
 /** Buckets guests into one list per stage, in board order. Guests carrying a
  * stage we no longer ship fall back to New rather than vanishing. */
 export function groupGuestsByStage(guests: readonly Guest[]): Record<GuestStage, Guest[]> {
