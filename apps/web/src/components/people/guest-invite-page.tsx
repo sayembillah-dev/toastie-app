@@ -17,6 +17,8 @@ interface GuestInvitePageProps {
 interface FormValues {
   name: string;
   phone: string;
+  organization?: string;
+  bio?: string;
 }
 
 /** True when the API rejected the submit with a 409 — this club already has a
@@ -31,9 +33,10 @@ function isAlreadyOnListError(error: unknown): boolean {
 }
 
 /** Public self-signup page at `/guest-invite/:token` — where a visitor lands
- * after scanning the club's invite QR. Asks for exactly a name and a mobile
- * number and drops them into the club's guest pipeline; no account, no
- * sign-in. The token in the URL is the only credential. */
+ * after scanning the club's invite QR. Only a name and a mobile number are
+ * required; where they work / what they do and a short intro are optional
+ * extras. Submitting drops them into the club's guest pipeline; no account,
+ * no sign-in. The token in the URL is the only credential. */
 export function GuestInvitePage({ token }: GuestInvitePageProps) {
   const {
     data: preview,
@@ -60,6 +63,8 @@ export function GuestInvitePage({ token }: GuestInvitePageProps) {
         token,
         name: values.name.trim(),
         phone: normalizePhone(values.phone),
+        organization: values.organization?.trim() || undefined,
+        bio: values.bio?.trim() || undefined,
       }).unwrap();
       setWelcomedName(values.name.trim().split(/\s+/)[0] ?? null);
     } catch (err) {
@@ -135,7 +140,7 @@ export function GuestInvitePage({ token }: GuestInvitePageProps) {
         icon={UserPlus}
         title={`Visit ${preview.clubName}`}
         subtitle="Thinking of dropping by a meeting? Leave your name and number and the club will be in touch."
-        footer="Just these two — no account needed."
+        footer="Only your name and number are required — no account needed."
       >
         <Form<FormValues>
           form={form}
@@ -156,6 +161,33 @@ export function GuestInvitePage({ token }: GuestInvitePageProps) {
             className="!mb-0"
           >
             <Input id="guest-invite-phone" placeholder="01XXXXXXXXX" inputMode="numeric" />
+          </Form.Item>
+
+          <Form.Item
+            label="Organization / profession"
+            name="organization"
+            extra="Optional — where you work or what you do."
+            className="!mb-0"
+          >
+            <Input
+              id="guest-invite-organization"
+              placeholder="e.g. Lecturer at BUET, banker, student"
+              maxLength={120}
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="A little about you"
+            name="bio"
+            extra="Optional — helps the club give you a proper welcome."
+            className="!mb-0"
+          >
+            <Input.TextArea
+              id="guest-invite-bio"
+              rows={3}
+              maxLength={600}
+              placeholder="What brings you to Toastmasters?"
+            />
           </Form.Item>
 
           <Button type="primary" block size="large" htmlType="submit" loading={isSubmitting}>

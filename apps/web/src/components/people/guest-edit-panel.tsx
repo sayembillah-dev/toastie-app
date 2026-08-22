@@ -30,6 +30,7 @@ interface FormValues {
   phone?: string;
   whatsappSameAsPhone: boolean;
   whatsapp?: string;
+  organization?: string;
   socials: GuestSocial[];
   bio?: string;
   notes?: string;
@@ -47,6 +48,7 @@ function deserialize(guest: Guest): FormValues {
     phone: guest.phone ?? '',
     whatsappSameAsPhone: !guest.whatsapp,
     whatsapp: guest.whatsapp ?? '',
+    organization: guest.organization ?? '',
     socials: guest.socials?.map((social) => ({ ...social })) ?? [],
     bio: guest.bio ?? '',
     notes: guest.notes ?? '',
@@ -230,6 +232,7 @@ export function GuestEditPanel({ guest, open, onClose }: GuestEditPanelProps) {
           : values.whatsapp
             ? normalizePhone(values.whatsapp)
             : undefined,
+        organization: values.organization?.trim() || undefined,
         ...(avatarUrl !== undefined ? { avatarUrl } : {}),
         socials: cleanedSocials,
         bio: values.bio?.trim() || undefined,
@@ -407,6 +410,10 @@ export function GuestEditPanel({ guest, open, onClose }: GuestEditPanelProps) {
                 </div>
               )}
             </Form.List>
+          </Form.Item>
+
+          <Form.Item label="Organization / profession" name="organization">
+            <Input placeholder="Where they work or what they do" maxLength={120} />
           </Form.Item>
 
           <Form.Item label="Invited by" name="invitedBy">

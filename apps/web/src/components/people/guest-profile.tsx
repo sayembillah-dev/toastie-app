@@ -130,6 +130,9 @@ function ProfileHeader({ guest }: { guest: Guest }) {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <h1 className="text-xl font-semibold leading-tight text-ink sm:text-2xl">{fullName}</h1>
+            {guest.organization ? (
+              <p className="mt-1 text-sm text-ink-soft">{guest.organization}</p>
+            ) : null}
             <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-muted">
               <StageBadge stage={guest.stage} />
               <span aria-hidden>·</span>

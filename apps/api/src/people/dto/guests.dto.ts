@@ -93,6 +93,11 @@ export class UpdateGuestDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(120)
+  organization?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(200_000)
   avatarUrl?: string;
 
@@ -158,6 +163,11 @@ export class CreateGuestDto {
     message: 'WhatsApp number must be exactly 11 digits',
   })
   whatsapp?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  organization?: string;
 
   @IsOptional()
   @IsString()

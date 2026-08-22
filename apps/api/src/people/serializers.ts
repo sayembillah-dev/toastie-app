@@ -19,6 +19,7 @@ export interface GuestWire {
   email?: string;
   phone?: string;
   whatsapp?: string;
+  organization?: string;
   avatarUrl?: string;
   socials?: Array<{ platform: string; url: string }>;
   bio?: string;
@@ -44,6 +45,7 @@ export async function toGuestWire(row: Prospect, storage: StorageService): Promi
   if (row.email) wire.email = row.email;
   if (row.phone) wire.phone = row.phone;
   if (row.whatsapp) wire.whatsapp = row.whatsapp;
+  if (row.organization) wire.organization = row.organization;
   if (row.avatarUrl) wire.avatarUrl = await storage.resolveUrl(row.avatarUrl);
   if (row.bio) wire.bio = row.bio;
   if (row.notes) wire.notes = row.notes;

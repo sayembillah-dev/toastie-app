@@ -315,30 +315,30 @@ model Area {
 // -------------------------------------------------------- tenant --
 
 model Club {
-  id              String              @id @default(cuid())
+  id               String              @id @default(cuid())
   /// Nullable: a self-registered club exists before a director places it in
   /// the org tree. Once placed all three fields (`areaId`, `divisionId`,
   /// `districtId`) are set together inside the reparent transaction.
-  areaId          String?
+  areaId           String?
   /// Denormalised lineage — scope resolution runs on every request,
   /// reparenting runs approximately never. Only `area` is a real FK; the
   /// other two are plain indexed columns kept in sync by the move
   /// transaction so a Division/District Director's scope filter is one
   /// indexed scan.
-  divisionId      String?
-  districtId      String?
-  name            String
+  divisionId       String?
+  districtId       String?
+  name             String
   /// URL-safe identifier for the public directory (`/clubs/<slug>`).
-  slug            String              @unique
-  clubNumber      String?             @unique
+  slug             String              @unique
+  clubNumber       String?             @unique
   /// Club Admin-editable profile fields — surfaced on the Club Profile page,
   /// distinct from the lineage/status fields a Director manages.
-  motto           String?
-  venueAddress    String?
-  venueMapUrl     String?
-  contactPhone    String?
+  motto            String?
+  venueAddress     String?
+  venueMapUrl      String?
+  contactPhone     String?
   /// Same embedded-JSON shape as `User.socials` — see that field's comment.
-  socials         Json                @default("[]")
+  socials          Json                @default("[]")
   /// Printed-agenda banner customisation. `bannerColor` is a hex code
   /// (`#003366`); null falls back to the default Toastmasters navy at
   /// render time. `bannerImage` holds a storage key (or legacy inline
@@ -347,26 +347,26 @@ model Club {
   /// `{ x, y, zoom, aspect }` — background-position percentages plus a
   /// cover-fit zoom, with the image's natural w/h so renderers can size it
   /// without loading the file.
-  bannerColor     String?
-  bannerImage     String?
-  bannerImagePos  Json?
+  bannerColor      String?
+  bannerImage      String?
+  bannerImagePos   Json?
   /// Short, out-of-band join credential — a Club Admin reads this off their
   /// own dashboard and hands it to someone directly (text, verbally, etc.).
   /// Deliberately separate from `slug`: the slug is public (it's in the
   /// directory URL), this is not. Pasting it onto `/clubs/join-by-code`
   /// creates an active `Member` membership immediately, no approval step.
-  joinCode        String              @unique
+  joinCode         String              @unique
   /// Public guest self-signup link token — whoever holds it can add
   /// themselves to this club's guest pipeline via `/guest-invite/<token>`,
   /// so it is secret like `joinCode`. Nullable: minted lazily the first
   /// time an officer opens the Invite-guest dialog and rotatable from the
   /// same place (rotation invalidates every previously shared link/QR).
-  guestInviteToken String?            @unique
-  directoryStatus ClubDirectoryStatus @default(active)
-  lifecycle       ClubLifecycle       @default(active)
-  joinPolicy      ClubJoinPolicy      @default(request)
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  guestInviteToken String?             @unique
+  directoryStatus  ClubDirectoryStatus @default(active)
+  lifecycle        ClubLifecycle       @default(active)
+  joinPolicy       ClubJoinPolicy      @default(request)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
   area Area? @relation(fields: [areaId], references: [id], onDelete: SetNull)
 
@@ -893,30 +893,33 @@ model SpeechSlotRequest {
 /// clash with the `ClubRole.Guest` enum value; the API path stays `/guests`
 /// and every UI string still reads "Guest" — the rename is DB-only.
 model Prospect {
-  id         String    @id @default(cuid())
-  clubId     String
-  firstName  String
-  lastName   String
-  email      String?
-  phone      String?
-  whatsapp   String?
-  avatarUrl  String?   @db.Text
+  id           String    @id @default(cuid())
+  clubId       String
+  firstName    String
+  lastName     String
+  email        String?
+  phone        String?
+  whatsapp     String?
+  /// Where they work or what they do — free text ("Doctor at DMCH", "CSE
+  /// student, BUET"). Captured on the public self-invite form.
+  organization String?
+  avatarUrl    String?   @db.Text
   /// `GuestSocial[]` — a small array (0–8 items) embedded rather than
   /// carried in a separate table. Read on every profile render.
-  socials    Json      @default("[]")
-  bio        String?
-  notes      String?
-  firstVisit DateTime?
-  lastVisit  DateTime?
-  visitCount Int       @default(0)
-  invitedBy  String?
+  socials      Json      @default("[]")
+  bio          String?
+  notes        String?
+  firstVisit   DateTime?
+  lastVisit    DateTime?
+  visitCount   Int       @default(0)
+  invitedBy    String?
   /// One of `GUEST_STAGE_IDS` (`new` / `contacted` / `interested` /
   /// `joined-meetings` / `joined-club` / `not-interested`). Stored as a
   /// plain string because Prisma enum identifiers cannot contain hyphens;
   /// the DTO enforces the union.
-  stage      String    @default("new")
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  stage        String    @default("new")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   club        Club         @relation(fields: [clubId], references: [id], onDelete: Cascade)
   contactLogs ContactLog[]

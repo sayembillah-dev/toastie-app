@@ -84,6 +84,10 @@ export interface Guest {
    * absent, the profile falls back to `phone` — the "same as phone" checkbox
    * on the edit panel writes `undefined` here. */
   whatsapp?: string;
+  /** Where they work or what they do — free text ("Doctor at DMCH", "CSE
+   * student, BUET"). Optional everywhere it's asked for: the public
+   * self-invite form and the edit panel. */
+  organization?: string;
   /** Data-URL or absolute image URL. Base64 data URLs live comfortably in the
    * local-storage back-end while there is no upload service. */
   avatarUrl?: string;
@@ -136,6 +140,7 @@ export type UpdateGuestInput = Partial<
     | 'email'
     | 'phone'
     | 'whatsapp'
+    | 'organization'
     | 'avatarUrl'
     | 'socials'
     | 'bio'
@@ -164,11 +169,14 @@ export interface PublicGuestInvitePreview {
   clubName: string;
 }
 
-/** The public self-signup form's fields — deliberately just the two the page
- * asks for. The API splits `name` into first/last and normalizes `phone`. */
+/** The public self-signup form's fields. Only `name` and `phone` are
+ * required — `organization` and `bio` are optional extras the visitor can
+ * skip. The API splits `name` into first/last and normalizes `phone`. */
 export interface SubmitGuestInviteInput {
   name: string;
   phone: string;
+  organization?: string;
+  bio?: string;
 }
 
 /** Buckets guests into one list per stage, in board order. Guests carrying a

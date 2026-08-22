@@ -111,6 +111,7 @@ export class PeopleService {
         email: dto.email?.trim() || null,
         phone: dto.phone ?? null,
         whatsapp: dto.whatsapp ?? null,
+        organization: dto.organization?.trim() || null,
         avatarUrl: dto.avatarUrl || null,
         socials: (dto.socials ?? []) as unknown as Prisma.InputJsonValue,
         bio: dto.bio?.trim() || null,
@@ -224,6 +225,8 @@ export class PeopleService {
         firstName: firstName.slice(0, 60),
         lastName: rest.join(' ').slice(0, 60),
         phone: dto.phone,
+        organization: dto.organization?.trim() || null,
+        bio: dto.bio?.trim() || null,
         invitedBy: 'Self-invite link',
         stage: 'new',
       },
@@ -256,6 +259,7 @@ export class PeopleService {
     if (dto.email !== undefined) data.email = dto.email.trim() || null;
     if (dto.phone !== undefined) data.phone = dto.phone;
     if (dto.whatsapp !== undefined) data.whatsapp = dto.whatsapp;
+    if (dto.organization !== undefined) data.organization = dto.organization.trim() || null;
     if (dto.avatarUrl !== undefined) {
       if (dto.avatarUrl) {
         this.storage.assertOwnedKey(dto.avatarUrl, 'guestAvatar', existing.clubId);
