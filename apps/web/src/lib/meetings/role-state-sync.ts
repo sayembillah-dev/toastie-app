@@ -17,8 +17,9 @@ import { type RoleKind, type RoleStateBackend, registerRoleStateBackend } from '
  *   share-token twin under `/public/meetings`.
  *
  * Both treat every failure as "stay silent": live capture must never break
- * because a sync call failed — the local copy keeps working and the next
- * mount retries hydration. */
+ * because a sync call failed. `save` still reports the outcome (false on
+ * any failure) so the registry can keep the key dirty — retrying the push
+ * and refusing to let a stale server copy clobber unsynced local writes. */
 
 function authedHeaders(): Headers {
   const headers = new Headers();
@@ -38,10 +39,19 @@ function authedBackend(meetingId: string, kind: RoleKind): RoleStateBackend {
       const body = (await res.json()) as { state?: unknown };
       return body.state ?? null;
     },
-    save(state) {
+    async save(state) {
       const headers = authedHeaders();
       headers.set('content-type', 'application/json');
-      void fetch(url, { method: 'PUT', headers, body: JSON.stringify({ state }) }).catch(() => {});
+      try {
+        const res = await fetch(url, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ state }),
+        });
+        return res.ok;
+      } catch {
+        return false;
+      }
     },
   };
 }
@@ -55,12 +65,17 @@ function publicBackend(meetingId: string, kind: RoleKind, token: string): RoleSt
       const body = (await res.json()) as { state?: unknown };
       return body.state ?? null;
     },
-    save(state) {
-      void fetch(url, {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ state }),
-      }).catch(() => {});
+    async save(state) {
+      try {
+        const res = await fetch(url, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ state }),
+        });
+        return res.ok;
+      } catch {
+        return false;
+      }
     },
   };
 }

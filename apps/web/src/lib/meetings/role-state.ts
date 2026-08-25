@@ -7,11 +7,13 @@
  * Persistence is two-tier: localStorage gives instant loads and same-tab
  * pub/sub, and a registered `RoleStateBackend` (wired up by
  * `role-state-sync.ts` — authed for the in-app tab, share-token for the
- * public page) mirrors every write to the server and hydrates from it on
- * mount. That server tier is what makes the data survive devices, browsers,
- * and the share-link handoff — before it existed, state lived in one
- * browser's localStorage only and revisiting the meeting from anywhere else
- * showed an empty tool.
+ * public page) mirrors every write to the server, hydrates from it on
+ * mount, and polls it on a short interval so writes from other devices
+ * land here without a reload. That server tier is what makes the data
+ * survive devices, browsers, and the share-link handoff — before it
+ * existed, state lived in one browser's
+ * localStorage only and revisiting the meeting from anywhere else showed an
+ * empty tool.
  */
 
 const KEY_PREFIX = 'toastly:role';
@@ -230,8 +232,10 @@ export function updateRoleState<K extends RoleKind>(
 export interface RoleStateBackend {
   /** The stored blob, or null when nobody has saved state for this pair yet. */
   load(): Promise<unknown | null>;
-  /** Fire-and-forget — a sync failure must never interrupt live capture. */
-  save(state: unknown): void;
+  /** Never throws — resolves false on any failure so the registry can keep
+   * the key dirty (retry the push; never let a stale pull clobber unsynced
+   * local writes). Live capture must never break because a sync failed. */
+  save(state: unknown): Promise<boolean>;
 }
 
 const backends = new Map<string, RoleStateBackend>();
@@ -240,11 +244,25 @@ const backends = new Map<string, RoleStateBackend>();
 const hydratedKeys = new Set<string>();
 /** Debounced pending writes, so rapid Ah-Counter taps batch into one PUT. */
 const pendingSaves = new Map<string, { handle: number; state: unknown }>();
+/** Keys with local writes the server hasn't confirmed. A failed save keeps
+ * the key dirty: polling then retries the push instead of pulling the
+ * server's stale copy over the fresher local one. */
+const dirtyKeys = new Set<string>();
+/** Saves currently in flight — polls stand down so the two never race. */
+const savingKeys = new Set<string>();
+/** Pulls currently in flight — overlapping poll ticks skip. */
+const pullsInFlight = new Set<string>();
+const pollTimers = new Map<string, number>();
 
 const SAVE_DEBOUNCE_MS = 700;
+/** Cross-device freshness cadence. Running timers render from `startedAt`
+ * (a wall-clock timestamp), so a poll only needs to deliver the discrete
+ * events — start/stop taps, Ah-Counter marks — and 5 s is plenty for that. */
+const POLL_INTERVAL_MS = 5000;
 
-/** Registers the server backend for a (kind, meeting) pair and kicks the
- * initial hydration. Returns the unregister for effect cleanup. */
+/** Registers the server backend for a (kind, meeting) pair, kicks the
+ * initial hydration, and starts the cross-device poll. Returns the
+ * unregister for effect cleanup. */
 export function registerRoleStateBackend(
   kind: RoleKind,
   meetingId: string,
@@ -254,71 +272,135 @@ export function registerRoleStateBackend(
   backends.set(key, backend);
   installFlushListeners();
   void hydrateRoleState(kind, meetingId);
+  startPolling(kind, meetingId);
   return () => {
-    if (backends.get(key) === backend) backends.delete(key);
+    if (backends.get(key) === backend) {
+      backends.delete(key);
+      stopPolling(key);
+    }
   };
 }
 
-/** First-load reconciliation. The server copy is the cross-device truth, so
- * it wins — unless a local write landed mid-load (the fresher capture wins
- * and is pushed up instead). A null server copy with a local copy present is
- * the pre-sync migration path: push the local data up so it reaches other
- * devices instead of dying with this browser. */
+/** First-load reconciliation — once per session per (kind, meeting). The
+ * merge itself lives in `pullAndReconcile`, shared with the poll ticks. */
 async function hydrateRoleState(kind: RoleKind, meetingId: string): Promise<void> {
   const key = stateKey(kind, meetingId);
   if (hydratedKeys.has(key)) return;
-  const backend = backends.get(key);
-  if (!backend) return;
   hydratedKeys.add(key);
+  const loaded = await pullAndReconcile(kind, meetingId);
+  if (!loaded) hydratedKeys.delete(key); // offline / server down — retry on next mount
+}
 
-  const localBefore = readRoleStateRaw(kind, meetingId);
-  let remote: unknown | null;
+/** Pulls the server copy and reconciles it with local. The server copy is
+ * the cross-device truth, so it wins — unless:
+ * - a local write landed mid-load (the fresher capture is pushed up instead;
+ *   this also covers writes that arrived via a cross-tab `storage` event,
+ *   which never scheduled a backend save in this tab),
+ * - the key is dirty or mid-save (the server copy is stale by definition —
+ *   the push side owns the key until its save confirms), or
+ * - the server has nothing yet but local does (pre-sync migration: push the
+ *   local data up so it reaches other devices instead of dying here).
+ * Resolves false only when the load itself failed. */
+async function pullAndReconcile(kind: RoleKind, meetingId: string): Promise<boolean> {
+  const key = stateKey(kind, meetingId);
+  const backend = backends.get(key);
+  if (!backend || pullsInFlight.has(key)) return true;
+  pullsInFlight.add(key);
   try {
-    remote = await backend.load();
-  } catch {
-    hydratedKeys.delete(key); // offline / server down — retry on next mount
-    return;
-  }
-
-  const localAfter = readRoleStateRaw(kind, meetingId);
-  if (localAfter !== localBefore && localAfter) {
-    safeSave(backend, localAfter);
-    return;
-  }
-  if (remote === null || remote === undefined) {
-    if (localAfter) safeSave(backend, localAfter);
-    return;
-  }
-  const remoteRaw = JSON.stringify(remote);
-  if (localAfter !== remoteRaw && typeof window !== 'undefined') {
+    const localBefore = readRoleStateRaw(kind, meetingId);
+    let remote: unknown | null;
     try {
-      window.localStorage.setItem(key, remoteRaw);
-      notifyListeners(key);
+      remote = await backend.load();
     } catch {
-      /* Storage blocked — components still render the remote copy via the
-       * notification above once the write lands, so nothing to do here. */
+      return false;
     }
+
+    const localAfter = readRoleStateRaw(kind, meetingId);
+    if (localAfter !== localBefore && localAfter) {
+      safeSave(key, backend, localAfter);
+      return true;
+    }
+    if (remote === null || remote === undefined) {
+      if (localAfter) safeSave(key, backend, localAfter);
+      return true;
+    }
+    if (dirtyKeys.has(key) || savingKeys.has(key)) return true;
+    // JSONB doesn't preserve key order, so compare semantically — a textual
+    // compare would see phantom changes on every poll and re-render the
+    // view every few seconds for nothing.
+    if (statesEqual(localAfter, remote)) return true;
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(key, JSON.stringify(remote));
+        notifyListeners(key);
+      } catch {
+        /* Storage blocked — a later poll retries the apply. */
+      }
+    }
+    return true;
+  } finally {
+    pullsInFlight.delete(key);
   }
 }
 
-function safeSave(backend: RoleStateBackend, raw: string): void {
+/** Pushes a raw local blob up, tracking dirtiness via `persistNow`. */
+function safeSave(key: string, backend: RoleStateBackend, raw: string): void {
   try {
-    backend.save(JSON.parse(raw));
+    void persistNow(key, backend, JSON.parse(raw));
   } catch {
     /* Unparseable local blob — leave the server copy alone. */
+  }
+}
+
+async function persistNow(key: string, backend: RoleStateBackend, state: unknown): Promise<void> {
+  savingKeys.add(key);
+  let ok: boolean;
+  try {
+    ok = await backend.save(state);
+  } catch {
+    ok = false;
+  }
+  savingKeys.delete(key);
+  if (ok) {
+    // A newer write queued while this one flew — stay dirty until it lands.
+    if (!pendingSaves.has(key)) dirtyKeys.delete(key);
+  } else {
+    dirtyKeys.add(key);
+  }
+}
+
+/** Key-order-insensitive comparison — Postgres JSONB normalizes key order,
+ * so a naive string compare would see phantom differences on every poll. */
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? '';
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  const body = Object.entries(value as Record<string, unknown>)
+    .filter(([, v]) => v !== undefined)
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`);
+  return `{${body.join(',')}}`;
+}
+
+function statesEqual(localRaw: string | null, remote: unknown): boolean {
+  if (!localRaw) return false;
+  try {
+    return stableStringify(JSON.parse(localRaw)) === stableStringify(remote);
+  } catch {
+    return localRaw === JSON.stringify(remote);
   }
 }
 
 function scheduleBackendSave(key: string, state: unknown): void {
   const backend = backends.get(key);
   if (!backend || typeof window === 'undefined') return;
+  dirtyKeys.add(key);
   const pending = pendingSaves.get(key);
   if (pending) window.clearTimeout(pending.handle);
   pendingSaves.set(key, {
     state,
     handle: window.setTimeout(() => {
       pendingSaves.delete(key);
-      backend.save(state);
+      void persistNow(key, backend, state);
     }, SAVE_DEBOUNCE_MS),
   });
 }
@@ -328,9 +410,59 @@ function scheduleBackendSave(key: string, state: unknown): void {
 function flushPendingSaves(): void {
   for (const [key, pending] of pendingSaves) {
     window.clearTimeout(pending.handle);
-    backends.get(key)?.save(pending.state);
+    const backend = backends.get(key);
+    if (backend) void persistNow(key, backend, pending.state);
   }
   pendingSaves.clear();
+}
+
+function startPolling(kind: RoleKind, meetingId: string): void {
+  const key = stateKey(kind, meetingId);
+  stopPolling(key);
+  if (typeof window === 'undefined') return;
+  pollTimers.set(
+    key,
+    window.setInterval(() => {
+      // Hydration pending — stand down. Hydration failed — retry it here
+      // instead of waiting for a remount. A queued debounce or an in-flight
+      // save means local is ahead, so stand down. A dirty key means the
+      // last push failed: retry the push rather than pulling the server's
+      // stale copy over fresher local data.
+      if (!hydratedKeys.has(key)) {
+        void hydrateRoleState(kind, meetingId);
+        return;
+      }
+      if (pendingSaves.has(key) || savingKeys.has(key)) return;
+      if (dirtyKeys.has(key)) {
+        retryDirtySave(key);
+        return;
+      }
+      void pullAndReconcile(kind, meetingId);
+    }, POLL_INTERVAL_MS),
+  );
+}
+
+function stopPolling(key: string): void {
+  const handle = pollTimers.get(key);
+  if (handle === undefined || typeof window === 'undefined') return;
+  window.clearInterval(handle);
+  pollTimers.delete(key);
+}
+
+function retryDirtySave(key: string): void {
+  const backend = backends.get(key);
+  if (!backend || typeof window === 'undefined') return;
+  let raw: string | null = null;
+  try {
+    raw = window.localStorage.getItem(key);
+  } catch {
+    raw = null;
+  }
+  if (!raw) {
+    dirtyKeys.delete(key);
+    return;
+  }
+  safeSave(key, backend, raw);
 }
 
 let flushListenersInstalled = false;

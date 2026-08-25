@@ -192,7 +192,14 @@ export class EducationService {
     memberId: string,
   ): Promise<SpeechSlotRequestWire[]> {
     const member = await this.load(memberId);
-    if (!can(subject, 'read', 'speechRequest', { clubId: member.clubId })) {
+    /* `own`-scoped read for the member themselves (the Me-page card lists
+     * their own asks); anyone else needs the club-scoped grant (VPE/Admin). */
+    if (
+      !can(subject, 'read', 'speechRequest', {
+        clubId: member.clubId,
+        ownerMembershipId: member.id,
+      })
+    ) {
       throw new ForbiddenException({
         code: 'PERMISSION_DENIED',
         resource: 'speechRequest',
@@ -213,7 +220,15 @@ export class EducationService {
     dto: CreateSpeechSlotRequestDto,
   ): Promise<SpeechSlotRequestWire> {
     const member = await this.load(memberId);
-    if (!can(subject, 'create', 'speechRequest', { clubId: member.clubId })) {
+    /* The member creates requests for their own membership (`own`-scoped
+     * grant); VPE/ClubAdmin can file one for anyone via the club grant.
+     * A member targeting somebody else's membership id 403s here. */
+    if (
+      !can(subject, 'create', 'speechRequest', {
+        clubId: member.clubId,
+        ownerMembershipId: member.id,
+      })
+    ) {
       throw new ForbiddenException({
         code: 'PERMISSION_DENIED',
         resource: 'speechRequest',
@@ -273,7 +288,15 @@ export class EducationService {
     memberId: string,
   ): Promise<Membership> {
     const member = await this.load(memberId);
-    if (!can(subject, 'read', 'evaluation', { clubId: member.clubId })) {
+    /* `ownerMembershipId` is what lets a plain member through on their own
+     * reports (`evaluation:read` is `own`-scoped in MEMBER_ROLE) while every
+     * other member still 403s; VPE/ClubAdmin pass on the club-scoped grant. */
+    if (
+      !can(subject, 'read', 'evaluation', {
+        clubId: member.clubId,
+        ownerMembershipId: member.id,
+      })
+    ) {
       throw new ForbiddenException({
         code: 'PERMISSION_DENIED',
         resource: 'evaluation',

@@ -54,7 +54,12 @@ export class EducationController {
     return this.education.startPathway(ctx.subject, memberId, dto);
   }
 
-  @Requires('evaluation', 'read')
+  /* Coarse gate is `education:read` (every club member has it club-wide):
+   * `evaluation:read` is `own`-scoped for plain members, which the
+   * pre-handler gate can't see — the service re-checks `evaluation:read`
+   * with the loaded membership as `ownerMembershipId`, so a member reads
+   * their own reports and only VPE/Admin read anyone's. */
+  @Requires('education', 'read')
   @Get('evaluations')
   evaluations(
     @CurrentContext() ctx: RequestContext,
@@ -63,7 +68,7 @@ export class EducationController {
     return this.education.listEvaluations(ctx.subject, memberId);
   }
 
-  @Requires('evaluation', 'read')
+  @Requires('education', 'read') // two-phase — see `evaluations` above
   @Get('timer-entries')
   timerEntries(
     @CurrentContext() ctx: RequestContext,
@@ -72,7 +77,7 @@ export class EducationController {
     return this.education.listTimerEntries(ctx.subject, memberId);
   }
 
-  @Requires('evaluation', 'read')
+  @Requires('education', 'read') // two-phase — see `evaluations` above
   @Get('ah-counter-entries')
   ahCounterEntries(
     @CurrentContext() ctx: RequestContext,
@@ -81,7 +86,11 @@ export class EducationController {
     return this.education.listAhCounterEntries(ctx.subject, memberId);
   }
 
-  @Requires('speechRequest', 'read')
+  /* Two-phase like `pathway`: `speechRequest:read` is `own`-scoped for
+   * plain members (the Me page lists the caller's own requests), so the
+   * coarse gate uses club-wide `education:read` and the service re-checks
+   * `speechRequest:read` with `ownerMembershipId` set. */
+  @Requires('education', 'read')
   @Get('speech-slot-requests')
   speechSlotRequests(
     @CurrentContext() ctx: RequestContext,
@@ -90,7 +99,12 @@ export class EducationController {
     return this.education.listSpeechSlotRequests(ctx.subject, memberId);
   }
 
-  @Requires('speechRequest', 'create')
+  /* A member requests a slot for themselves (`speechRequest:create` is
+   * `own`-scoped in MEMBER_ROLE) — the coarse gate can't see that, so it
+   * stays at club-wide `education:read` and `EducationService`
+   * re-checks `create` with the URL membership as `ownerMembershipId`.
+   * VPE/ClubAdmin pass on their club-scoped grant as before. */
+  @Requires('education', 'read')
   @Post('speech-slot-requests')
   createSpeechSlotRequest(
     @CurrentContext() ctx: RequestContext,

@@ -178,6 +178,14 @@ export class TasksService {
           reason: 'You are not assigned to this task',
         });
       }
+    } else {
+      // The coarse gate is `task:read` now (so assignees can reach their own
+      // tasks), so an empty body would otherwise slip every check and still
+      // bump `updatedAt` + write an activity row. Reject it instead.
+      throw new BadRequestException({
+        code: 'NOTHING_TO_UPDATE',
+        message: 'Provide at least one field to update',
+      });
     }
 
     let assigneeIds: string[] | undefined;
