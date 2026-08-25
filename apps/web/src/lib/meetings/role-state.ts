@@ -4,10 +4,14 @@
  * page read and write here so a guest holding the QR link stays in sync with
  * the club member watching in the tab, without either side owning the state.
  *
- * localStorage placeholder mirrors the evaluation flow (see
- * `lib/evaluation/storage.ts`) — swap for a POST/subscribe backend once one
- * lands and callers won't need to change. Cross-device sync isn't implied by
- * localStorage; that arrives with the real backend.
+ * Persistence is two-tier: localStorage gives instant loads and same-tab
+ * pub/sub, and a registered `RoleStateBackend` (wired up by
+ * `role-state-sync.ts` — authed for the in-app tab, share-token for the
+ * public page) mirrors every write to the server and hydrates from it on
+ * mount. That server tier is what makes the data survive devices, browsers,
+ * and the share-link handoff — before it existed, state lived in one
+ * browser's localStorage only and revisiting the meeting from anywhere else
+ * showed an empty tool.
  */
 
 const KEY_PREFIX = 'toastly:role';
@@ -201,6 +205,7 @@ export function writeRoleState<K extends RoleKind>(
     }
   }
   notifyListeners(key);
+  scheduleBackendSave(key, next);
 }
 
 /** Read + write shortcut for reducer-style updates. Passing the current value
@@ -214,4 +219,126 @@ export function updateRoleState<K extends RoleKind>(
   const next = updater(current);
   writeRoleState(kind, meetingId, next);
   return next;
+}
+
+/* ------------------------------------------------------------------ */
+/* Server sync — registered per (kind, meeting) by `role-state-sync.ts`. */
+
+/** Server persistence for one (kind, meeting) pair. Implementations live in
+ * `role-state-sync.ts`: the authed variant hits
+ * `/meetings/:id/role-state/:kind`, the public one the share-token twin. */
+export interface RoleStateBackend {
+  /** The stored blob, or null when nobody has saved state for this pair yet. */
+  load(): Promise<unknown | null>;
+  /** Fire-and-forget — a sync failure must never interrupt live capture. */
+  save(state: unknown): void;
+}
+
+const backends = new Map<string, RoleStateBackend>();
+/** Keys whose initial server load ran (or is in flight) — hydrate once per
+ * session per (kind, meeting). */
+const hydratedKeys = new Set<string>();
+/** Debounced pending writes, so rapid Ah-Counter taps batch into one PUT. */
+const pendingSaves = new Map<string, { handle: number; state: unknown }>();
+
+const SAVE_DEBOUNCE_MS = 700;
+
+/** Registers the server backend for a (kind, meeting) pair and kicks the
+ * initial hydration. Returns the unregister for effect cleanup. */
+export function registerRoleStateBackend(
+  kind: RoleKind,
+  meetingId: string,
+  backend: RoleStateBackend,
+): () => void {
+  const key = stateKey(kind, meetingId);
+  backends.set(key, backend);
+  installFlushListeners();
+  void hydrateRoleState(kind, meetingId);
+  return () => {
+    if (backends.get(key) === backend) backends.delete(key);
+  };
+}
+
+/** First-load reconciliation. The server copy is the cross-device truth, so
+ * it wins — unless a local write landed mid-load (the fresher capture wins
+ * and is pushed up instead). A null server copy with a local copy present is
+ * the pre-sync migration path: push the local data up so it reaches other
+ * devices instead of dying with this browser. */
+async function hydrateRoleState(kind: RoleKind, meetingId: string): Promise<void> {
+  const key = stateKey(kind, meetingId);
+  if (hydratedKeys.has(key)) return;
+  const backend = backends.get(key);
+  if (!backend) return;
+  hydratedKeys.add(key);
+
+  const localBefore = readRoleStateRaw(kind, meetingId);
+  let remote: unknown | null;
+  try {
+    remote = await backend.load();
+  } catch {
+    hydratedKeys.delete(key); // offline / server down — retry on next mount
+    return;
+  }
+
+  const localAfter = readRoleStateRaw(kind, meetingId);
+  if (localAfter !== localBefore && localAfter) {
+    safeSave(backend, localAfter);
+    return;
+  }
+  if (remote === null || remote === undefined) {
+    if (localAfter) safeSave(backend, localAfter);
+    return;
+  }
+  const remoteRaw = JSON.stringify(remote);
+  if (localAfter !== remoteRaw && typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(key, remoteRaw);
+      notifyListeners(key);
+    } catch {
+      /* Storage blocked — components still render the remote copy via the
+       * notification above once the write lands, so nothing to do here. */
+    }
+  }
+}
+
+function safeSave(backend: RoleStateBackend, raw: string): void {
+  try {
+    backend.save(JSON.parse(raw));
+  } catch {
+    /* Unparseable local blob — leave the server copy alone. */
+  }
+}
+
+function scheduleBackendSave(key: string, state: unknown): void {
+  const backend = backends.get(key);
+  if (!backend || typeof window === 'undefined') return;
+  const pending = pendingSaves.get(key);
+  if (pending) window.clearTimeout(pending.handle);
+  pendingSaves.set(key, {
+    state,
+    handle: window.setTimeout(() => {
+      pendingSaves.delete(key);
+      backend.save(state);
+    }, SAVE_DEBOUNCE_MS),
+  });
+}
+
+/** Best-effort flush when the tab hides or closes — debounce alone would
+ * drop the last seconds of a meeting if the host closes the lid mid-tap. */
+function flushPendingSaves(): void {
+  for (const [key, pending] of pendingSaves) {
+    window.clearTimeout(pending.handle);
+    backends.get(key)?.save(pending.state);
+  }
+  pendingSaves.clear();
+}
+
+let flushListenersInstalled = false;
+function installFlushListeners(): void {
+  if (flushListenersInstalled || typeof window === 'undefined') return;
+  flushListenersInstalled = true;
+  window.addEventListener('pagehide', flushPendingSaves);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushPendingSaves();
+  });
 }

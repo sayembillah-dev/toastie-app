@@ -13,7 +13,8 @@ import { PrismaService } from '@/prisma';
 
 import type { CreateMeetingDto, UpdateMeetingDto } from './dto/meetings.dto';
 import { syncPlannerFieldsFromMeeting } from './planner-mirror';
-import { type MeetingWire, toMeetingWire } from './serializers';
+import { assertRoleStateKind, assertRoleStateSize } from './role-state';
+import { type MeetingRoleStateWire, type MeetingWire, toMeetingWire } from './serializers';
 
 /** Handles `/meetings` — the club's meeting roster. Every meeting is born
  * a draft; publishing is a separate PATCH from its own button on the
@@ -169,6 +170,67 @@ export class MeetingsService {
     }
     await this.prisma.meeting.delete({ where: { id: meetingId } });
     return null;
+  }
+
+  /** Live Ah Counter/Timer/Grammarian capture state. Both routes gate on
+   * `meeting:read` — deliberately not `meeting:update`: the member holding
+   * the Timer or Ah-Counter role is usually a plain member (club-scope read
+   * only), and the anonymous share-link side can write with just the meeting
+   * token, so an officer-only gate would 403 exactly the people this serves.
+   * The blob is stored verbatim; last write wins. */
+  async getRoleState(
+    subject: PermissionSubject,
+    meetingId: string,
+    kind: string,
+  ): Promise<MeetingRoleStateWire> {
+    assertRoleStateKind(kind);
+    const meeting = await this.load(meetingId);
+    if (!can(subject, 'read', 'meeting', { clubId: meeting.clubId })) {
+      throw new ForbiddenException({
+        code: 'PERMISSION_DENIED',
+        resource: 'meeting',
+        action: 'read',
+        reason: 'You do not manage this club',
+      });
+    }
+    const row = await this.prisma.meetingRoleState.findUnique({
+      where: { meetingId_kind: { meetingId, kind } },
+    });
+    return {
+      kind,
+      state: row?.state ?? null,
+      updatedAt: row?.updatedAt.toISOString() ?? null,
+    };
+  }
+
+  async saveRoleState(
+    subject: PermissionSubject,
+    meetingId: string,
+    kind: string,
+    state: Record<string, unknown>,
+  ): Promise<MeetingRoleStateWire> {
+    assertRoleStateKind(kind);
+    assertRoleStateSize(state);
+    const meeting = await this.load(meetingId);
+    if (!can(subject, 'read', 'meeting', { clubId: meeting.clubId })) {
+      throw new ForbiddenException({
+        code: 'PERMISSION_DENIED',
+        resource: 'meeting',
+        action: 'read',
+        reason: 'You do not manage this club',
+      });
+    }
+    const row = await this.prisma.meetingRoleState.upsert({
+      where: { meetingId_kind: { meetingId, kind } },
+      create: {
+        clubId: meeting.clubId,
+        meetingId,
+        kind,
+        state: state as Prisma.InputJsonValue,
+      },
+      update: { state: state as Prisma.InputJsonValue },
+    });
+    return { kind, state: row.state, updatedAt: row.updatedAt.toISOString() };
   }
 
   private async load(meetingId: string) {

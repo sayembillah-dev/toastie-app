@@ -1,9 +1,12 @@
-import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
+import { Body, Controller, Get, NotFoundException, Param, Put, Query } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 
 import { Public } from '@/access';
 import { PrismaService } from '@/prisma';
 
-import { type WordOfTheDayWire } from './serializers';
+import { SaveMeetingRoleStateDto } from './dto/meetings.dto';
+import { assertRoleStateKind, assertRoleStateSize } from './role-state';
+import { type MeetingRoleStateWire, type WordOfTheDayWire } from './serializers';
 
 /** Wire shape returned by `/public/meetings/:id` — a **minimal** projection.
  * Anonymous callers only see what the share pages actually render: the
@@ -416,5 +419,70 @@ export class PublicMeetingsController {
       if (meeting.wordPartOfSpeech) wire.word.partOfSpeech = meeting.wordPartOfSpeech;
     }
     return wire;
+  }
+
+  /** Live role capture state for the share-link pages — same (id, token)
+   * gate as `getSpeaker`/`getRoleAssignment`. The guest holding the Timer or
+   * Ah-Counter link writes here; the in-app tab reads the same row via the
+   * authenticated twin, which is what keeps the two surfaces in sync. The
+   * blob is opaque to the server; last write wins. */
+  @Get(':meetingId/role-state/:kind')
+  async getRoleState(
+    @Param('meetingId') meetingId: string,
+    @Param('kind') kind: string,
+    @Query('t') token: string | undefined,
+  ): Promise<MeetingRoleStateWire> {
+    assertRoleStateKind(kind);
+    await this.loadMeetingByToken(meetingId, token);
+    const row = await this.prisma.meetingRoleState.findUnique({
+      where: { meetingId_kind: { meetingId, kind } },
+    });
+    return {
+      kind,
+      state: row?.state ?? null,
+      updatedAt: row?.updatedAt.toISOString() ?? null,
+    };
+  }
+
+  @Put(':meetingId/role-state/:kind')
+  async saveRoleState(
+    @Param('meetingId') meetingId: string,
+    @Param('kind') kind: string,
+    @Query('t') token: string | undefined,
+    @Body() dto: SaveMeetingRoleStateDto,
+  ): Promise<MeetingRoleStateWire> {
+    assertRoleStateKind(kind);
+    assertRoleStateSize(dto.state);
+    const meeting = await this.loadMeetingByToken(meetingId, token);
+    const row = await this.prisma.meetingRoleState.upsert({
+      where: { meetingId_kind: { meetingId, kind } },
+      create: {
+        clubId: meeting.clubId,
+        meetingId,
+        kind,
+        state: dto.state as Prisma.InputJsonValue,
+      },
+      update: { state: dto.state as Prisma.InputJsonValue },
+    });
+    return { kind, state: row.state, updatedAt: row.updatedAt.toISOString() };
+  }
+
+  /** Shared (id, token) gate for the role-state routes — identical semantics
+   * to the inline lookups above: wrong id or wrong token both 404. */
+  private async loadMeetingByToken(
+    meetingId: string,
+    token: string | undefined,
+  ): Promise<{ clubId: string }> {
+    if (!token) {
+      throw new NotFoundException('No meeting matches that share link');
+    }
+    const meeting = await this.prisma.meeting.findFirst({
+      where: { id: meetingId, shareToken: token },
+      select: { clubId: true },
+    });
+    if (!meeting) {
+      throw new NotFoundException('No meeting matches that share link');
+    }
+    return meeting;
   }
 }

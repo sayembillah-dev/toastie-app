@@ -13,6 +13,7 @@ import {
   subscribeToRoleState,
   updateRoleState,
 } from '@/lib/meetings/role-state';
+import { useRoleStateSync } from '@/lib/meetings/role-state-sync';
 
 const TIME_FMT = new Intl.DateTimeFormat('en-GB', {
   hour: '2-digit',
@@ -24,12 +25,16 @@ const TIME_FMT = new Intl.DateTimeFormat('en-GB', {
 interface GrammarianViewProps {
   meetingId: string;
   showShare: boolean;
+  /** Share-link credential — only provided on the public page, where it
+   * stands in for the auth the in-app tab uses. */
+  token?: string;
 }
 
 /** Shared interactive view — used by the in-app Grammarian tab and by the
  * public share page. State lives in the role-state store, keyed by meeting,
  * so both surfaces stay in sync via `useSyncExternalStore`. */
-export function GrammarianView({ meetingId, showShare }: GrammarianViewProps) {
+export function GrammarianView({ meetingId, showShare, token = '' }: GrammarianViewProps) {
+  useRoleStateSync('grammarian', meetingId, showShare ? undefined : token);
   const subscribe = useCallback(
     (notify: () => void) => subscribeToRoleState('grammarian', meetingId, notify),
     [meetingId],

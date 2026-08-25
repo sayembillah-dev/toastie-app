@@ -54,6 +54,16 @@ export function toMeetingWire(row: Meeting): MeetingWire {
   return wire;
 }
 
+/** Wire shape for `/meetings/:id/role-state/:kind` (and the share-token twin
+ * under `/public/meetings`). `state` is the opaque client blob, round-tripped
+ * verbatim; `null` when nobody has saved state for that (meeting, kind) yet —
+ * the client then falls back to its local copy and pushes it up. */
+export interface MeetingRoleStateWire {
+  kind: string;
+  state: unknown;
+  updatedAt: string | null;
+}
+
 /** Wire shape matches the web `lib/meetings/role-assignments.ts`
  * `RoleAssignment` interface. Meeting id is implicit in the URL. */
 export interface MeetingRoleAssignmentWire {

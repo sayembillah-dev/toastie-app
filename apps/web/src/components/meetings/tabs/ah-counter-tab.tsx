@@ -27,6 +27,7 @@ import {
   subscribeToRoleState,
   updateRoleState,
 } from '@/lib/meetings/role-state';
+import { useRoleStateSync } from '@/lib/meetings/role-state-sync';
 import type { Guest } from '@/lib/people/guests';
 import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
 import {
@@ -491,6 +492,7 @@ interface AhCounterViewProps {
 /** Shared Ah Counter view — used by the in-app tab and the public share page.
  * State is persisted per meeting so both surfaces stay in sync. */
 export function AhCounterView({ meetingId, showShare, token = '' }: AhCounterViewProps) {
+  useRoleStateSync('ah-counter', meetingId, showShare ? undefined : token);
   const { data: members } = useGetMembersQuery(undefined, { skip: !showShare });
   const { data: guests } = useGetGuestsQuery(undefined, { skip: !showShare });
   const { data: roleRows } = useGetMeetingRolesQuery(meetingId, { skip: !showShare });

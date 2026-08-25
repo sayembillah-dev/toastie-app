@@ -154,7 +154,9 @@ export function PublicRolePage({ kind }: PublicRolePageProps) {
         {kind === 'timer' ? (
           <TimerView meetingId={meetingId} showShare={false} token={token} />
         ) : null}
-        {kind === 'grammarian' ? <GrammarianView meetingId={meetingId} showShare={false} /> : null}
+        {kind === 'grammarian' ? (
+          <GrammarianView meetingId={meetingId} showShare={false} token={token} />
+        ) : null}
       </div>
     </div>
   );

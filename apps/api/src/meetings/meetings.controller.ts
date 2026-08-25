@@ -7,13 +7,14 @@ import {
   Param,
   Patch,
   Post,
+  Put,
 } from '@nestjs/common';
 
 import { CurrentContext, type RequestContext, Requires } from '@/access';
 
-import { CreateMeetingDto, UpdateMeetingDto } from './dto/meetings.dto';
+import { CreateMeetingDto, SaveMeetingRoleStateDto, UpdateMeetingDto } from './dto/meetings.dto';
 import { MeetingsService } from './meetings.service';
-import { type MeetingWire } from './serializers';
+import { type MeetingRoleStateWire, type MeetingWire } from './serializers';
 
 @Controller('meetings')
 export class MeetingsController {
@@ -33,6 +34,29 @@ export class MeetingsController {
     @Param('meetingId') meetingId: string,
   ): Promise<MeetingWire> {
     return this.meetings.get(ctx.subject, meetingId);
+  }
+
+  /** Live role capture state (Ah Counter/Timer/Grammarian) — see the service
+   * for why the write side gates on `meeting:read` rather than `update`. */
+  @Requires('meeting', 'read')
+  @Get(':meetingId/role-state/:kind')
+  getRoleState(
+    @CurrentContext() ctx: RequestContext,
+    @Param('meetingId') meetingId: string,
+    @Param('kind') kind: string,
+  ): Promise<MeetingRoleStateWire> {
+    return this.meetings.getRoleState(ctx.subject, meetingId, kind);
+  }
+
+  @Requires('meeting', 'read')
+  @Put(':meetingId/role-state/:kind')
+  saveRoleState(
+    @CurrentContext() ctx: RequestContext,
+    @Param('meetingId') meetingId: string,
+    @Param('kind') kind: string,
+    @Body() dto: SaveMeetingRoleStateDto,
+  ): Promise<MeetingRoleStateWire> {
+    return this.meetings.saveRoleState(ctx.subject, meetingId, kind, dto.state);
   }
 
   @Requires('meeting', 'create')

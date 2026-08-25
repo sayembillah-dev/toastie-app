@@ -3,6 +3,7 @@ import {
   IsIn,
   IsInt,
   IsISO8601,
+  IsObject,
   IsOptional,
   IsString,
   Matches,
@@ -100,4 +101,14 @@ export class UpdateMeetingDto {
   @ValidateNested()
   @Type(() => WordOfTheDayDto)
   word?: WordOfTheDayDto;
+}
+
+/** Body for `PUT /meetings/:meetingId/role-state/:kind` and its share-token
+ * twin under `/public/meetings`. `state` is an opaque, client-owned JSON
+ * blob (the web's `role-state.ts` owns the per-kind shape); the global
+ * ValidationPipe strips anything undecorated, so the blob must arrive under
+ * this one decorated property. */
+export class SaveMeetingRoleStateDto {
+  @IsObject()
+  state!: Record<string, unknown>;
 }

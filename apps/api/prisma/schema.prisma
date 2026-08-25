@@ -587,10 +587,33 @@ model Meeting {
   guestAttendance       MeetingGuestAttendance[] @relation("MeetingGuestAttendance")
   plannerRows           PlannerRow[]
   evaluationSubmissions EvaluationSubmission[]   @relation("MeetingEvaluationSubmissions")
+  roleStates            MeetingRoleState[]
 
   @@unique([clubId, id])
   @@unique([clubId, meetingNumber])
   @@index([clubId, dateTime])
+}
+
+/// Live capture state for the three "live" meeting roles — Ah Counter, Timer,
+/// Grammarian — one row per (meeting, kind). `state` is an opaque JSON blob
+/// owned by the web's `lib/meetings/role-state.ts`; the server only stores and
+/// serves it so the data survives devices, browsers, and the share-link
+/// handoff (it previously lived in each browser's localStorage and was lost
+/// the moment the meeting was revisited from anywhere else). Last write wins.
+model MeetingRoleState {
+  id        String   @id @default(cuid())
+  clubId    String
+  meetingId String
+  /// 'ah-counter' | 'timer' | 'grammarian' — the web's `RoleKind`.
+  kind      String
+  state     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  meeting Meeting @relation(fields: [clubId, meetingId], references: [clubId, id], onDelete: Cascade)
+
+  @@unique([meetingId, kind])
+  @@index([clubId])
 }
 
 /// One row per (meeting, role key) — who's assigned to President, Toastmaster,
