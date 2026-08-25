@@ -46,7 +46,7 @@ import { getApiErrorMessage } from '@/store/api-error';
  * header sub-row and every body row. Widths, labels and group tints live here.
  * -------------------------------------------------------------------------- */
 
-type Tint = 'none' | 'amber' | 'blue' | 'violet' | 'teal' | 'slate';
+type Tint = 'none' | 'amber' | 'blue' | 'violet' | 'teal' | 'rose' | 'slate';
 
 interface AssigneeCol {
   field: AssigneeField;
@@ -68,6 +68,8 @@ const GROUPED_ASSIGNEE_COLUMNS: AssigneeCol[] = [
   { field: 'evaluator2', label: 'Evaluator 2', minWidth: 200, tint: 'violet' },
   { field: 'speaker3', label: 'Speaker 3', minWidth: 200, tint: 'teal' },
   { field: 'evaluator3', label: 'Evaluator 3', minWidth: 200, tint: 'teal' },
+  { field: 'speaker4', label: 'Speaker 4', minWidth: 200, tint: 'rose' },
+  { field: 'evaluator4', label: 'Evaluator 4', minWidth: 200, tint: 'rose' },
   { field: 'generalEvaluator', label: 'General Evaluator', minWidth: 200, tint: 'slate' },
   { field: 'timer', label: 'Timer', minWidth: 170, tint: 'slate' },
   { field: 'ahCounter', label: 'Ah-counter', minWidth: 170, tint: 'slate' },
@@ -88,6 +90,8 @@ function subHeaderGroupClass(tint: Tint): string {
       return 'bg-violet-50/60 text-ink';
     case 'teal':
       return 'bg-teal-50/60 text-ink';
+    case 'rose':
+      return 'bg-rose-50/60 text-ink';
     case 'slate':
       return 'bg-slate-50/60 text-ink';
     default:

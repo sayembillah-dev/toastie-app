@@ -1,5 +1,8 @@
-import { CalendarBlank, Compass, Flag, Path } from '@phosphor-icons/react/dist/ssr';
+import { CalendarBlank, Compass, Flag, Path, PencilSimple } from '@phosphor-icons/react/dist/ssr';
+import { Button } from 'antd';
+import { useState } from 'react';
 
+import { StartPathwayModal } from '@/components/education/start-pathway-modal';
 import type { HistoryEvent, MemberStats } from '@/lib/education/history';
 import type { Level, Member, Pathway } from '@/lib/education/members';
 import {
@@ -42,6 +45,8 @@ interface PathwayCardProps {
  * is read straight off the canonical Pathways catalog rather than guessed, so
  * it stays true when the catalog changes. */
 export function PathwayCard({ member, stats, history }: PathwayCardProps) {
+  const [pathwayModalOpen, setPathwayModalOpen] = useState(false);
+
   if (!member.pathway || !member.level) {
     return (
       <article className="rounded-xl border border-dashed border-line-strong bg-canvas px-6 py-10 text-center">
@@ -53,8 +58,22 @@ export function PathwayCard({ member, stats, history }: PathwayCardProps) {
         </span>
         <h2 className="text-sm font-semibold text-ink">No pathway started yet</h2>
         <p className="mx-auto mt-1.5 max-w-sm text-xs text-ink-soft">
-          Start a pathway from the Education tab to see your project progress here.
+          Start your pathway to see project progress, levels, and what&apos;s next — right here.
         </p>
+        <Button
+          type="primary"
+          size="middle"
+          className="mt-5"
+          icon={<Path size={14} weight="bold" />}
+          onClick={() => setPathwayModalOpen(true)}
+        >
+          Start Pathway
+        </Button>
+        <StartPathwayModal
+          open={pathwayModalOpen}
+          member={member}
+          onClose={() => setPathwayModalOpen(false)}
+        />
       </article>
     );
   }
@@ -98,12 +117,23 @@ export function PathwayCard({ member, stats, history }: PathwayCardProps) {
           <h2 className="mt-1.5 text-xl font-semibold text-ink">{pathway}</h2>
           <p className="mt-1 text-sm text-ink-soft">Level {level} of 5</p>
         </div>
-        <span
-          aria-hidden
-          className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white"
-        >
-          <span className="text-sm font-semibold">L{level}</span>
-        </span>
+        <div className="flex shrink-0 items-start gap-1.5">
+          <button
+            type="button"
+            onClick={() => setPathwayModalOpen(true)}
+            aria-label="Update your pathway"
+            title="Update pathway"
+            className="flex size-8 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-fill hover:text-ink"
+          >
+            <PencilSimple size={16} weight="bold" />
+          </button>
+          <span
+            aria-hidden
+            className="flex size-11 items-center justify-center rounded-xl bg-slate-900 text-white"
+          >
+            <span className="text-sm font-semibold">L{level}</span>
+          </span>
+        </div>
       </div>
 
       <div className="mt-4">
@@ -156,6 +186,12 @@ export function PathwayCard({ member, stats, history }: PathwayCardProps) {
           )}
         </div>
       </div>
+
+      <StartPathwayModal
+        open={pathwayModalOpen}
+        member={member}
+        onClose={() => setPathwayModalOpen(false)}
+      />
     </article>
   );
 }

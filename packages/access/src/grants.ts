@@ -73,9 +73,18 @@ const OFFICER_TASK_ACCESS: Grant[] = [
   { resource: 'task', action: 'delete', scope: 'own' },
 ];
 
+/** Every member manages their own Pathways journey — pathway, level, and the
+ * project they're currently on — from the Me page or their own Education
+ * profile. The route's coarse gate can't see ownership (no row is loaded
+ * yet), so `POST /members/:memberId/pathway` requires only `education:read`
+ * pre-handler and the service re-checks `update` with `ownerMembershipId`
+ * set; this grant is what passes for the member themselves. Club-scope
+ * managers (VPE/President/ClubAdmin) pass on their role grants as before. */
+const OWN_EDUCATION_ACCESS: Grant[] = [{ resource: 'education', action: 'update', scope: 'own' }];
+
 const GUEST_ROLE: Grant[] = [{ resource: 'club', action: 'read', scope: 'club' }];
 
-const MEMBER_ROLE: Grant[] = [...CLUB_BASE_READ, ...OWN_TASK_ACCESS];
+const MEMBER_ROLE: Grant[] = [...CLUB_BASE_READ, ...OWN_TASK_ACCESS, ...OWN_EDUCATION_ACCESS];
 
 const SERGEANT_AT_ARMS_ROLE: Grant[] = [
   ...MEMBER_ROLE,

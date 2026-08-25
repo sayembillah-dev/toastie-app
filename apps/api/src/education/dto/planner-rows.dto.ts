@@ -16,7 +16,7 @@ export const PLANNER_NOTES_MAX = 2000;
 
 /** Body for `PATCH /planner-rows/:rowId`. Every field optional — the grid
  * writes one cell at a time. `assignees` is sent whole (the frontend already
- * holds the full 13-slot map) and replaces the stored JSON outright, same as
+ * holds the full 15-slot map) and replaces the stored JSON outright, same as
  * `PlannerIdea.attachments`. `meetingId` is set once by the "Create meeting"
  * dialog to link the row to the meeting it produced. */
 export class UpdatePlannerRowDto {

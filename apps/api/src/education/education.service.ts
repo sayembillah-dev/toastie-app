@@ -100,12 +100,21 @@ export class EducationService {
     dto: StartPathwayDto,
   ): Promise<MemberWire> {
     const member = await this.load(memberId);
-    if (!can(subject, 'update', 'education', { clubId: member.clubId })) {
+    /* Club-scope managers (VPE/President/ClubAdmin) pass on their role grant;
+     * any other member passes only for their own membership, via the
+     * `own`-scoped grant in `MEMBER_ROLE` — the controller's coarse gate ran
+     * before the row (and therefore its owner) was known. */
+    if (
+      !can(subject, 'update', 'education', {
+        clubId: member.clubId,
+        ownerMembershipId: member.id,
+      })
+    ) {
       throw new ForbiddenException({
         code: 'PERMISSION_DENIED',
         resource: 'education',
         action: 'update',
-        reason: 'You do not manage this club',
+        reason: 'You can only manage your own pathway',
       });
     }
     if (dto.level < 1 || dto.level > 5) {

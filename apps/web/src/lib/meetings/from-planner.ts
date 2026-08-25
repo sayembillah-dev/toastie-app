@@ -19,11 +19,12 @@ export const ROLE_BY_FIELD: Array<[keyof PlannerRow, string]> = [
   ['grammarian', 'grammarian'],
 ];
 
-/** The three speaker/evaluator pairs, in agenda order. */
+/** The four speaker/evaluator pairs, in agenda order. */
 const SPEAKER_PAIRS: Array<[keyof PlannerRow, keyof PlannerRow]> = [
   ['speaker1', 'evaluator1'],
   ['speaker2', 'evaluator2'],
   ['speaker3', 'evaluator3'],
+  ['speaker4', 'evaluator4'],
 ];
 
 /** Who a slot resolves to on the meeting side — a member or a roster guest.

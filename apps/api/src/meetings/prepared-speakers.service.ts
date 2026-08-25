@@ -20,8 +20,8 @@ import { type PreparedSpeakerWire, toPreparedSpeakerWire } from './serializers';
 
 /** Handles `/meetings/:meetingId/prepared-speakers` — the Prepared Speakers
  * tab's speech slots. Gated by `meetingRole` (same roles that manage the
- * Roles tab manage this) rather than a dedicated resource key. Ordered 1–3,
- * matching the planner's Speaker 1–3 columns that seed and mirror it. */
+ * Roles tab manage this) rather than a dedicated resource key. Ordered 1–4,
+ * matching the planner's Speaker 1–4 columns that seed and mirror it. */
 @Injectable()
 export class PreparedSpeakersService {
   constructor(

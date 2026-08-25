@@ -1,6 +1,12 @@
 'use client';
 
-import { ArrowLeft, GraduationCap, Path, WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import {
+  ArrowLeft,
+  GraduationCap,
+  Path,
+  PencilSimple,
+  WarningCircle,
+} from '@phosphor-icons/react/dist/ssr';
 import { skipToken } from '@reduxjs/toolkit/query';
 import { Button, Tabs } from 'antd';
 import Link from 'next/link';
@@ -14,6 +20,7 @@ import { AccessGate } from '@/components/permissions/access-gate';
 import { PersonAvatar } from '@/components/ui/person-avatar';
 import type { Member } from '@/lib/education/members';
 import { formatRoles, getInitials } from '@/lib/education/members';
+import { useCan } from '@/lib/permissions/use-can';
 import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
 import { useGetMemberQuery } from '@/store/api';
 import { getApiErrorMessage, isNotFoundError } from '@/store/api-error';
@@ -42,7 +49,17 @@ function hashString(input: string): number {
   return Math.abs(hash);
 }
 
-function ProfileHeader({ member, onStartPathway }: { member: Member; onStartPathway: () => void }) {
+function ProfileHeader({
+  member,
+  canManagePathway,
+  onStartPathway,
+}: {
+  member: Member;
+  /** Viewer may start/edit this member's pathway — club education managers,
+   * or the member themselves (own-scoped grant). Hides the CTA otherwise. */
+  canManagePathway: boolean;
+  onStartPathway: () => void;
+}) {
   const fullName = `${member.firstName} ${member.lastName}`;
   const initials = getInitials(member);
   const swatch = AVATAR_PALETTE[hashString(member.id) % AVATAR_PALETTE.length];
@@ -75,8 +92,18 @@ function ProfileHeader({ member, onStartPathway }: { member: Member; onStartPath
                 <GraduationCap size={12} weight="bold" />
                 Level {member.level}
               </span>
+              {canManagePathway ? (
+                <Button
+                  size="middle"
+                  onClick={onStartPathway}
+                  icon={<PencilSimple size={14} weight="bold" />}
+                  className="w-full sm:w-auto"
+                >
+                  Edit
+                </Button>
+              ) : null}
             </div>
-          ) : (
+          ) : canManagePathway ? (
             <Button
               type="primary"
               size="middle"
@@ -86,7 +113,7 @@ function ProfileHeader({ member, onStartPathway }: { member: Member; onStartPath
             >
               Start Pathway
             </Button>
-          )}
+          ) : null}
         </div>
       </div>
     </header>
@@ -96,6 +123,14 @@ function ProfileHeader({ member, onStartPathway }: { member: Member; onStartPath
 function ProfileContent({ member }: { member: Member }) {
   const [modalOpen, setModalOpen] = useState(false);
   const { activeKey, onChange } = usePersistentTab('tab', 'progress');
+  const { can } = useCan();
+  /* Club education managers pass on their club-scope grant; everyone else
+   * only when the profile is their own (own-scoped grant, checked with the
+   * same ownerMembershipId convention the API service uses). */
+  const canManagePathway = can('update', 'education', {
+    clubId: member.clubId,
+    ownerMembershipId: member.id,
+  });
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
@@ -111,7 +146,11 @@ function ProfileContent({ member }: { member: Member }) {
         </Link>
       </div>
 
-      <ProfileHeader member={member} onStartPathway={() => setModalOpen(true)} />
+      <ProfileHeader
+        member={member}
+        canManagePathway={canManagePathway}
+        onStartPathway={() => setModalOpen(true)}
+      />
 
       <Tabs
         activeKey={activeKey}
@@ -121,7 +160,13 @@ function ProfileContent({ member }: { member: Member }) {
           {
             key: 'progress',
             label: 'Progress',
-            children: <ProgressTab member={member} onStartPathway={() => setModalOpen(true)} />,
+            children: (
+              <ProgressTab
+                member={member}
+                canManagePathway={canManagePathway}
+                onStartPathway={() => setModalOpen(true)}
+              />
+            ),
           },
           {
             key: 'history',

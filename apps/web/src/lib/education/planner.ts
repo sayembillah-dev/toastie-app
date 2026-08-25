@@ -21,6 +21,8 @@ export type AssigneeField =
   | 'evaluator2'
   | 'speaker3'
   | 'evaluator3'
+  | 'speaker4'
+  | 'evaluator4'
   | 'generalEvaluator'
   | 'timer'
   | 'ahCounter'
@@ -38,6 +40,8 @@ const ASSIGNEE_FIELDS: AssigneeField[] = [
   'evaluator2',
   'speaker3',
   'evaluator3',
+  'speaker4',
+  'evaluator4',
   'generalEvaluator',
   'timer',
   'ahCounter',
@@ -61,6 +65,8 @@ export interface PlannerRow {
   evaluator2: Assignee | null;
   speaker3: Assignee | null;
   evaluator3: Assignee | null;
+  speaker4: Assignee | null;
+  evaluator4: Assignee | null;
   generalEvaluator: Assignee | null;
   timer: Assignee | null;
   ahCounter: Assignee | null;
@@ -86,6 +92,8 @@ export function createEmptyRow(id: string, meetingNumber: number | null = null):
     evaluator2: null,
     speaker3: null,
     evaluator3: null,
+    speaker4: null,
+    evaluator4: null,
     generalEvaluator: null,
     timer: null,
     ahCounter: null,
@@ -97,7 +105,7 @@ export function createEmptyRow(id: string, meetingNumber: number | null = null):
 }
 
 /** Wire shape from `GET/POST/PATCH /planner-rows` — `assignees` travels as
- * one JSON blob rather than 13 columns; `fromPlannerRowWire` unpacks it into
+ * one JSON blob rather than 15 columns; `fromPlannerRowWire` unpacks it into
  * the flat shape every component already works with. */
 export interface PlannerRowWire {
   id: string;
@@ -141,7 +149,7 @@ export function fromPlannerRowWire(wire: PlannerRowWire): PlannerRow {
   return row;
 }
 
-/** Packs the row's 13 assignee fields into the JSON shape the API stores. */
+/** Packs the row's 15 assignee fields into the JSON shape the API stores. */
 export function toAssigneesJson(row: PlannerRow): Partial<Record<AssigneeField, Assignee | null>> {
   const out: Partial<Record<AssigneeField, Assignee | null>> = {};
   for (const field of ASSIGNEE_FIELDS) out[field] = row[field];

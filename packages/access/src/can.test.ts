@@ -129,6 +129,27 @@ describe('can — own scope', () => {
     expect(can(s, 'update', 'task', { clubId: 'club-a', ownerMembershipId: 'm-2' })).toBe(false);
   });
 
+  it("a Member can update their own pathway but not another member's", () => {
+    const s = subject([clubAssignment({ membershipId: 'm-8', roles: ['Member'] })]);
+    expect(can(s, 'update', 'education', { clubId: 'club-a', ownerMembershipId: 'm-8' })).toBe(
+      true,
+    );
+    expect(can(s, 'update', 'education', { clubId: 'club-a', ownerMembershipId: 'm-2' })).toBe(
+      false,
+    );
+    // The coarse club-only target (what the route guard sees pre-handler)
+    // stays denied — the service's fine check with ownerMembershipId is the
+    // authority on this route.
+    expect(can(s, 'update', 'education', { clubId: 'club-a' })).toBe(false);
+  });
+
+  it("a VPE can still update any member's pathway", () => {
+    const s = subject([clubAssignment({ membershipId: 'm-9', roles: ['VPEducation'] })]);
+    expect(can(s, 'update', 'education', { clubId: 'club-a', ownerMembershipId: 'm-2' })).toBe(
+      true,
+    );
+  });
+
   it('a plain Member cannot create a task; an officer can', () => {
     const member = subject([clubAssignment({ membershipId: 'm-8', roles: ['Member'] })]);
     const president = subject([clubAssignment({ membershipId: 'm-9', roles: ['President'] })]);

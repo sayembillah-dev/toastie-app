@@ -64,7 +64,7 @@ export class PlannerRowsService {
       /* Only carry across what this call actually changed — number/date/theme
        * are scalar overwrites, so touching one that wasn't sent would clobber
        * an edit made from the meeting side moments earlier. `assignees`
-       * always mirrors in full: the client sends the whole 13-slot blob on
+       * always mirrors in full: the client sends the whole 15-slot blob on
        * every write, so it's always the authoritative current state, not a
        * partial patch. */
       if (updated.meetingId) {

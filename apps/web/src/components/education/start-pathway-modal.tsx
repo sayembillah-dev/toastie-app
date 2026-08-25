@@ -27,7 +27,11 @@ interface FormState {
   project: string | null;
 }
 
-const INITIAL_STATE: FormState = { pathway: null, project: null };
+/** Blank for a first start; prefilled with the member's current picks when
+ * the modal doubles as the "update my pathway" editor. */
+function initialFormFor(member: Member): FormState {
+  return { pathway: member.pathway ?? null, project: member.startedProject ?? null };
+}
 
 function LevelPill({ level }: { level: Level | null }) {
   return (
@@ -68,7 +72,7 @@ function LevelPill({ level }: { level: Level | null }) {
 }
 
 export function StartPathwayModal({ open, member, onClose }: StartPathwayModalProps) {
-  const [form, setForm] = useState<FormState>(INITIAL_STATE);
+  const [form, setForm] = useState<FormState>(() => initialFormFor(member));
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [startPathway, { isLoading: isSubmitting }] = useStartPathwayMutation();
   const { message } = App.useApp();
@@ -77,7 +81,7 @@ export function StartPathwayModal({ open, member, onClose }: StartPathwayModalPr
    * reset runs once the dialog has actually gone instead of triggering a
    * cascading render on every close. */
   function resetForm() {
-    setForm(INITIAL_STATE);
+    setForm(initialFormFor(member));
     setSubmitError(null);
   }
 
@@ -99,6 +103,9 @@ export function StartPathwayModal({ open, member, onClose }: StartPathwayModalPr
   );
 
   const canSubmit = form.pathway !== null && selectedProject !== null;
+  /** The same dialog doubles as the self-service "change my
+   * pathway/level/project" editor — copy shifts once a pathway exists. */
+  const isUpdate = Boolean(member.pathway && member.level);
 
   /* `unwrap()` turns a rejected mutation into a throw so the modal can stay open
    * and surface the reason instead of silently closing on a failed write. */
@@ -114,7 +121,11 @@ export function StartPathwayModal({ open, member, onClose }: StartPathwayModalPr
         level: selectedProject.level,
       }).unwrap();
 
-      message.success(`${member.firstName} started ${form.pathway}`);
+      message.success(
+        isUpdate
+          ? `${member.firstName}'s pathway was updated`
+          : `${member.firstName} started ${form.pathway}`,
+      );
       onClose();
     } catch (error) {
       setSubmitError(getApiErrorMessage(error, 'Could not start the pathway'));
@@ -131,7 +142,7 @@ export function StartPathwayModal({ open, member, onClose }: StartPathwayModalPr
       }}
       confirmLoading={isSubmitting}
       mask={{ closable: !isSubmitting }}
-      okText="Start Pathway"
+      okText={isUpdate ? 'Save Changes' : 'Start Pathway'}
       cancelText="Cancel"
       okButtonProps={{ disabled: !canSubmit, size: 'middle' }}
       cancelButtonProps={{ size: 'middle', disabled: isSubmitting }}
@@ -150,10 +161,13 @@ export function StartPathwayModal({ open, member, onClose }: StartPathwayModalPr
             <Path size={20} weight="bold" />
           </span>
           <div className="min-w-0">
-            <h2 className="text-base font-semibold text-ink">Start a Pathway</h2>
+            <h2 className="text-base font-semibold text-ink">
+              {isUpdate ? 'Update Pathway' : 'Start a Pathway'}
+            </h2>
             <p className="mt-0.5 text-xs text-ink-soft">
-              Set {member.firstName}&apos;s learning path. Their history and progress on Toastie
-              begin from the level of the project you select.
+              {isUpdate
+                ? `Change ${member.firstName}'s pathway, level, or current project. Past history stays put — progress continues from the project you select.`
+                : `Set ${member.firstName}'s learning path. Their history and progress on Toastie begin from the level of the project you select.`}
             </p>
           </div>
         </header>

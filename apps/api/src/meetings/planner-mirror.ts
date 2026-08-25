@@ -27,6 +27,7 @@ const SPEAKER_PAIRS: Array<[number, string, string]> = [
   [1, 'speaker1', 'evaluator1'],
   [2, 'speaker2', 'evaluator2'],
   [3, 'speaker3', 'evaluator3'],
+  [4, 'speaker4', 'evaluator4'],
 ];
 
 interface PersonAssignee {
@@ -132,7 +133,7 @@ export async function syncPlannerRolesFromMeeting(
   });
 }
 
-/** Prepared speakers changed → refresh the linked planner row's six
+/** Prepared speakers changed → refresh the linked planner row's eight
  * speaker/evaluator columns. */
 export async function syncPlannerSpeakersFromMeeting(
   tx: Prisma.TransactionClient,
@@ -187,8 +188,8 @@ export async function syncPlannerFieldsFromMeeting(
 }
 
 /** A planner row (already linked to a meeting) changed → carry its
- * number/date/theme and its 13 assignee slots onto the meeting side: the 7
- * role columns become `MeetingRoleAssignment` rows, the 3 speaker/evaluator
+ * number/date/theme and its 15 assignee slots onto the meeting side: the 7
+ * role columns become `MeetingRoleAssignment` rows, the 4 speaker/evaluator
  * pairs become `MeetingSpeaker` identity fields. Only real, linkable people
  * (members or roster guests) move across — a typed-not-in-roster guest has
  * no id to point a foreign key at and is left for the meeting side to hold

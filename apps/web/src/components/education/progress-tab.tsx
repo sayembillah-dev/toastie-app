@@ -21,6 +21,9 @@ import { getApiErrorMessage } from '@/store/api-error';
 
 interface ProgressTabProps {
   member: Member;
+  /** Whether the viewer may start/edit this member's pathway (club education
+   * managers, or the member themselves). Hides the CTA for everyone else. */
+  canManagePathway: boolean;
   onStartPathway: () => void;
 }
 
@@ -94,7 +97,13 @@ function LevelBar({ level, startingLevel = 1 }: { level: number; startingLevel?:
   );
 }
 
-function EmptyPathway({ onStartPathway }: { onStartPathway: () => void }) {
+function EmptyPathway({
+  canManagePathway,
+  onStartPathway,
+}: {
+  canManagePathway: boolean;
+  onStartPathway: () => void;
+}) {
   return (
     <div className="rounded-2xl border border-dashed border-line-strong bg-canvas px-6 py-12 text-center">
       <span
@@ -108,15 +117,17 @@ function EmptyPathway({ onStartPathway }: { onStartPathway: () => void }) {
         Start a pathway to unlock progress tracking. Speeches, projects, and level milestones will
         show up here as soon as the journey begins.
       </p>
-      <Button
-        type="primary"
-        size="middle"
-        className="mt-5"
-        icon={<Path size={14} weight="bold" />}
-        onClick={onStartPathway}
-      >
-        Start Pathway
-      </Button>
+      {canManagePathway ? (
+        <Button
+          type="primary"
+          size="middle"
+          className="mt-5"
+          icon={<Path size={14} weight="bold" />}
+          onClick={onStartPathway}
+        >
+          Start Pathway
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -142,7 +153,7 @@ function ProgressSkeleton() {
   );
 }
 
-export function ProgressTab({ member, onStartPathway }: ProgressTabProps) {
+export function ProgressTab({ member, canManagePathway, onStartPathway }: ProgressTabProps) {
   /* The roll-up is computed by the API layer, not during render — the same call
    * shape a `GET /members/:id/stats` endpoint will answer. Members without a
    * pathway have nothing to roll up, so the request is skipped entirely. */
@@ -153,7 +164,7 @@ export function ProgressTab({ member, onStartPathway }: ProgressTabProps) {
   } = useGetMemberStatsQuery(member.pathway && member.level ? member.id : skipToken);
 
   if (!member.pathway || !member.level) {
-    return <EmptyPathway onStartPathway={onStartPathway} />;
+    return <EmptyPathway canManagePathway={canManagePathway} onStartPathway={onStartPathway} />;
   }
 
   if (isError) {

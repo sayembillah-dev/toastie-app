@@ -23,6 +23,7 @@ import { splitLocalDateTime, toInstant } from '@/lib/meetings/datetime';
 import type { DraftSpeaker, MeetingDraft } from '@/lib/meetings/draft';
 import type { Meeting, MeetingStatus } from '@/lib/meetings/meetings';
 import { DEFAULT_START_TIME } from '@/lib/meetings/meetings';
+import { MAX_SPEAKERS_PER_MEETING } from '@/lib/meetings/prepared-speakers';
 import { buildRoles } from '@/lib/meetings/roles';
 import { useUpdateMeetingMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
@@ -31,9 +32,9 @@ import { selectMeetingDraft } from '@/store/meeting-draft-slice';
 
 import { useMemberOf, useNameOf } from './use-name-of';
 
-/** Two prepared speeches is the club's normal slate — the readiness meter reads
- * anything at or above it as a full house. */
-const TARGET_SPEAKERS = 2;
+/** A full slate is every prepared-speaker slot the meeting offers — the
+ * readiness meter reads anything at or above it as a full house. */
+const TARGET_SPEAKERS = MAX_SPEAKERS_PER_MEETING;
 
 const DATE_FMT = new Intl.DateTimeFormat('en-GB', {
   weekday: 'long',

@@ -41,7 +41,7 @@ interface RoleField {
   label: string;
 }
 
-/* The row's thirteen slots, grouped the way the agenda reads rather than the
+/* The row's fifteen slots, grouped the way the agenda reads rather than the
  * way the grid scrolls — this is the last look before the meeting exists. */
 const ROLE_GROUPS: Array<{ title: string; fields: RoleField[] }> = [
   {
@@ -67,6 +67,8 @@ const ROLE_GROUPS: Array<{ title: string; fields: RoleField[] }> = [
       { field: 'evaluator2', label: 'Evaluator 2' },
       { field: 'speaker3', label: 'Speaker 3' },
       { field: 'evaluator3', label: 'Evaluator 3' },
+      { field: 'speaker4', label: 'Speaker 4' },
+      { field: 'evaluator4', label: 'Evaluator 4' },
     ],
   },
   {

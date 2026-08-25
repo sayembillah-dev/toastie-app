@@ -40,7 +40,11 @@ export class EducationController {
     return this.education.getStats(ctx.subject, memberId);
   }
 
-  @Requires('education', 'update')
+  /* Coarse gate stays at `read` (every club member has it club-wide): a
+   * member may start or update their OWN pathway, and ownership isn't known
+   * until the membership row loads — `EducationService.startPathway`
+   * re-checks `education:update` with `ownerMembershipId` set. */
+  @Requires('education', 'read')
   @Post('pathway')
   startPathway(
     @CurrentContext() ctx: RequestContext,

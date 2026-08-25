@@ -4,12 +4,12 @@ import type { DraftSpeaker } from '@/lib/meetings/draft';
 import { getGuestFullName } from '@/lib/people/guests';
 
 /** A prepared speech slot on a meeting — backed by `MeetingSpeaker` on the
- * API, one row per order (1–3), matching the planner's Speaker 1–3 columns
+ * API, one row per order (1–4), matching the planner's Speaker 1–4 columns
  * that seed and mirror it. Replaces what used to be pure Redux draft state
  * (`lib/meetings/draft.ts`'s old `DraftSpeaker`), so a slot now survives a
  * page refresh. */
 
-export const MAX_SPEAKERS_PER_MEETING = 3;
+export const MAX_SPEAKERS_PER_MEETING = 4;
 
 export const SPEAKER_STATUSES = ['requested', 'confirmed', 'delivered'] as const;
 export type SpeakerStatus = (typeof SPEAKER_STATUSES)[number];

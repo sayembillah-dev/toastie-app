@@ -11,7 +11,7 @@ import {
 
 export const SPEAKER_TITLE_MAX = 120;
 export const SPEAKER_NOTES_MAX = 160;
-export const MAX_SPEAKERS_PER_MEETING = 3;
+export const MAX_SPEAKERS_PER_MEETING = 4;
 
 export const SPEAKER_STATUSES = ['requested', 'confirmed', 'delivered'] as const;
 
