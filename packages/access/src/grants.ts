@@ -84,7 +84,13 @@ const OWN_EDUCATION_ACCESS: Grant[] = [{ resource: 'education', action: 'update'
 
 const GUEST_ROLE: Grant[] = [{ resource: 'club', action: 'read', scope: 'club' }];
 
-const MEMBER_ROLE: Grant[] = [...CLUB_BASE_READ, ...OWN_TASK_ACCESS, ...OWN_EDUCATION_ACCESS];
+const MEMBER_ROLE: Grant[] = [
+  ...CLUB_BASE_READ,
+  ...OWN_TASK_ACCESS,
+  ...OWN_EDUCATION_ACCESS,
+  ...rw('meeting'),
+  ...rw('meetingRole'),
+];
 
 const SERGEANT_AT_ARMS_ROLE: Grant[] = [
   ...MEMBER_ROLE,
