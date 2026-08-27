@@ -6,6 +6,7 @@ import {
   IsIn,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   MaxLength,
   MinLength,
@@ -130,12 +131,22 @@ export class UpdateGuestDto {
 
 /** Body for `POST /guests`. No `stage` — every guest starts at `new` — and no
  * visit stats, which are derived from `VisitLog` rows (see `visit-stats.ts`)
- * rather than typed in by hand. */
+ * rather than typed in by hand.
+ *
+ * Can create a guest by either:
+ * 1. Providing firstName (and optional other fields) — new guest
+ * 2. Providing membershipId — add existing member as guest (auto-fills firstName/lastName/email/phone) */
 export class CreateGuestDto {
+  // Either membershipId OR firstName must be provided
+  @IsOptional()
+  @IsUUID()
+  membershipId?: string;
+
+  @IsOptional()
   @IsString()
   @MinLength(1)
   @MaxLength(60)
-  firstName!: string;
+  firstName?: string;
 
   // Optional: the quick-add drawer only insists on a first name. Stored as an
   // empty string rather than null so `Prospect.lastName` stays non-nullable.

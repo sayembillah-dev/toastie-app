@@ -150,11 +150,17 @@ export type UpdateGuestInput = Partial<
   >
 >;
 
-/** Fields the "Add guest" drawer can write. Only `firstName` is required —
- * everything else (last name, avatar, socials, bio, notes) can be filled in
- * afterward via the edit panel. No `stage`: every guest starts at `new`. */
-export type CreateGuestInput = Pick<Guest, 'firstName'> &
-  Partial<Pick<Guest, 'lastName' | 'email' | 'phone' | 'whatsapp' | 'invitedBy'>>;
+/** Fields the "Add guest" drawer can write.
+ *
+ * Either `firstName` (manual entry) or `membershipId` (add existing member) is required.
+ * Last name, avatar, socials, bio, notes can be filled in afterward via the edit panel.
+ * No `stage`: every guest starts at `new`. */
+export type CreateGuestInput =
+  | (Pick<Guest, 'firstName'> &
+      Partial<Pick<Guest, 'lastName' | 'email' | 'phone' | 'whatsapp' | 'invitedBy'>>)
+  | ({
+      membershipId: string;
+    } & Partial<Pick<Guest, 'email' | 'phone' | 'whatsapp'>>);
 
 /** The club's standing guest self-signup link — `GET /guests/invite-link`.
  * One token per club, minted lazily on first read and reusable until rotated;

@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 
 import { CurrentContext, type RequestContext, Requires } from '@/access';
@@ -61,6 +62,24 @@ export class GuestsController {
   rotateInviteLink(@CurrentContext() ctx: RequestContext): Promise<{ token: string }> {
     const clubId = requireClubContext(ctx);
     return this.people.rotateGuestInviteLink(ctx.subject, clubId);
+  }
+
+  @Requires('guest', 'create')
+  @Get('search/available-members')
+  searchAvailableMembers(
+    @CurrentContext() ctx: RequestContext,
+    @Query('q') query?: string,
+  ): Promise<
+    Array<{
+      id: string;
+      firstName: string;
+      lastName: string;
+      email: string | null;
+      clubName: string;
+    }>
+  > {
+    const clubId = requireClubContext(ctx);
+    return this.people.searchMembersForGuestAdd(ctx.subject, clubId, query);
   }
 
   @Requires('guest', 'read')

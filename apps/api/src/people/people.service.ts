@@ -81,6 +81,61 @@ export class PeopleService {
     return toGuestWires(rows, this.storage);
   }
 
+  /** Search for members who can be added as guests to a club — excludes
+   * those already in the target club. Returns basic info for UI selection. */
+  async searchMembersForGuestAdd(
+    subject: PermissionSubject,
+    clubId: string,
+    query?: string,
+  ): Promise<
+    Array<{
+      id: string;
+      firstName: string;
+      lastName: string;
+      email: string | null;
+      clubName: string;
+    }>
+  > {
+    if (!can(subject, 'create', 'guest', { clubId })) {
+      throw new ForbiddenException({
+        code: 'PERMISSION_DENIED',
+        resource: 'guest',
+        action: 'create',
+        reason: 'You do not manage this club',
+      });
+    }
+
+    const searchTerm = query?.toLowerCase() ?? '';
+    const rows = await this.prisma.membership.findMany({
+      where: {
+        // Exclude members already in the target club
+        NOT: { clubId },
+        // Search by name or email if query provided
+        ...(searchTerm && {
+          OR: [
+            { firstName: { contains: searchTerm, mode: 'insensitive' } },
+            { lastName: { contains: searchTerm, mode: 'insensitive' } },
+            { user: { email: { contains: searchTerm, mode: 'insensitive' } } },
+          ],
+        }),
+      },
+      include: {
+        club: { select: { name: true } },
+        user: { select: { email: true } },
+      },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      take: 50, // Limit results for performance
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      firstName: row.firstName,
+      lastName: row.lastName,
+      email: row.user?.email ?? null,
+      clubName: row.club.name,
+    }));
+  }
+
   async getGuest(subject: PermissionSubject, guestId: string): Promise<GuestWire> {
     const row = await this.loadGuest(guestId);
     this.assertGuest(subject, row, 'read');
@@ -88,7 +143,10 @@ export class PeopleService {
   }
 
   /** The only place a guest is created — meeting attendance and meeting-role
-   * pickers only ever link to an existing `Prospect`, never mint one. */
+   * pickers only ever link to an existing `Prospect`, never mint one.
+   *
+   * Can create by either manually entering details (firstName + optional fields)
+   * or by providing a membershipId to add an existing member as a guest. */
   async createGuest(
     subject: PermissionSubject,
     clubId: string,
@@ -102,14 +160,60 @@ export class PeopleService {
         reason: 'You do not manage this club',
       });
     }
+
+    let firstName: string;
+    let lastName: string;
+    let email: string | null;
+    let phone: string | null;
+
+    if (dto.membershipId) {
+      // Adding an existing member as a guest
+      const membership = await this.prisma.membership.findUnique({
+        where: { id: dto.membershipId },
+        include: {
+          user: {
+            select: { email: true },
+          },
+        },
+      });
+      if (!membership) {
+        throw new NotFoundException(`No member with id "${dto.membershipId}"`);
+      }
+
+      // Prevent adding someone who's already a member of the target club
+      if (membership.clubId === clubId) {
+        throw new ConflictException({
+          code: 'ALREADY_MEMBER',
+          message: 'This person is already a member of this club',
+        });
+      }
+
+      firstName = membership.firstName;
+      lastName = membership.lastName;
+      email = membership.user?.email ?? null;
+      phone = membership.phone;
+    } else {
+      // Manual guest entry — firstName is required
+      if (!dto.firstName) {
+        throw new BadRequestException({
+          code: 'MISSING_FIRST_NAME',
+          message: 'Either firstName or membershipId is required',
+        });
+      }
+      firstName = dto.firstName;
+      lastName = dto.lastName ?? '';
+      email = dto.email ?? null;
+      phone = dto.phone ?? null;
+    }
+
     if (dto.avatarUrl) this.storage.assertOwnedKey(dto.avatarUrl, 'guestAvatar', clubId);
     const row = await this.prisma.prospect.create({
       data: {
         clubId,
-        firstName: dto.firstName.trim(),
-        lastName: dto.lastName?.trim() ?? '',
-        email: dto.email?.trim() || null,
-        phone: dto.phone ?? null,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: email?.trim() || null,
+        phone,
         whatsapp: dto.whatsapp ?? null,
         organization: dto.organization?.trim() || null,
         avatarUrl: dto.avatarUrl || null,

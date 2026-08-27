@@ -747,6 +747,26 @@ export const toastlyApi = createApi({
       }),
     }),
 
+    /* Search for existing members who can be added as guests to the club —
+     * excludes members already in the target club. Used in the add-guest drawer
+     * for the "add existing member" mode. */
+    searchMembersForGuestAdd: build.query<
+      Array<{
+        id: string;
+        firstName: string;
+        lastName: string;
+        email: string | null;
+        clubName: string;
+      }>,
+      { q?: string }
+    >({
+      query: ({ q }) => ({
+        url: '/guests/search/available-members',
+        method: 'GET',
+        params: q ? { q } : undefined,
+      }),
+    }),
+
     /* Read-only preview for the convert-to-member dialog — tells it whether
      * the guest's phone matches an existing account before the admin
      * commits to anything. */
@@ -2575,6 +2595,7 @@ export const {
   useRotateGuestInviteLinkMutation,
   useGetPublicGuestInviteQuery,
   useSubmitPublicGuestInviteMutation,
+  useSearchMembersForGuestAddQuery,
   useCheckGuestMatchQuery,
   useUpdateGuestMutation,
   useDeleteGuestMutation,
