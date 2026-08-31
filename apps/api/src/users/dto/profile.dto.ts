@@ -91,3 +91,14 @@ export class UpdateProfileDto {
   @MaxLength(200)
   currentPassword?: string;
 }
+
+/** Body for `DELETE /profile` — the account holder deleting their own
+ * account. The password is re-confirmed for the same reason
+ * `UpdateProfileDto` demands it on a credential change, only more so: this
+ * is irreversible, and an unlocked phone left on a table should not be
+ * enough to destroy someone's account. */
+export class DeleteAccountDto {
+  @IsString()
+  @MaxLength(200)
+  currentPassword!: string;
+}

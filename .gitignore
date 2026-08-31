@@ -6,6 +6,7 @@ dist/
 .next/
 out/
 build/
+.expo/
 
 # deploy bundle staged by .github/workflows/ci-cd.yml (and by anyone
 # reproducing that step locally) — ~100MB of node_modules and standalone output

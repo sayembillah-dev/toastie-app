@@ -15,7 +15,7 @@ import { type OfficerRole, toClubRoles } from '@/memberships';
 import { PrismaService } from '@/prisma';
 import { StorageService } from '@/storage';
 
-import type { UpdateProfileDto } from './dto/profile.dto';
+import type { DeleteAccountDto, UpdateProfileDto } from './dto/profile.dto';
 import type { CreateUserDto, SetUserPasswordDto, UpdateUserDto } from './dto/users.dto';
 import {
   type CreateUserResultWire,
@@ -444,6 +444,100 @@ export class UsersService {
       return toProfileWire(updated, await this.loadProfileMemberships(userId), this.storage);
     } catch (err) {
       throw this.mapUniqueConflict(err);
+    }
+  }
+
+  /** Self-service account deletion, as Google Play's data-deletion policy
+   * requires of any app that lets people register.
+   *
+   * Deliberately NOT the same operation as `bulkDelete` above: that one is
+   * the Super Admin removing *other* people and gates on `user:delete`,
+   * which no club or org role grants. This one gates on nothing but a
+   * re-typed password, because `userId` comes from `@CurrentUser()` and a
+   * person needs no permission to stop being a user.
+   *
+   * What survives is the point. `Membership.userId` is `onDelete: SetNull`,
+   * so their roster rows revert to unclaimed and every agenda, speech,
+   * evaluation and attendance row — all keyed on `membershipId`, never
+   * `userId` — is untouched. The club keeps its records the way it keeps its
+   * minutes. Everything genuinely personal cascades: refresh tokens, push
+   * subscriptions, org assignments, credential shares, invites they sent.
+   *
+   * The one thing cascade cannot do is the denormalised contact block on
+   * `Membership`. Leaving it would make the deletion a lie — name, email and
+   * phone still on file — and worse, `phone` is the claim key
+   * (`WHERE phone = ? AND userId IS NULL`), so whoever is issued that number
+   * next would silently claim the row and inherit a stranger's speech
+   * history. Email and phone are cleared; the name stays, as a club record.
+   */
+  async deleteOwnAccount(userId: string, dto: DeleteAccountDto): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, passwordHash: true, isSuperAdmin: true },
+    });
+    if (!user) {
+      throw new UnauthorizedException({ code: 'SESSION_INVALID' });
+    }
+
+    const passwordOk = await this.tokens.verifyPassword(user.passwordHash, dto.currentPassword);
+    if (!passwordOk) {
+      throw new UnauthorizedException({ code: 'INVALID_CREDENTIALS' });
+    }
+
+    await this.assertNotLastAdmin(user.id, user.isSuperAdmin);
+
+    // Scrub before the delete, not after: `userId` is what identifies the
+    // rows, and deleting the user nulls it.
+    await this.prisma.$transaction([
+      this.prisma.membership.updateMany({
+        where: { userId },
+        data: { email: null, phone: null },
+      }),
+      this.prisma.user.delete({ where: { id: userId } }),
+    ]);
+  }
+
+  /** Refuses a self-delete that would strand a club with nobody able to
+   * administer it, or the platform with no Super Admin. Both are states only
+   * an out-of-band fix can recover from, so they are worth blocking in front
+   * of the user — who can hand the role over and come back — rather than
+   * discovering later. */
+  private async assertNotLastAdmin(userId: string, isSuperAdmin: boolean): Promise<void> {
+    if (isSuperAdmin) {
+      const remaining = await this.prisma.user.count({
+        where: { isSuperAdmin: true, status: 'active', id: { not: userId } },
+      });
+      if (remaining === 0) {
+        throw new BadRequestException({ code: 'LAST_SUPER_ADMIN' });
+      }
+    }
+
+    const adminOf = await this.prisma.membership.findMany({
+      where: { userId, isClubAdmin: true, status: 'active' },
+      select: { id: true, clubId: true, club: { select: { name: true } } },
+    });
+    if (adminOf.length === 0) return;
+
+    const covered = await this.prisma.membership.groupBy({
+      by: ['clubId'],
+      where: {
+        clubId: { in: adminOf.map((m) => m.clubId) },
+        id: { notIn: adminOf.map((m) => m.id) },
+        isClubAdmin: true,
+        status: 'active',
+      },
+      _count: { _all: true },
+    });
+    const stillAdministered = new Set(
+      covered.filter((row) => row._count._all > 0).map((row) => row.clubId),
+    );
+
+    const orphaned = adminOf.filter((m) => !stillAdministered.has(m.clubId));
+    if (orphaned.length > 0) {
+      throw new BadRequestException({
+        code: 'LAST_CLUB_ADMIN',
+        clubs: orphaned.map((m) => m.club.name),
+      });
     }
   }
 

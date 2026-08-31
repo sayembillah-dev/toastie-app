@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "Toastie",
+    "slug": "Toastie",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "toastie",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.toastie.app"
+    },
+    "android": {
+      "package": "com.toastie.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#fafafa",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#fafafa",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 180
+        }
+      ],
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "0232c471-897e-4993-bbcf-04519c7c31be"
+      }
+    },
+    "owner": "nifty-developers"
+  }
+}
