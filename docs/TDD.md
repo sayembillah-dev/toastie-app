@@ -135,7 +135,9 @@ All routes are served under a global `/api` prefix. Grouped by feature:
 - **Evaluations** (`members/:memberId`, `public/meetings/:meetingId/...`):
   received evaluations, and the public sign-and-submit evaluation flow.
 - **People** (`guests`): guest CRUD, member matching, convert-to-member,
-  contact logs, visit logs.
+  contact logs, visit logs, and a platform-wide member search
+  (`guests/search/available-members`) used to add an existing member of
+  another club as a guest of the caller's club.
 - **Library** (`assets`, `documents`, `planner/ideas` equivalents under
   `library`): CRUD for each.
 - **Inventory** (`inventory-items`, `meetings/:meetingId/checklist`): CRUD
@@ -200,6 +202,11 @@ can(subject, action, resource, target) -> boolean
   unit), or global access (Super Admin, via the `isSuperAdmin` flag on
   `User`).
 
+**Notable grant.** The plain `Member` role (not only officers) carries full
+club-scoped `create`/`read`/`update`/`delete` on `meeting` and `meetingRole`
+(`packages/access/src/grants.ts`, `MEMBER_ROLE`). Any member of a club can
+build or edit that club's agendas, not just its officers.
+
 ### 7.2 Enforcement points
 
 - **Backend:** NestJS guards in `src/access/` build the subject from the
@@ -228,6 +235,19 @@ person on the other end is not expected to have an account:
   a lightweight identity "sign" step, not a login)
 - `GET public/invites/:token`
 - `GET public/users/:userId/credentials` (one-time credential handoff)
+
+### 7.4 Cross-club member search
+
+`GET guests/search/available-members` is authenticated and gated by
+`create:guest` on the caller's active club, but its search itself is not
+club-scoped: it queries `Membership` across every club on the platform (by
+name or email) so an officer can find a known Toastmaster who belongs to a
+different club and add them as a guest of their own. This is a deliberate,
+narrow exception to the tenancy boundary described in section 8, limited to
+read access to a member's name, email, and club name for search purposes; it
+does not expose a foreign-club member's other data, and adding them as a
+guest copies their name/email/phone into a new `Prospect` row rather than
+linking to the source `Membership`.
 
 ## 8. Data model and tenancy
 

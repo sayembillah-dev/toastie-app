@@ -34,7 +34,8 @@ Area, a Division, and a District.
 ## 3. Target users
 
 - **Club members.** View the agenda, their assigned role or speech slot,
-  their own education progress and evaluation history.
+  their own education progress and evaluation history. Any member, not only
+  officers, can also build or edit their club's meeting agendas.
 - **Club officers** (President, VP Education, VP Membership, VP Public
   Relations, Secretary, Treasurer, Sergeant-at-Arms, Immediate Past
   President, Club Admin). Each role has a different default set of
@@ -84,7 +85,7 @@ Area, a Division, and a District.
 
 ### 6.1 Running a meeting
 
-An officer builds the agenda for an upcoming meeting: sets the theme and
+A member or officer builds the agenda for an upcoming meeting: sets the theme and
 word of the day, assigns roles (Toastmaster, Timer, Ah-Counter, Grammarian,
 and the rest), schedules prepared speakers and their evaluators, and adds
 table topics questions. The agenda is published and shared as a link that
@@ -107,6 +108,11 @@ visit. Each subsequent visit and contact attempt (call, message, follow-up)
 is logged against them. When they decide to join, the officer converts the
 guest record into a member, carrying their visit and contact history
 forward rather than starting a new, disconnected member record.
+
+A guest can also be added by searching for a Toastmaster who already
+belongs to a different club on the platform (for example, a member visiting
+from a sister club) and adding them as a guest directly, rather than typing
+in their details by hand.
 
 ### 6.4 Tracking education progress
 

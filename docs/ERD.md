@@ -260,6 +260,13 @@ contacted, interested, joined-meetings, joined-club, not-interested). Has
 many `contactLogs`, `visitLogs`, `roleAssignments`, `speakerSlots`,
 `evaluatorSlots`, `meetingAttendance`.
 
+A `Prospect` can be created by hand (`firstName` and optional fields) or by
+copying a name/email/phone from an existing `Membership` at another club
+(`POST guests` with `membershipId`, backing the "add a member from another
+club as a guest" flow). Either way it is a one-time copy at creation time,
+not a live reference: `Prospect` has no `membershipId` column, so the new
+guest row has no ongoing link back to the source membership.
+
 **ContactLog**: `prospectId`, `method`, `outcome`.
 
 **VisitLog**: `prospectId`, `meetingId` (nullable), `role`, `notes`,
@@ -320,6 +327,9 @@ membershipId)`.
   club-scoped parent table, matched by `(clubId, parentId)` foreign keys on
   children, is the single mechanism that makes cross-tenant data leakage a
   schema-level impossibility rather than an application-level discipline.
+  The one deliberate exception is the guest-add member search (see
+  [TDD.md, section 7.4](./TDD.md#74-cross-club-member-search)), which is a
+  read-only, application-level scoped lookup, not a schema-level one.
 - **Membership over User.** Nearly everything hangs off `Membership`, not
   `User`, because a club needs to be able to represent a person (roster
   entry, denormalized name/phone, roles, history) before that person has an
