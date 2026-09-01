@@ -318,10 +318,11 @@ function SpeakerCard({
 
   return (
     <article className="overflow-hidden rounded-xl border border-line bg-sidebar">
-      {/* The toggle wraps only the chevron + #/title cluster — the status pill
-       * and delete button stay outside so they don't fight the accordion for
-       * clicks. The whole header row aligns to the same baseline either way. */}
-      <div className="flex flex-wrap items-center gap-2 px-4 py-3 sm:px-5">
+      {/* The toggle wraps only the chevron + #/title cluster — every other
+       * control stays outside so it doesn't fight the accordion for clicks.
+       * The row never wraps: on narrow screens the name truncates instead, so
+       * a collapsed card stays one tidy line on a phone. */}
+      <div className="flex items-center gap-1.5 px-3 py-2.5 sm:gap-2 sm:px-5 sm:py-3">
         <button
           type="button"
           onClick={onToggle}
@@ -337,7 +338,7 @@ function SpeakerCard({
               expanded ? '' : '-rotate-90'
             }`}
           />
-          <span className="text-sm font-semibold text-ink-muted">#{index}</span>
+          <span className="shrink-0 text-sm font-semibold text-ink-muted">#{index}</span>
           <span className="min-w-0 flex-1 truncate text-sm">
             {speakerName ? (
               <>
@@ -383,22 +384,36 @@ function SpeakerCard({
             onClick={onMoveDown}
           />
         </div>
+        {/* The status pill IS the picker — the borderless select is styled as
+         * the coloured chip itself (semantic slots: root = pill body, content
+         * = label text, suffix = chevron), so the header carries one compact
+         * control instead of a select plus a duplicate badge. */}
         <Select
           size="small"
           variant="borderless"
-          className="w-27.5 shrink-0"
+          className="w-25 shrink-0"
           value={speaker.status}
           options={SPEAKER_STATUSES.map((s) => ({ value: s, label: STATUS_STYLES[s].label }))}
           onChange={(next) => onPatch({ status: next })}
           aria-label={`Status for speaker #${index}`}
           popupMatchSelectWidth={false}
+          styles={{
+            root: {
+              backgroundColor: status.bg,
+              borderRadius: 9999,
+              paddingInline: 8,
+              transition: 'background-color 150ms ease',
+            },
+            content: {
+              color: status.fg,
+              fontSize: 10,
+              fontWeight: 600,
+              letterSpacing: '0.05em',
+              textTransform: 'uppercase',
+            },
+            suffix: { color: status.fg },
+          }}
         />
-        <span
-          className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-          style={{ backgroundColor: status.bg, color: status.fg }}
-        >
-          {status.label}
-        </span>
         <FeedbackBadge count={speaker.evaluationCount} />
         <Tooltip title="Show evaluation QR">
           <Button
