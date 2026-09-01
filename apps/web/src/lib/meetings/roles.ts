@@ -19,6 +19,12 @@ export function getToastmasterAbbrev(dateTime: string): string {
 export interface RoleDef {
   key: string;
   label: string;
+  /** Optional roles never block readiness: an unassigned optional role isn't
+   * counted as a gap and is left off the printed/public agenda entirely. */
+  optional?: boolean;
+  /** What the role actually does, shown behind the info (ⓘ) button next to
+   * the role's label on the Roles tab. */
+  description?: string;
 }
 
 /** Role keys are the contract between the Roles tab and the agenda — both read
@@ -34,7 +40,15 @@ export function buildRoles(meeting: Meeting): RoleDef[] {
     { key: 'ah-counter', label: 'Ah Counter' },
     { key: 'timer', label: 'Timer' },
     { key: 'grammarian', label: 'Grammarian' },
+    {
+      key: 'hakmaster',
+      label: 'Hakmaster',
+      optional: true,
+      description:
+        'The Hakmaster listens carefully to the whole meeting and writes questions as it goes. At the end of the meeting they ask those questions to the audience — to find out who was listening most attentively.',
+    },
   ];
 }
 
-export const ROLE_COUNT = 9;
+/** Total roles a meeting can assign, optional ones included. */
+export const ROLE_COUNT = 10;

@@ -6,6 +6,7 @@ import {
   CaretRight,
   EnvelopeSimple,
   MagnifyingGlass,
+  SignOut,
 } from '@phosphor-icons/react/dist/ssr';
 import { App, Empty, Input, Modal, Skeleton } from 'antd';
 import Image from 'next/image';
@@ -13,6 +14,7 @@ import { useMemo, useState } from 'react';
 
 import { useSessionRefresh } from '@/components/session-provider';
 import { writeStoredContext } from '@/lib/auth/token-storage';
+import { useSignOut } from '@/lib/auth/use-sign-out';
 import {
   type PublicClub,
   useGetPublicClubDirectoryQuery,
@@ -32,6 +34,9 @@ import toastieLogo from '../../../assets/toastie.svg';
 export function OnboardingScreen() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-sidebar p-6">
+      {/* No app shell here, so the rail's logout control isn't available —
+       * without this, a person signed into the wrong account has no way out. */}
+      <SignOutButton />
       <div className="w-full max-w-xl rounded-3xl border border-line bg-canvas p-10 shadow-[0_20px_50px_-24px_rgba(28,28,28,0.16)] sm:p-12">
         <div className="mb-8 flex items-center gap-2.5">
           <Image src={toastieLogo} alt="" aria-hidden className="h-9 w-auto" priority />
@@ -55,6 +60,34 @@ export function OnboardingScreen() {
         </p>
       </div>
     </div>
+  );
+}
+
+function SignOutButton() {
+  const signOut = useSignOut();
+  const [signingOut, setSigningOut] = useState(false);
+
+  async function handleClick() {
+    setSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      // The router.replace inside signOut navigates away; reset only matters
+      // if that somehow doesn't happen (e.g. navigation aborted).
+      setSigningOut(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void handleClick()}
+      disabled={signingOut}
+      className="fixed top-5 right-5 flex items-center gap-1.5 rounded-full border border-line bg-canvas px-3.5 py-2 text-sm font-medium text-ink-soft shadow-sm transition-colors hover:border-line-strong hover:text-ink disabled:opacity-60"
+    >
+      <SignOut size={16} />
+      {signingOut ? 'Signing out…' : 'Sign out'}
+    </button>
   );
 }
 

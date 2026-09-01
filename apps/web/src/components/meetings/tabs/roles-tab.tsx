@@ -1,7 +1,7 @@
 'use client';
 
-import { UserCircle } from '@phosphor-icons/react/dist/ssr';
-import { App } from 'antd';
+import { Info, UserCircle } from '@phosphor-icons/react/dist/ssr';
+import { App, Popover } from 'antd';
 import { useMemo } from 'react';
 import { AssigneeSelect } from '@/components/education/assignee-select';
 import { ReadOnly } from '@/components/permissions/read-only';
@@ -74,6 +74,27 @@ export function RolesTab({ meeting }: RolesTabProps) {
                 >
                   <UserCircle size={12} weight="bold" className="text-ink-muted" />
                   {role.label}
+                  {role.optional ? (
+                    <span className="font-normal text-ink-muted">(optional)</span>
+                  ) : null}
+                  {role.description ? (
+                    <Popover
+                      content={<p className="max-w-64 text-xs">{role.description}</p>}
+                      trigger="click"
+                    >
+                      <button
+                        type="button"
+                        aria-label={`What the ${role.label} does`}
+                        /* Inside a `label htmlFor`, a plain click would also
+                         * focus the picker — cancelling the event's default
+                         * keeps the popover the only outcome. */
+                        onClick={(e) => e.preventDefault()}
+                        className="text-ink-muted transition-colors hover:text-ink"
+                      >
+                        <Info size={13} />
+                      </button>
+                    </Popover>
+                  ) : null}
                 </label>
                 <div className="rounded-lg border border-line bg-sidebar px-2">
                   <AssigneeSelect

@@ -196,7 +196,12 @@ export function PublicAgendaPage({ meetingId }: PublicAgendaPageProps) {
 
   const roles = buildRoles(meeting);
   const mentors = roles.filter((role) => MENTOR_KEYS.includes(role.key));
-  const others = roles.filter((role) => !MENTOR_KEYS.includes(role.key));
+  /* Optional roles (e.g. Hakmaster) show only when assigned — visitors
+   * shouldn't see a standing "Unassigned" row for a role the meeting
+   * doesn't use. */
+  const others = roles.filter(
+    (role) => !MENTOR_KEYS.includes(role.key) && (!role.optional || draft.roles[role.key]),
+  );
   const startsAt = new Date(meeting.dateTime);
   const { word } = draft;
 

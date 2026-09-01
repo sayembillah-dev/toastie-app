@@ -10,6 +10,7 @@ export const CLUB_ROLES = [
   'IPP',
   'Secretary',
   'ClubAdmin',
+  'Moderator',
 ] as const;
 
 export type ClubRole = (typeof CLUB_ROLES)[number];

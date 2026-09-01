@@ -86,7 +86,9 @@ function isSpeakerComplete(speaker: DraftSpeaker): boolean {
 }
 
 function buildReadiness(meeting: Meeting, draft: MeetingDraft): Readiness {
-  const roles = buildRoles(meeting);
+  /* Optional roles (e.g. Hakmaster) are excluded — a meeting is ready without
+   * them, so an unassigned optional role must never read as a gap. */
+  const roles = buildRoles(meeting).filter((role) => !role.optional);
   const unassigned = roles.filter((role) => !draft.roles[role.key]);
   const themeParts = [draft.theme.trim() || meeting.theme, draft.word.word, draft.word.meaning];
   const themeDone = themeParts.filter((part) => part.trim()).length;
@@ -438,7 +440,9 @@ function RolesCard({
   nameOf: (memberId: string | undefined) => string;
   memberOf: (memberId: string | undefined) => Member | undefined;
 }) {
-  const roles = buildRoles(meeting);
+  /* An optional role that nobody holds is left off the card entirely, so the
+   * filled/total pill only ever counts roles the meeting actually uses. */
+  const roles = buildRoles(meeting).filter((role) => !role.optional || draft.roles[role.key]);
   const filled = roles.filter((role) => draft.roles[role.key]).length;
 
   return (

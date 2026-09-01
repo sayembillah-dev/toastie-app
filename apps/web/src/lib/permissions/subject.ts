@@ -21,6 +21,7 @@ const ROLE_MAP: Record<OfficerRole, ClubRole> = {
   Secretary: 'Secretary',
   Treasurer: 'Treasurer',
   SAA: 'SergeantAtArms',
+  Moderator: 'Moderator',
   Member: 'Member',
 };
 

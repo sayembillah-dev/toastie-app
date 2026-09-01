@@ -130,6 +130,7 @@ export function buildAgenda(
   const ahCounter = holderName(nameOf, roles['ah-counter']);
   const timer = holderName(nameOf, roles.timer);
   const grammarian = holderName(nameOf, roles.grammarian);
+  const hakmaster = holderName(nameOf, roles.hakmaster);
 
   /* Every speech evaluator named once, in the order the speakers were added. */
   const speechEvaluators = [
@@ -215,6 +216,25 @@ export function buildAgenda(
       minutes: 2,
       lines: [{ key: 'feedback', label: 'Feedback & Q&A', minutes: 4 }],
     },
+    /* Optional closing segment — only on the agenda when a Hakmaster is
+     * actually assigned, so meetings without one keep their usual run of
+     * show and timings. */
+    ...(hakmaster
+      ? [
+          {
+            title: `${tm} invites the Hakmaster`,
+            person: hakmaster,
+            minutes: 0,
+            lines: [
+              {
+                key: 'hakmaster-quiz',
+                label: 'Hakmaster quizzes the audience on the meeting',
+                minutes: 5,
+              },
+            ],
+          },
+        ]
+      : []),
     { title: 'Meeting Conclusion', minutes: 0, lines: [] },
   ];
 

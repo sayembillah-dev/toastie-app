@@ -26,21 +26,16 @@ import {
   X,
 } from '@phosphor-icons/react/dist/ssr';
 import type { Action, ResourceKey } from '@toastly/access';
-import { App, Avatar, Badge, Button, Drawer, Input, Layout, Menu } from 'antd';
+import { Avatar, Badge, Button, Drawer, Input, Layout, Menu } from 'antd';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Fragment, useMemo } from 'react';
 
-import { clearAuthStorage, readRefreshToken } from '@/lib/auth/token-storage';
+import { useSignOut } from '@/lib/auth/use-sign-out';
 import { useCan } from '@/lib/permissions/use-can';
-import { toastlyApi, useAuthLogoutMutation } from '@/store/api';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import {
-  selectActiveContextKey,
-  selectSessionUser,
-  sessionUnauthenticated,
-} from '@/store/session-slice';
+import { selectActiveContextKey, selectSessionUser } from '@/store/session-slice';
 import {
   mobileNavClosed,
   mobileNavOpened,
@@ -408,25 +403,7 @@ export function AppShell({ children, actions, notificationCount = 0 }: AppShellP
   const dispatch = useAppDispatch();
   const closeMobileNav = () => dispatch(mobileNavClosed());
 
-  const { message } = App.useApp();
-  const [authLogout] = useAuthLogoutMutation();
-  /* Best-effort server-side revoke (kills this refresh token's family), then
-   * unconditionally clear local state — a failed revoke call must never
-   * leave the user stuck signed in on their own machine. */
-  const handleLogout = async () => {
-    const refreshToken = readRefreshToken();
-    try {
-      if (refreshToken) await authLogout({ refreshToken }).unwrap();
-    } catch {
-      // Ignore — the token may already be expired/revoked server-side.
-    } finally {
-      clearAuthStorage();
-      dispatch(toastlyApi.util.resetApiState());
-      dispatch(sessionUnauthenticated());
-      message.success('Signed out');
-      router.replace('/login');
-    }
-  };
+  const handleLogout = useSignOut();
 
   /* District/Division/Area drill-downs navigate by breadcrumb and card
    * drill-down — no sidebar nav needed. Club Admin has its own three-entry

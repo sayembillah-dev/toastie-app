@@ -79,6 +79,7 @@ enum ClubRole {
   Guest
   IPP
   Member
+  Moderator
   President
   Secretary
   SergeantAtArms

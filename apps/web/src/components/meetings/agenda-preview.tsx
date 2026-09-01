@@ -237,7 +237,9 @@ interface SheetRailProps {
 /** Left rail: the officers and role-holders, the club mission, and the word of
  * the day — everything the Roles, Prepared Speakers and Theme tabs collected. */
 function SheetRail({ meeting, draft, nameOf }: SheetRailProps) {
-  const roles = buildRoles(meeting);
+  /* Optional roles print only when somebody actually holds them — an empty
+   * "Hakmaster —" row on every agenda would be pure noise. */
+  const roles = buildRoles(meeting).filter((role) => !role.optional || draft.roles[role.key]);
   const { word } = draft;
 
   const evaluators = [

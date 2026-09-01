@@ -183,6 +183,15 @@ const CLUB_ADMIN_ROLE: Grant[] = [
   ...r('report'),
 ];
 
+/** A Moderator is a Club Admin by another name — the exact same grant set.
+ * The role exists for people who administer the club without necessarily
+ * being one of its members: a moderator can be a regular member of the
+ * club, a member of a *different* club, or someone with no club at all
+ * (a roster row they later claim by phone). Unlike `ClubAdmin` — which the
+ * roster UI exposes through the `isClubAdmin` toggle — Moderator is an
+ * ordinary selectable officer role. */
+const MODERATOR_ROLE: Grant[] = CLUB_ADMIN_ROLE;
+
 export const CLUB_ROLE_GRANTS: Record<ClubRole, Grant[]> = {
   Guest: GUEST_ROLE,
   Member: MEMBER_ROLE,
@@ -195,6 +204,7 @@ export const CLUB_ROLE_GRANTS: Record<ClubRole, Grant[]> = {
   IPP: IPP_ROLE,
   Secretary: SECRETARY_ROLE,
   ClubAdmin: CLUB_ADMIN_ROLE,
+  Moderator: MODERATOR_ROLE,
 };
 
 /** Every resource a Director can see when drilling into one of their clubs.

@@ -8,6 +8,7 @@ export const OFFICER_ROLES = [
   'Secretary',
   'Treasurer',
   'SAA',
+  'Moderator',
   'Member',
 ] as const;
 

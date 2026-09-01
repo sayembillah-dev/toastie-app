@@ -12,6 +12,7 @@ export const OFFICER_ROLES = [
   'Secretary',
   'Treasurer',
   'SAA',
+  'Moderator',
   'Member',
 ] as const;
 
@@ -25,6 +26,7 @@ const OFFICER_TO_CLUB: Record<OfficerRole, PrismaClubRole> = {
   Secretary: 'Secretary',
   Treasurer: 'Treasurer',
   SAA: 'SergeantAtArms',
+  Moderator: 'Moderator',
   Member: 'Member',
 };
 
@@ -36,12 +38,14 @@ const CLUB_TO_OFFICER: Partial<Record<PrismaClubRole, OfficerRole>> = {
   Secretary: 'Secretary',
   Treasurer: 'Treasurer',
   SergeantAtArms: 'SAA',
+  Moderator: 'Moderator',
   Member: 'Member',
 };
 
 /** ClubRole values not in `OfficerRole`. `ClubAdmin` is exposed via the
  * `isClubAdmin` boolean, not the roster; `Guest` and `IPP` aren't rendered by
- * the current web today, so they drop out of the wire projection. */
+ * the current web today, so they drop out of the wire projection. `Moderator`
+ * IS on the roster — that's how a club administers an external moderator. */
 export function toOfficerRoles(roles: PrismaClubRole[]): OfficerRole[] {
   const seen = new Set<OfficerRole>();
   const out: OfficerRole[] = [];
