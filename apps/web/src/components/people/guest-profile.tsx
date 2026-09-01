@@ -135,6 +135,14 @@ function ProfileHeader({ guest }: { guest: Guest }) {
             ) : null}
             <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-muted">
               <StageBadge stage={guest.stage} />
+              {guest.sharedContact ? (
+                <>
+                  <span aria-hidden>·</span>
+                  <span title="Linked to the shared contact pool — details sync across every club that knows this phone number">
+                    Shared contact
+                  </span>
+                </>
+              ) : null}
               <span aria-hidden>·</span>
               <span>{visitLabel}</span>
               {guest.visitCount > 0 ? (

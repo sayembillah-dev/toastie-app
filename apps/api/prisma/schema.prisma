@@ -199,6 +199,41 @@ model User {
   joinRequests      JoinRequest[]
   credentialShare   CredentialShare?
   pushSubscriptions PushSubscription[]
+  person            Person?
+}
+
+/// The global identity — one row per phone number, the single source of
+/// truth for shared profile fields (name, email, bio, avatar, whatsapp,
+/// organization, socials). Clubs keep their private pipeline/roster rows
+/// (`Prospect`/`Membership`) linked here; history rows key off those club
+/// rows and never move. `userId` is null until an account registers with
+/// this number — claiming sets it and makes the account's profile
+/// authoritative everywhere (see docs/IDENTITY_PLAN.md).
+model Person {
+  id           String    @id @default(cuid())
+  /// Normalised 11-digit BD phone — `normalizePhone()` on every write.
+  phone        String    @unique
+  firstName    String
+  lastName     String
+  email        String?
+  bio          String?   @db.Text
+  avatarUrl    String?   @db.Text
+  whatsapp     String?
+  organization String?
+  /// `ProfileSocial[]` — same convention as `User.socials`/`Prospect.socials`.
+  socials      Json      @default("[]")
+  /// Null = unclaimed number — still a fully functional contact everywhere.
+  userId       String?   @unique
+  /// Set when an account first claims this number at registration.
+  claimedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  prospects   Prospect[]
+  memberships Membership[]
+
+  @@index([userId])
 }
 
 /// A one-time, unauthenticated handoff of a freshly-created account's
@@ -397,6 +432,10 @@ model Membership {
   /// constraint, so `@@unique([clubId, userId])` allows unlimited
   /// unclaimed rows AND one claimed row per user per club.
   userId           String?
+  /// Link to the global identity for this roster row's phone — null for
+  /// name-only rows. Display of shared profile fields for claimed rows
+  /// comes from `Person` (docs/IDENTITY_PLAN.md §5).
+  personId         String?
   /// Name is denormalised on the membership: the club owns its roster
   /// display, `Robert` vs `Bob` can diverge legitimately, and the roster
   /// keeps working with zero joins on `User`.
@@ -432,8 +471,9 @@ model Membership {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
-  club Club  @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  club   Club    @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  person Person? @relation(fields: [personId], references: [id], onDelete: SetNull)
 
   invitesCreated         Invite[]                @relation("InvitePreCreatedMembership")
   decidedJoinRequests    JoinRequest[]
@@ -463,6 +503,7 @@ model Membership {
   @@index([email])
   /// Claim lookups: `WHERE phone = ? AND userId IS NULL` at registration.
   @@index([phone])
+  @@index([personId])
 }
 
 model OrgAssignment {
@@ -839,7 +880,10 @@ model HistoryEvent {
 model Evaluation {
   id                    String   @id @default(cuid())
   clubId                String
-  membershipId          String
+  /// Speaker side: member OR guest, never both — service-enforced
+  /// (docs/IDENTITY_PLAN.md §7a). The evaluator side stays member-only.
+  membershipId          String?
+  guestId               String?
   evaluatorMembershipId String
   speechEventId         String
   meetingNumber         Int
@@ -850,17 +894,22 @@ model Evaluation {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
-  membership Membership @relation("EvaluationSpeaker", fields: [clubId, membershipId], references: [clubId, id], onDelete: Cascade)
-  evaluator  Membership @relation("EvaluationEvaluator", fields: [clubId, evaluatorMembershipId], references: [clubId, id], onDelete: Cascade)
+  membership Membership? @relation("EvaluationSpeaker", fields: [clubId, membershipId], references: [clubId, id], onDelete: Cascade)
+  guest      Prospect?   @relation("EvaluationGuestSpeaker", fields: [clubId, guestId], references: [clubId, id], onDelete: Cascade)
+  evaluator  Membership  @relation("EvaluationEvaluator", fields: [clubId, evaluatorMembershipId], references: [clubId, id], onDelete: Cascade)
 
   @@index([clubId, membershipId])
+  @@index([clubId, guestId])
   @@index([speechEventId])
 }
 
 model TimerEntry {
   id               String   @id @default(cuid())
   clubId           String
-  membershipId     String
+  /// Member OR guest, never both — service-enforced, same pattern as
+  /// `MeetingRoleAssignment` (docs/IDENTITY_PLAN.md §7a).
+  membershipId     String?
+  guestId          String?
   speechEventId    String
   meetingNumber    Int
   date             DateTime
@@ -869,16 +918,21 @@ model TimerEntry {
   actualSeconds    Int
   createdAt        DateTime @default(now())
 
-  membership Membership @relation(fields: [clubId, membershipId], references: [clubId, id], onDelete: Cascade)
+  membership Membership? @relation(fields: [clubId, membershipId], references: [clubId, id], onDelete: Cascade)
+  guest      Prospect?   @relation(fields: [clubId, guestId], references: [clubId, id], onDelete: Cascade)
 
   @@index([clubId, membershipId])
+  @@index([clubId, guestId])
   @@index([speechEventId])
 }
 
 model AhCounterEntry {
   id            String   @id @default(cuid())
   clubId        String
-  membershipId  String
+  /// Member OR guest, never both — service-enforced, same pattern as
+  /// `MeetingRoleAssignment` (docs/IDENTITY_PLAN.md §7a).
+  membershipId  String?
+  guestId       String?
   speechEventId String
   meetingNumber Int
   date          DateTime
@@ -888,9 +942,11 @@ model AhCounterEntry {
   fillerCounts  Json     @default("{}")
   createdAt     DateTime @default(now())
 
-  membership Membership @relation(fields: [clubId, membershipId], references: [clubId, id], onDelete: Cascade)
+  membership Membership? @relation(fields: [clubId, membershipId], references: [clubId, id], onDelete: Cascade)
+  guest      Prospect?   @relation(fields: [clubId, guestId], references: [clubId, id], onDelete: Cascade)
 
   @@index([clubId, membershipId])
+  @@index([clubId, guestId])
   @@index([speechEventId])
 }
 
@@ -918,6 +974,9 @@ model SpeechSlotRequest {
 model Prospect {
   id           String    @id @default(cuid())
   clubId       String
+  /// Link to the global identity — null only for name-only guests with no
+  /// phone on file. Maintained on every create/update that has a phone.
+  personId     String?
   firstName    String
   lastName     String
   email        String?
@@ -945,6 +1004,7 @@ model Prospect {
   updatedAt    DateTime  @updatedAt
 
   club        Club         @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  person      Person?      @relation(fields: [personId], references: [id], onDelete: SetNull)
   contactLogs ContactLog[]
   visitLogs   VisitLog[]
 
@@ -952,9 +1012,13 @@ model Prospect {
   speakerSlots      MeetingSpeaker[]         @relation("MeetingSpeakerGuestAsSpeaker")
   evaluatorSlots    MeetingSpeaker[]         @relation("MeetingSpeakerGuestAsEvaluator")
   meetingAttendance MeetingGuestAttendance[]
+  timerEntries      TimerEntry[]
+  ahCounterEntries  AhCounterEntry[]
+  evaluations       Evaluation[]             @relation("EvaluationGuestSpeaker")
 
   @@unique([clubId, id])
   @@index([clubId, stage])
+  @@index([personId])
 }
 
 model ContactLog {

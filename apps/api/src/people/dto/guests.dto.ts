@@ -49,6 +49,14 @@ class GuestSocialDto {
 /** Body for `PATCH /guests/:guestId`. Every field is optional so the Kanban
  * drop, mobile dropdown, and edit panel can share this shape. */
 export class UpdateGuestDto {
+  /** Single "Full name" input — split server-side, wins over the pair. */
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(161)
+  name?: string;
+
   @IsOptional()
   @IsString()
   @MinLength(1)
@@ -134,13 +142,21 @@ export class UpdateGuestDto {
  * rather than typed in by hand.
  *
  * Can create a guest by either:
- * 1. Providing firstName (and optional other fields) — new guest
+ * 1. Providing name (and optional other fields) — new guest
  * 2. Providing membershipId — add existing member as guest (auto-fills firstName/lastName/email/phone) */
 export class CreateGuestDto {
-  // Either membershipId OR firstName must be provided
+  // Either membershipId OR name must be provided
   @IsOptional()
   @IsUUID()
   membershipId?: string;
+
+  /** Single "Full name" input — split server-side, wins over the pair. */
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(161)
+  name?: string;
 
   @IsOptional()
   @IsString()

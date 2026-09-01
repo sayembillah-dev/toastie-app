@@ -1,13 +1,18 @@
 'use client';
 
-import { App, Button, Drawer, Form, Input, Radio, Select, Spin } from 'antd';
+import { App, Avatar, Button, Drawer, Form, Input, Radio, Select, Spin, Tag } from 'antd';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { ReadOnly } from '@/components/permissions/read-only';
-import { getGuestFullName } from '@/lib/people/guests';
-import { emailRules, normalizePhone, phoneRules, shortNameRules } from '@/lib/validation/rules';
-import { useCreateGuestMutation, useSearchMembersForGuestAddQuery } from '@/store/api';
+import { getGuestFullName, type PersonLookup } from '@/lib/people/guests';
+import { emailRules, fullNameRules, normalizePhone, phoneRules } from '@/lib/validation/rules';
+import {
+  useCreateGuestMutation,
+  useLookupPersonByPhoneQuery,
+  useSearchMembersForGuestAddQuery,
+} from '@/store/api';
 import { getApiErrorMessage, getFieldErrors } from '@/store/api-error';
 
 interface AddGuestDrawerProps {
@@ -17,8 +22,8 @@ interface AddGuestDrawerProps {
 
 interface FormValues {
   membershipId?: string;
-  firstName?: string;
-  lastName?: string;
+  /** Single "Full name" input — the API splits it on the first space. */
+  name?: string;
   email?: string;
   phone?: string;
   whatsapp?: string;
@@ -54,6 +59,31 @@ export function AddGuestDrawer({ open, onClose }: AddGuestDrawerProps) {
     { skip: mode !== 'existing' || !open },
   );
 
+  /* Number-first lookup (IDENTITY_PLAN §7): as the officer types a phone
+   * number, ask the global pool who it belongs to. Debounced, and only fired
+   * once the input normalizes to a full 11-digit number. */
+  const phoneValue = Form.useWatch('phone', form);
+  const [lookupPhone, setLookupPhone] = useState('');
+  useEffect(() => {
+    const normalized = phoneValue ? normalizePhone(phoneValue) : '';
+    const timer = setTimeout(() => setLookupPhone(normalized), 400);
+    return () => clearTimeout(timer);
+  }, [phoneValue]);
+  const { data: lookup } = useLookupPersonByPhoneQuery(lookupPhone, {
+    skip: !open || mode !== 'new' || !/^\d{11}$/.test(lookupPhone),
+  });
+  const found = lookup?.status === 'found' ? lookup : null;
+
+  /** One tap: the shared profile fills the form — the officer can still
+   * edit before saving. */
+  function handleUseFoundInfo(person: PersonLookup) {
+    form.setFieldsValue({
+      name: [person.firstName, person.lastName].filter(Boolean).join(' ') || undefined,
+      email: person.email,
+      whatsapp: person.whatsapp,
+    });
+  }
+
   function handleClose() {
     form.resetFields();
     setMode('new');
@@ -68,8 +98,7 @@ export function AddGuestDrawer({ open, onClose }: AddGuestDrawerProps) {
       setSelectedMember(member);
       form.setFieldsValue({
         membershipId: memberId,
-        firstName: member.firstName,
-        lastName: member.lastName,
+        name: [member.firstName, member.lastName].filter(Boolean).join(' ') || undefined,
         email: member.email || undefined,
       });
     }
@@ -94,8 +123,7 @@ export function AddGuestDrawer({ open, onClose }: AddGuestDrawerProps) {
         };
       } else {
         input = {
-          firstName: values.firstName!.trim(),
-          lastName: values.lastName?.trim(),
+          name: values.name!.trim(),
           email: values.email?.trim(),
           phone: values.phone ? normalizePhone(values.phone) : undefined,
           whatsapp: values.whatsapp ? normalizePhone(values.whatsapp) : undefined,
@@ -164,18 +192,9 @@ export function AddGuestDrawer({ open, onClose }: AddGuestDrawerProps) {
 
           {mode === 'new' ? (
             <>
-              <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-                <Form.Item label="First name" name="firstName" rules={shortNameRules('First name')}>
-                  <Input placeholder="First name" autoFocus />
-                </Form.Item>
-                <Form.Item
-                  label="Last name"
-                  name="lastName"
-                  rules={shortNameRules('Last name', { required: false })}
-                >
-                  <Input placeholder="Last name" />
-                </Form.Item>
-              </div>
+              <Form.Item label="Full name" name="name" rules={fullNameRules()}>
+                <Input placeholder="e.g. Sayem Billah" autoComplete="name" autoFocus />
+              </Form.Item>
 
               <Form.Item label="Email" name="email" rules={emailRules()}>
                 <Input placeholder="name@example.com" type="email" />
@@ -184,6 +203,58 @@ export function AddGuestDrawer({ open, onClose }: AddGuestDrawerProps) {
               <Form.Item label="Phone" name="phone" rules={phoneRules({ required: false })}>
                 <Input placeholder="01568286512" type="tel" inputMode="tel" />
               </Form.Item>
+
+              {found && (
+                <div className="mb-4 rounded-lg border border-neutral-200 p-3 dark:border-neutral-700">
+                  <div className="flex items-start gap-3">
+                    <Avatar src={found.avatarUrl}>
+                      {(found.firstName?.[0] ?? '') + (found.lastName?.[0] ?? '')}
+                    </Avatar>
+                    <div className="min-w-0 flex-1 text-sm">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-ink">
+                          {found.firstName} {found.lastName}
+                        </span>
+                        {found.claimed && <Tag color="green">Has an account</Tag>}
+                      </div>
+                      {found.memberOf.length > 0 && (
+                        <div className="text-xs text-ink-muted">
+                          Member of {found.memberOf.map((m) => m.clubName).join(', ')}
+                        </div>
+                      )}
+                      {(found.yourClub.visitCount > 0 ||
+                        found.yourClub.roleCount > 0 ||
+                        found.yourClub.speechCount > 0) && (
+                        <div className="text-xs text-ink-muted">
+                          With your club: {found.yourClub.visitCount} visits ·{' '}
+                          {found.yourClub.roleCount} roles · {found.yourClub.speechCount} speeches
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {found.yourClub.isGuest ? (
+                    <div className="mt-2 text-xs">
+                      <span className="text-ink-muted">Already in your guest list. </span>
+                      <Link href={`/people/${found.yourClub.guestId}`} onClick={handleClose}>
+                        Open profile
+                      </Link>
+                    </div>
+                  ) : found.yourClub.isMember ? (
+                    <div className="mt-2 text-xs text-ink-muted">
+                      Already a member of this club.
+                    </div>
+                  ) : (
+                    <Button
+                      size="small"
+                      className="mt-2"
+                      onClick={() => found && handleUseFoundInfo(found)}
+                    >
+                      Use their info
+                    </Button>
+                  )}
+                </div>
+              )}
 
               <Form.Item
                 label="WhatsApp number"

@@ -19,6 +19,9 @@ export const PHONE_REGEX = /^\d{11}$/;
 export const URL_PATTERN = /^https?:\/\/[^\s]+$/;
 
 export const NAME_MAX = 80;
+/** Single "Full name" input — the API splits on the first space into the
+ * firstName/lastName columns, so the cap is the two halves plus the space. */
+export const FULL_NAME_MAX = 161;
 export const EMAIL_MAX = 255;
 export const PASSWORD_MIN = 8;
 export const PASSWORD_MAX = 200;
@@ -61,6 +64,15 @@ export function nameRules(label = 'Name'): Rule[] {
   return [
     requiredText(`${label} is required`),
     { max: NAME_MAX, message: `${label} must be ${NAME_MAX} characters or fewer` },
+  ];
+}
+
+/** The single "Full name" input used app-wide — one field, split server-side
+ * on the first space. Rejects all-whitespace via `requiredText`. */
+export function fullNameRules(label = 'Full name'): Rule[] {
+  return [
+    requiredText(`${label} is required`),
+    { max: FULL_NAME_MAX, message: `${label} must be ${FULL_NAME_MAX} characters or fewer` },
   ];
 }
 

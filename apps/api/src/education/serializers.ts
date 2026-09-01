@@ -168,7 +168,10 @@ export function toSpeechGivenHistoryRow(speaker: DeliveredSpeakerRow): HistoryEv
 export interface EvaluationWire {
   id: string;
   speechEventId: string;
-  memberId: string;
+  /// Speaker side: exactly one of memberId/guestId is set (member-only rows
+  /// predate guest logging). Evaluator side stays member-only.
+  memberId: string | null;
+  guestId: string | null;
   evaluatorId: string;
   meetingNumber: number;
   date: string;
@@ -183,6 +186,7 @@ export function toEvaluationWire(row: EvaluationRow): EvaluationWire {
     id: row.id,
     speechEventId: row.speechEventId,
     memberId: row.membershipId,
+    guestId: row.guestId,
     evaluatorId: row.evaluatorMembershipId,
     meetingNumber: row.meetingNumber,
     date: isoDate(row.date),
@@ -195,7 +199,9 @@ export function toEvaluationWire(row: EvaluationRow): EvaluationWire {
 export interface TimerEntryWire {
   id: string;
   speechEventId: string;
-  memberId: string;
+  /// Exactly one of memberId/guestId is set.
+  memberId: string | null;
+  guestId: string | null;
   meetingNumber: number;
   date: string;
   targetMinMinutes: number;
@@ -208,6 +214,7 @@ export function toTimerEntryWire(row: TimerEntryRow): TimerEntryWire {
     id: row.id,
     speechEventId: row.speechEventId,
     memberId: row.membershipId,
+    guestId: row.guestId,
     meetingNumber: row.meetingNumber,
     date: isoDate(row.date),
     targetMinMinutes: row.targetMinMinutes,
@@ -219,7 +226,9 @@ export function toTimerEntryWire(row: TimerEntryRow): TimerEntryWire {
 export interface AhCounterEntryWire {
   id: string;
   speechEventId: string;
-  memberId: string;
+  /// Exactly one of memberId/guestId is set.
+  memberId: string | null;
+  guestId: string | null;
   meetingNumber: number;
   date: string;
   fillerCounts: Record<string, number>;
@@ -230,6 +239,7 @@ export function toAhCounterEntryWire(row: AhCounterEntryRow): AhCounterEntryWire
     id: row.id,
     speechEventId: row.speechEventId,
     memberId: row.membershipId,
+    guestId: row.guestId,
     meetingNumber: row.meetingNumber,
     date: isoDate(row.date),
     fillerCounts: parseFillerCounts(row.fillerCounts),

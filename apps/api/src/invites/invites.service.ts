@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, type ClubRole as PrismaClubRole } from '@prisma/client';
 import { can, type PermissionSubject } from '@toastly/access';
+import { IdentityService } from '@/identity';
 import { toClubRoles, toOfficerRoles } from '@/memberships';
 import { PrismaService } from '@/prisma';
 
@@ -24,7 +25,10 @@ const INVITE_TTL_DAYS = 30;
  * `/invite/:token` pages once the invitee signs in or signs up. */
 @Injectable()
 export class InvitesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly identity: IdentityService,
+  ) {}
 
   async list(subject: PermissionSubject, clubId: string): Promise<InviteWire[]> {
     if (!can(subject, 'read', 'invite', { clubId })) {
@@ -236,6 +240,11 @@ export class InvitesService {
       }
     }
 
+    // Accepting an invite is an account holder stepping into rows a club
+    // prepared for their number — claim the identity so both the targeted
+    // membership (or the fresh one) and any pre-account rows attach.
+    const person = await this.identity.claimPerson(userId);
+
     const now = new Date();
     await this.prisma.$transaction([
       this.prisma.invite.update({
@@ -247,6 +256,7 @@ export class InvitesService {
             where: { id: targetMembership.id },
             data: {
               userId,
+              personId: person?.id ?? null,
               firstName: user.firstName,
               lastName: user.lastName,
               email: user.email,
@@ -258,6 +268,7 @@ export class InvitesService {
             data: {
               clubId: row.clubId,
               userId,
+              personId: person?.id ?? null,
               firstName: user.firstName,
               lastName: user.lastName,
               email: user.email,

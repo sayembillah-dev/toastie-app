@@ -12,7 +12,7 @@ import type {
   OfficerRole,
 } from '@/lib/education/members';
 import { OFFICER_ROLES } from '@/lib/education/members';
-import { NAME_MAX, normalizePhone, PHONE_REGEX } from '@/lib/validation/rules';
+import { FULL_NAME_MAX, normalizePhone, PHONE_REGEX } from '@/lib/validation/rules';
 import { useBulkCreateMembersMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -22,25 +22,22 @@ const START_ROWS = 3;
 
 interface RowDraft {
   key: string;
-  firstName: string;
-  lastName: string;
+  /** Single "Full name" cell — the API splits it on the first space. */
+  name: string;
   phone: string;
   roles: OfficerRole[];
 }
 
 const emptyRow = (): RowDraft => ({
   key: crypto.randomUUID(),
-  firstName: '',
-  lastName: '',
+  name: '',
   phone: '',
   roles: [],
 });
 
 /** A row with nothing typed into it at all — ignored on submit. */
 function isEmptyRow(row: RowDraft): boolean {
-  return (
-    !row.firstName.trim() && !row.lastName.trim() && !row.phone.trim() && row.roles.length === 0
-  );
+  return !row.name.trim() && !row.phone.trim() && row.roles.length === 0;
 }
 
 /** Per-row client validation mirroring the API DTOs; returns row key →
@@ -50,8 +47,7 @@ function validateRows(rows: RowDraft[]): Map<string, string> {
   const phonesSeen = new Set<string>();
   for (const [index, row] of rows.entries()) {
     const label = `Row ${index + 1}`;
-    if (!row.firstName.trim()) errors.set(row.key, `${label}: first name is required`);
-    else if (!row.lastName.trim()) errors.set(row.key, `${label}: last name is required`);
+    if (!row.name.trim()) errors.set(row.key, `${label}: full name is required`);
     else if (row.phone.trim()) {
       const phone = normalizePhone(row.phone.trim());
       if (!PHONE_REGEX.test(phone)) errors.set(row.key, `${label}: phone must be 11 digits`);
@@ -63,19 +59,21 @@ function validateRows(rows: RowDraft[]): Map<string, string> {
   return errors;
 }
 
-/** Clipboard text out of a spreadsheet: tab-separated columns
- * (first name, last name, phone), one person per line. */
+/** Clipboard text out of a spreadsheet: tab-separated columns, one person
+ * per line. Two columns read as (full name, phone); a legacy three-column
+ * paste (first, last, phone) still works — the two name cells join. */
 function parsePastedRows(text: string): RowDraft[] {
   return text
     .split(/\r?\n/)
     .filter((line) => line.trim() !== '')
     .map((line) => {
-      const [firstName = '', lastName = '', phone = ''] = line.split('\t');
+      const cells = line.split('\t');
+      const [nameCell, phoneCell] =
+        cells.length >= 3 ? [`${cells[0] ?? ''} ${cells[1] ?? ''}`, cells[2]] : cells;
       return {
         key: crypto.randomUUID(),
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        phone: phone.trim(),
+        name: (nameCell ?? '').trim().replace(/\s+/g, ' '),
+        phone: (phoneCell ?? '').trim(),
         roles: [],
       };
     });
@@ -153,8 +151,7 @@ function ModalBody({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
       return;
     }
     const payload: CreateMemberInput[] = active.map((row) => ({
-      firstName: row.firstName.trim(),
-      lastName: row.lastName.trim(),
+      name: row.name.trim(),
       phone: row.phone.trim() || undefined,
       roles: row.roles.length > 0 ? row.roles : undefined,
     }));
@@ -192,28 +189,15 @@ function ModalBody({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
       render: (_value, _row, index) => <span className="text-xs text-ink-muted">{index + 1}</span>,
     },
     {
-      title: 'First name',
+      title: 'Full name',
       render: (_value, row) => (
         <Input
-          aria-label="First name"
-          placeholder="Aisha"
-          value={row.firstName}
-          maxLength={NAME_MAX}
+          aria-label="Full name"
+          placeholder="Aisha Patel"
+          value={row.name}
+          maxLength={FULL_NAME_MAX}
           status={rowErrors.has(row.key) ? 'error' : ''}
-          onChange={(event) => updateRow(row.key, { firstName: event.target.value })}
-        />
-      ),
-    },
-    {
-      title: 'Last name',
-      render: (_value, row) => (
-        <Input
-          aria-label="Last name"
-          placeholder="Patel"
-          value={row.lastName}
-          maxLength={NAME_MAX}
-          status={rowErrors.has(row.key) ? 'error' : ''}
-          onChange={(event) => updateRow(row.key, { lastName: event.target.value })}
+          onChange={(event) => updateRow(row.key, { name: event.target.value })}
         />
       ),
     },
@@ -271,8 +255,7 @@ function ModalBody({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
         Everyone added here joins the roster right away — no password or signup needed. Assign them
         to meetings and track their pathway immediately, then use the{' '}
         <strong className="text-ink">Invite</strong> action on their row whenever they&apos;re ready
-        to claim the account. Tip: paste first name, last name and phone straight from a
-        spreadsheet.
+        to claim the account. Tip: paste name and phone straight from a spreadsheet.
       </p>
 
       {failures.length > 0 ? (
@@ -284,7 +267,7 @@ function ModalBody({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
             <ul className="m-0 list-disc pl-4">
               {failures.map((failure) => (
                 <li key={`${failure.index}-${failure.firstName}-${failure.lastName}`}>
-                  {failure.firstName} {failure.lastName}
+                  {[failure.firstName, failure.lastName].filter(Boolean).join(' ')}
                   {failure.phone ? ` (${failure.phone})` : ''} — {failure.message}
                 </li>
               ))}

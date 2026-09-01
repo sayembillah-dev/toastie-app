@@ -6,7 +6,7 @@ import { useState } from 'react';
 
 import { AuthCard } from '@/components/auth/auth-card';
 import { AuthShell } from '@/components/auth/auth-shell';
-import { nameRules, normalizePhone, phoneRules } from '@/lib/validation/rules';
+import { fullNameRules, normalizePhone, phoneRules } from '@/lib/validation/rules';
 import { useGetPublicGuestInviteQuery, useSubmitPublicGuestInviteMutation } from '@/store/api';
 import { getApiErrorMessage, getFieldErrors } from '@/store/api-error';
 
@@ -149,7 +149,12 @@ export function GuestInvitePage({ token }: GuestInvitePageProps) {
           onFinish={handleSubmit}
           className="flex flex-col gap-4"
         >
-          <Form.Item label="Your name" name="name" rules={nameRules()} className="!mb-0">
+          <Form.Item
+            label="Your name"
+            name="name"
+            rules={fullNameRules('Your name')}
+            className="!mb-0"
+          >
             <Input id="guest-invite-name" placeholder="e.g. Jordan Lee" autoFocus />
           </Form.Item>
 

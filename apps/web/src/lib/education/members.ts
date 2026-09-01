@@ -87,16 +87,25 @@ export interface Member {
   pathwayStartedAt?: string;
 }
 
-/** Fields the Club Admin "Add member" form writes. `roles` defaults to
- * `['Member']` server-side when omitted. */
-export type CreateMemberInput = Pick<Member, 'firstName' | 'lastName' | 'phone'> & {
+/** Fields the Club Admin "Add member" form writes. `name` is the single
+ * "Full name" input — split server-side, wins over the legacy first/last
+ * pair. `roles` defaults to `['Member']` server-side when omitted. */
+export type CreateMemberInput = Pick<Member, 'phone'> & {
+  name?: string;
+  firstName?: string;
+  lastName?: string;
   roles?: OfficerRole[];
 };
 
 /** Fields the Club Admin "Edit member" form can write. Status, admin flag and
  * permissions each have their own dedicated endpoint — this one is plain
  * profile/role editing. */
-export type UpdateMemberInput = Partial<Pick<Member, 'firstName' | 'lastName' | 'roles' | 'phone'>>;
+export type UpdateMemberInput = Partial<
+  Pick<Member, 'firstName' | 'lastName' | 'roles' | 'phone'>
+> & {
+  /** Single "Full name" input — the API splits it on the first space. */
+  name?: string;
+};
 
 /** One row of a bulk-add submission that didn't make it onto the roster.
  * `index` points at the row's position in the submitted array so the bulk-add

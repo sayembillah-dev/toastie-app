@@ -42,6 +42,14 @@ class ProfileSocialDto {
  * `email` or `phone` is being changed, since those are the fields that
  * double as sign-in/contact credentials. */
 export class UpdateProfileDto {
+  /** Single "Full name" input — split server-side, wins over the pair. */
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(161)
+  name?: string;
+
   @IsOptional()
   @IsString()
   @MinLength(1)

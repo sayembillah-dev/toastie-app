@@ -113,12 +113,13 @@ import type {
   Guest,
   GuestInviteLink,
   GuestMatch,
+  PersonLookup,
   PublicGuestInvitePreview,
   SubmitGuestInviteInput,
   UpdateGuestInput,
 } from '@/lib/people/guests';
 import type { CreateVisitLogInput, UpdateVisitLogInput, VisitLog } from '@/lib/people/visit-logs';
-import type { Profile, UpdateProfileInput } from '@/lib/profile/profile';
+import type { MyHistory, Profile, UpdateProfileInput } from '@/lib/profile/profile';
 import type { PushSubscriptionInput } from '@/lib/push/push-notifications';
 import type {
   CreateTaskInput,
@@ -149,8 +150,11 @@ export interface LoginInput {
 export interface RegisterInput {
   phone: string;
   password: string;
-  firstName: string;
-  lastName: string;
+  /** Single "Full name" input — the API splits it on the first space. */
+  name?: string;
+  /** Legacy pair — `name` wins server-side when both are sent. */
+  firstName?: string;
+  lastName?: string;
   /** Optional — users can sign up with phone alone. Never used for login. */
   email?: string;
 }
@@ -765,6 +769,13 @@ export const toastlyApi = createApi({
         method: 'GET',
         params: q ? { q } : undefined,
       }),
+    }),
+
+    /* Number-first identity lookup (IDENTITY_PLAN §7) — powers the add-guest
+     * drawer's autofill card. Keyed by the raw phone string; callers skip
+     * until the number normalizes to a full 11 digits. */
+    lookupPersonByPhone: build.query<PersonLookup, string>({
+      query: (phone) => ({ url: '/guests/lookup', method: 'GET', params: { phone } }),
     }),
 
     /* Read-only preview for the convert-to-member dialog — tells it whether
@@ -2192,6 +2203,12 @@ export const toastlyApi = createApi({
       query: () => ({ url: '/profile', method: 'GET' }),
       providesTags: ['Profile'],
     }),
+
+    /* The number-first payoff (IDENTITY_PLAN §7a) — everywhere this account's
+     * phone has been: guest + member eras, all clubs, one timeline. */
+    getMyHistory: build.query<MyHistory, void>({
+      query: () => ({ url: '/profile/history', method: 'GET' }),
+    }),
     updateMyProfile: build.mutation<Profile, UpdateProfileInput>({
       query: (body) => ({ url: '/profile', method: 'PATCH', body }),
       invalidatesTags: ['Profile'],
@@ -2432,8 +2449,11 @@ export const PLATFORM_USERS_PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 export interface CreatePlatformUserInput {
   phone: string;
   password: string;
-  firstName: string;
-  lastName: string;
+  /** Single "Full name" input — the API splits it on the first space. */
+  name?: string;
+  /** Legacy pair — `name` wins server-side when both are sent. */
+  firstName?: string;
+  lastName?: string;
   email?: string;
   /** Toastmasters International member number — a person-level identifier,
    * independent of any club placement below. */
@@ -2509,6 +2529,8 @@ export interface JoinedClub {
 /** The Super Admin user-detail panel's edit form — every field optional,
  * a save only sends what changed. */
 export interface UpdatePlatformUserProfileInput {
+  /** Single "Full name" input — the API splits it on the first space. */
+  name?: string;
   firstName?: string;
   lastName?: string;
   email?: string;
@@ -2596,6 +2618,7 @@ export const {
   useGetPublicGuestInviteQuery,
   useSubmitPublicGuestInviteMutation,
   useSearchMembersForGuestAddQuery,
+  useLookupPersonByPhoneQuery,
   useCheckGuestMatchQuery,
   useUpdateGuestMutation,
   useDeleteGuestMutation,
@@ -2702,6 +2725,7 @@ export const {
   useLazyGetAuthSessionQuery,
   useChangePasswordMutation,
   useGetMyProfileQuery,
+  useGetMyHistoryQuery,
   useUpdateMyProfileMutation,
   useGetCredentialShareQuery,
   useListPlatformUsersQuery,

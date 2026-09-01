@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { can, type PermissionSubject } from '@toastly/access';
+import { IdentityService } from '@/identity';
 import { MEMBERSHIP_AVATAR_INCLUDE, type MemberWire, toMemberWire } from '@/memberships';
 import { PrismaService } from '@/prisma';
 import { StorageService } from '@/storage';
@@ -30,6 +31,7 @@ export class JoinRequestsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly identity: IdentityService,
   ) {}
 
   async createFromUser(userId: string, dto: CreateJoinRequestDto): Promise<JoinRequestWire> {
@@ -145,6 +147,10 @@ export class JoinRequestsService {
     // Approving a request and creating the membership must be atomic — a
     // half-committed approval leaves an admin with a "approved" record but
     // no roster row, and no way back short of a manual DB fix.
+    // The approving user already has an account, so their global identity
+    // is claimed (or becomes so) — the new roster row is born linked.
+    const person = await this.identity.claimPerson(user.id);
+
     const now = new Date();
     const [, membership] = await this.prisma.$transaction([
       this.prisma.joinRequest.update({
@@ -159,6 +165,7 @@ export class JoinRequestsService {
         data: {
           clubId: existing.clubId,
           userId: user.id,
+          personId: person?.id ?? null,
           firstName: user.firstName,
           lastName: user.lastName,
           email: user.email,

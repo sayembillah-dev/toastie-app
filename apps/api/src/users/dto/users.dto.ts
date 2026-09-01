@@ -65,6 +65,14 @@ export class BulkDeleteUsersDto {
 /** Profile-field edit from the Super Admin's user detail panel. Every field
  * optional — a save only sends what changed. */
 export class UpdateUserDto {
+  /** Single "Full name" input — split server-side, wins over the pair. */
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(161)
+  name?: string;
+
   @IsOptional()
   @IsString()
   @MinLength(1)
@@ -124,15 +132,27 @@ export class CreateUserDto {
   @MaxLength(200)
   password!: string;
 
+  /** Single "Full name" input — split server-side, wins over the pair. */
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @MinLength(1)
-  @MaxLength(80)
-  firstName!: string;
+  @MaxLength(161)
+  name?: string;
 
+  /** Legacy pair — optional now that `name` is canonical; the service
+   * rejects a submission that carries neither. */
+  @IsOptional()
   @IsString()
   @MinLength(1)
   @MaxLength(80)
-  lastName!: string;
+  firstName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(80)
+  lastName?: string;
 
   @IsOptional()
   @IsString()

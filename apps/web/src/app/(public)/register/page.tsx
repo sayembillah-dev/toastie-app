@@ -13,10 +13,10 @@ import { safeNextPath } from '@/lib/auth/next-path';
 import { writeAccessToken, writeRefreshToken, writeStoredContext } from '@/lib/auth/token-storage';
 import {
   emailRules,
+  fullNameRules,
   normalizePhone,
   passwordRules,
   phoneRules,
-  shortNameRules,
 } from '@/lib/validation/rules';
 import { useAuthRegisterMutation } from '@/store/api';
 import { getFieldErrors } from '@/store/api-error';
@@ -26,8 +26,7 @@ import { isContextKeyValid, sessionLoaded } from '@/store/session-slice';
 interface FormValues {
   phone: string;
   password: string;
-  firstName: string;
-  lastName: string;
+  name: string;
   email?: string;
 }
 
@@ -50,8 +49,7 @@ function RegisterPageContent() {
       const res = await register({
         phone: normalizePhone(values.phone),
         password: values.password,
-        firstName: values.firstName.trim(),
-        lastName: values.lastName.trim(),
+        name: values.name.trim(),
         email: trimmedEmail ? trimmedEmail.toLowerCase() : undefined,
       }).unwrap();
 
@@ -97,28 +95,14 @@ function RegisterPageContent() {
         {error ? <Alert type="error" showIcon className="mb-4" message={error} /> : null}
 
         <Form<FormValues> form={form} layout="vertical" onFinish={onSubmit} disabled={isLoading}>
-          <div className="flex gap-3">
-            <Form.Item
-              label="First name"
-              name="firstName"
-              className="flex-1 !mb-4"
-              rules={shortNameRules('First name')}
-            >
-              <Input
-                autoComplete="given-name"
-                size="large"
-                prefix={<User size={16} className="text-ink-muted" />}
-              />
-            </Form.Item>
-            <Form.Item
-              label="Last name"
-              name="lastName"
-              className="flex-1 !mb-4"
-              rules={shortNameRules('Last name')}
-            >
-              <Input autoComplete="family-name" size="large" />
-            </Form.Item>
-          </div>
+          <Form.Item label="Full name" name="name" className="!mb-4" rules={fullNameRules()}>
+            <Input
+              autoComplete="name"
+              size="large"
+              placeholder="e.g. Sayem Billah"
+              prefix={<User size={16} className="text-ink-muted" />}
+            />
+          </Form.Item>
 
           <Form.Item label="Mobile number" name="phone" rules={phoneRules()}>
             <Input

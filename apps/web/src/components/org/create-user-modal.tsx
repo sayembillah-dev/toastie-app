@@ -15,11 +15,11 @@ import { OFFICER_ROLES } from '@/lib/education/members';
 import { generatePassword } from '@/lib/org/password';
 import {
   emailRules,
+  fullNameRules,
   normalizePhone,
   passwordRules,
   phoneRules,
   requiredSelectRule,
-  shortNameRules,
 } from '@/lib/validation/rules';
 import {
   type CreatePlatformUserResult,
@@ -57,17 +57,6 @@ interface FormValues {
   roles: OfficerRole[];
   memberType?: MemberType;
   isClubAdmin: boolean;
-}
-
-/** Splits a single "Full name" field into the `firstName`/`lastName` pair
- * the backend still stores separately. First word is the first name, the
- * rest (if any) is the last name — matches how every other name field in
- * this app already treats a two-word default. */
-function splitFullName(fullName: string): { firstName: string; lastName: string } {
-  const trimmed = fullName.trim().replace(/\s+/g, ' ');
-  const spaceIndex = trimmed.indexOf(' ');
-  if (spaceIndex === -1) return { firstName: trimmed, lastName: '' };
-  return { firstName: trimmed.slice(0, spaceIndex), lastName: trimmed.slice(spaceIndex + 1) };
 }
 
 interface CreateUserModalProps {
@@ -212,19 +201,12 @@ function ModalBody({ onClose }: { onClose: () => void }) {
     } catch {
       return;
     }
-    const { firstName, lastName } = splitFullName(values.fullName);
-    if (!lastName) {
-      form.setFields([
-        { name: 'fullName', errors: ['Include a first and last name (e.g. Jane Doe)'] },
-      ]);
-      return;
-    }
     try {
       const result = await createUser({
         phone: normalizePhone(values.phone),
         password: values.password.trim(),
-        firstName,
-        lastName,
+        // The API splits the single full-name input on the first space.
+        name: values.fullName.trim(),
         email: values.email?.trim() || undefined,
         tiMemberNumber: values.tiMemberNumber?.trim() || undefined,
         clubId: values.assignOrgRole ? values.clubId : undefined,
@@ -258,10 +240,10 @@ function ModalBody({ onClose }: { onClose: () => void }) {
       }
       const fieldErrors = getFieldErrors(err);
       if (fieldErrors) {
-        // The form has one `fullName` input for the DTO's separate
-        // `firstName`/`lastName` — route either back onto it.
-        const { firstName, lastName, ...rest } = fieldErrors;
-        const nameErrors = [...(firstName ?? []), ...(lastName ?? [])];
+        // The form has one `fullName` input — route `name` (and the legacy
+        // `firstName`/`lastName` pair) errors back onto it.
+        const { name, firstName, lastName, ...rest } = fieldErrors;
+        const nameErrors = [...(name ?? []), ...(firstName ?? []), ...(lastName ?? [])];
         form.setFields([
           ...(nameErrors.length > 0 ? [{ name: 'fullName' as const, errors: nameErrors }] : []),
           ...Object.entries(rest).map(([name, errors]) => ({
@@ -302,12 +284,7 @@ function ModalBody({ onClose }: { onClose: () => void }) {
       }}
       className="flex flex-col gap-4"
     >
-      <Form.Item
-        label="Full name"
-        name="fullName"
-        rules={shortNameRules('Full name')}
-        className="!mb-0"
-      >
+      <Form.Item label="Full name" name="fullName" rules={fullNameRules()} className="!mb-0">
         <Input id="cu-full-name" placeholder="Jane Doe" />
       </Form.Item>
 

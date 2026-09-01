@@ -47,8 +47,29 @@ export interface Profile {
  * the server when `email` or `phone` is present. */
 export type UpdateProfileInput = Partial<
   Pick<Profile, 'firstName' | 'lastName' | 'email' | 'phone' | 'bio' | 'avatarUrl' | 'socials'>
-> & { currentPassword?: string };
+> & {
+  currentPassword?: string;
+  /** Single "Full name" input — the API splits it on the first space. */
+  name?: string;
+};
 
 export function getProfileInitials(profile: Pick<Profile, 'firstName' | 'lastName'>): string {
   return `${profile.firstName.charAt(0)}${profile.lastName.charAt(0)}`.toUpperCase();
+}
+
+/** `GET /profile/history` (IDENTITY_PLAN §7a) — cross-club timeline. */
+export interface MyHistoryEvent {
+  date: string;
+  meetingId: string;
+  meetingLabel: string;
+  clubId: string;
+  clubName: string;
+  kind: 'visit' | 'role' | 'speech';
+  detail?: string;
+  era: 'guest' | 'member';
+}
+
+export interface MyHistory {
+  events: MyHistoryEvent[];
+  stats: { clubsTouched: number; meetingsAttended: number; roles: number; speeches: number };
 }

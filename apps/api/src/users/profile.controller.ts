@@ -3,7 +3,7 @@ import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Patch } from '@nes
 import { type AuthenticatedUser, CurrentUser } from '@/auth';
 
 import { DeleteAccountDto, UpdateProfileDto } from './dto/profile.dto';
-import { type ProfileWire } from './serializers';
+import { type MyHistoryWire, type ProfileWire } from './serializers';
 import { UsersService } from './users.service';
 
 /** Self-service profile — the signed-in account holder editing their own
@@ -19,6 +19,13 @@ export class ProfileController {
   @Get()
   getMine(@CurrentUser() user: AuthenticatedUser): Promise<ProfileWire> {
     return this.users.getProfile(user.id);
+  }
+
+  /** The number-first payoff (IDENTITY_PLAN §7a): everywhere this account's
+   * phone has been — guest and member eras, all clubs, one timeline. */
+  @Get('history')
+  getMyHistory(@CurrentUser() user: AuthenticatedUser): Promise<MyHistoryWire> {
+    return this.users.getMyHistory(user.id);
   }
 
   @Patch()

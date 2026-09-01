@@ -11,6 +11,8 @@ import { Prisma } from '@prisma/client';
 import { can, type PermissionSubject } from '@toastly/access';
 
 import { TokenService } from '@/auth';
+import { resolveNamePatch, resolveNames } from '@/common';
+import { IdentityService } from '@/identity';
 import { type OfficerRole, toClubRoles } from '@/memberships';
 import { PrismaService } from '@/prisma';
 import { StorageService } from '@/storage';
@@ -19,6 +21,8 @@ import type { DeleteAccountDto, UpdateProfileDto } from './dto/profile.dto';
 import type { CreateUserDto, SetUserPasswordDto, UpdateUserDto } from './dto/users.dto';
 import {
   type CreateUserResultWire,
+  type MyHistoryEventWire,
+  type MyHistoryWire,
   type ProfileWire,
   toProfileWire,
   toUserWire,
@@ -38,6 +42,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly tokens: TokenService,
     private readonly storage: StorageService,
+    private readonly identity: IdentityService,
   ) {}
 
   async list(
@@ -177,8 +182,15 @@ export class UsersService {
     const phone = dto.phone;
     const email = dto.email?.trim().toLowerCase() || null;
     const passwordHash = await this.tokens.hashPassword(dto.password);
-    const firstName = dto.firstName.trim();
-    const lastName = dto.lastName.trim();
+    // Single `name` input or the legacy first/last pair — one must resolve.
+    const names = resolveNames(dto);
+    if (!names) {
+      throw new BadRequestException({
+        code: 'NAME_REQUIRED',
+        message: 'Provide the full name',
+      });
+    }
+    const { firstName, lastName } = names;
     const tiMemberNumber = dto.tiMemberNumber?.trim() || null;
 
     let club: { id: string; name: string } | null = null;
@@ -212,11 +224,15 @@ export class UsersService {
             mustChangePassword: true,
           },
         });
+        // Claim the global identity for this number inside the same
+        // transaction, so the roster row below is born linked.
+        const person = await this.identity.claimPerson(created.id, tx);
         if (club) {
           await tx.membership.create({
             data: {
               clubId: club.id,
               userId: created.id,
+              personId: person?.id ?? null,
               firstName,
               lastName,
               email,
@@ -272,8 +288,9 @@ export class UsersService {
     await this.loadWithCounts(userId);
 
     const data: Prisma.UserUpdateInput = {};
-    if (dto.firstName !== undefined) data.firstName = dto.firstName.trim();
-    if (dto.lastName !== undefined) data.lastName = dto.lastName.trim();
+    const namePatch = resolveNamePatch(dto);
+    if (namePatch.firstName !== undefined) data.firstName = namePatch.firstName;
+    if (namePatch.lastName !== undefined) data.lastName = namePatch.lastName;
     if (dto.email !== undefined) data.email = dto.email.trim().toLowerCase() || null;
     if (dto.phone !== undefined) data.phone = dto.phone;
     if (dto.tiMemberNumber !== undefined) data.tiMemberNumber = dto.tiMemberNumber.trim() || null;
@@ -284,6 +301,14 @@ export class UsersService {
         data,
         include: { _count: { select: { memberships: true, orgAssignments: true } } },
       });
+      if (
+        namePatch.firstName !== undefined ||
+        namePatch.lastName !== undefined ||
+        dto.email !== undefined ||
+        dto.phone !== undefined
+      ) {
+        await this.identity.syncUserProfile(userId);
+      }
       return toUserWire(
         updated,
         updated._count.memberships,
@@ -418,8 +443,9 @@ export class UsersService {
     }
 
     const data: Prisma.UserUpdateInput = {};
-    if (dto.firstName !== undefined) data.firstName = dto.firstName.trim();
-    if (dto.lastName !== undefined) data.lastName = dto.lastName.trim();
+    const namePatch = resolveNamePatch(dto);
+    if (namePatch.firstName !== undefined) data.firstName = namePatch.firstName;
+    if (namePatch.lastName !== undefined) data.lastName = namePatch.lastName;
     if (dto.email !== undefined) data.email = dto.email.trim().toLowerCase() || null;
     if (dto.phone !== undefined) data.phone = dto.phone;
     if (dto.bio !== undefined) data.bio = dto.bio.trim() || null;
@@ -438,6 +464,9 @@ export class UsersService {
 
     try {
       const updated = await this.prisma.user.update({ where: { id: userId }, data });
+      // The account holder is the source of truth — one profile save
+      // propagates to every club, roster and guest list (IDENTITY_PLAN §5).
+      await this.identity.syncUserProfile(userId);
       if (dto.avatarUrl !== undefined && user.avatarUrl && user.avatarUrl !== updated.avatarUrl) {
         await this.storage.remove(user.avatarUrl);
       }
@@ -470,6 +499,110 @@ export class UsersService {
    * next would silently claim the row and inherit a stranger's speech
    * history. Email and phone are cleared; the name stays, as a club record.
    */
+  /** `GET /profile/history` (IDENTITY_PLAN §7a): the account holder's whole
+   * cross-club story — everywhere their number has been, guest and member
+   * eras unioned, one chronological feed. Club-private CRM stays out. */
+  async getMyHistory(userId: string): Promise<MyHistoryWire> {
+    const empty: MyHistoryWire = {
+      events: [],
+      stats: { clubsTouched: 0, meetingsAttended: 0, roles: 0, speeches: 0 },
+    };
+    const person = await this.prisma.person.findFirst({ where: { userId } });
+    if (!person) return empty;
+
+    const [memberships, prospects] = await Promise.all([
+      this.prisma.membership.findMany({ where: { personId: person.id }, select: { id: true } }),
+      this.prisma.prospect.findMany({ where: { personId: person.id }, select: { id: true } }),
+    ]);
+    const memberIds = memberships.map((m) => m.id);
+    const guestIds = prospects.map((p) => p.id);
+    if (memberIds.length === 0 && guestIds.length === 0) return empty;
+
+    const meetingSelect = {
+      id: true,
+      theme: true,
+      meetingNumber: true,
+      dateTime: true,
+      club: { select: { id: true, name: true } },
+    } as const;
+    const [memberAtt, guestAtt, roles, speeches] = await Promise.all([
+      memberIds.length
+        ? this.prisma.meetingAttendance.findMany({
+            where: { membershipId: { in: memberIds }, present: true },
+            select: { membershipId: true, meeting: { select: meetingSelect } },
+          })
+        : [],
+      guestIds.length
+        ? this.prisma.meetingGuestAttendance.findMany({
+            where: { guestId: { in: guestIds }, present: true },
+            select: { guestId: true, meeting: { select: meetingSelect } },
+          })
+        : [],
+      this.prisma.meetingRoleAssignment.findMany({
+        where: {
+          OR: [{ membershipId: { in: memberIds } }, { guestId: { in: guestIds } }],
+        },
+        select: {
+          roleKey: true,
+          membershipId: true,
+          guestId: true,
+          meeting: { select: meetingSelect },
+        },
+      }),
+      this.prisma.meetingSpeaker.findMany({
+        where: {
+          OR: [{ membershipId: { in: memberIds } }, { guestId: { in: guestIds } }],
+        },
+        select: {
+          title: true,
+          membershipId: true,
+          guestId: true,
+          meeting: { select: meetingSelect },
+        },
+      }),
+    ]);
+
+    const events: MyHistoryWire['events'] = [];
+    const push = (
+      m: {
+        id: string;
+        theme: string;
+        meetingNumber: number;
+        dateTime: Date;
+        club: { id: string; name: string };
+      },
+      kind: MyHistoryEventWire['kind'],
+      era: MyHistoryEventWire['era'],
+      detail?: string,
+    ) =>
+      events.push({
+        date: m.dateTime.toISOString(),
+        meetingId: m.id,
+        meetingLabel: m.theme ? `#${m.meetingNumber} · ${m.theme}` : `Meeting #${m.meetingNumber}`,
+        clubId: m.club.id,
+        clubName: m.club.name,
+        kind,
+        era,
+        ...(detail ? { detail } : {}),
+      });
+    for (const r of memberAtt) push(r.meeting, 'visit', 'member');
+    for (const r of guestAtt) push(r.meeting, 'visit', 'guest');
+    for (const r of roles) push(r.meeting, 'role', r.membershipId ? 'member' : 'guest', r.roleKey);
+    for (const r of speeches)
+      push(r.meeting, 'speech', r.membershipId ? 'member' : 'guest', r.title || undefined);
+
+    events.sort((a, b) => b.date.localeCompare(a.date));
+    return {
+      events,
+      stats: {
+        clubsTouched: new Set(events.map((e) => e.clubId)).size,
+        meetingsAttended: memberAtt.length + guestAtt.length,
+        roles: roles.length,
+        speeches: speeches.length,
+      },
+    };
+  }
+
   async deleteOwnAccount(userId: string, dto: DeleteAccountDto): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

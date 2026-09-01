@@ -8,6 +8,8 @@ import {
 import { Prisma, type ClubRole as PrismaClubRole } from '@prisma/client';
 import { can, type PermissionSubject } from '@toastly/access';
 
+import { resolveNamePatch, resolveNames } from '@/common';
+import { IdentityService } from '@/identity';
 import { PrismaService } from '@/prisma';
 import { StorageService } from '@/storage/storage.service';
 
@@ -77,6 +79,7 @@ export class MembershipsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly identity: IdentityService,
   ) {}
 
   async list(
@@ -160,6 +163,15 @@ export class MembershipsService {
     }
     const clubRoles = normaliseRoles(dto.roles);
 
+    // Single `name` input or the legacy first/last pair — one must resolve.
+    const names = resolveNames(dto);
+    if (!names) {
+      throw new BadRequestException({
+        code: 'NAME_REQUIRED',
+        message: 'Provide the full name',
+      });
+    }
+
     // A phone number turns the roster row into a claim key: when an account
     // already exists with this number the row is born claimed; otherwise it
     // waits unclaimed until registration claims it (see AuthService.register).
@@ -181,12 +193,20 @@ export class MembershipsService {
       }
     }
 
+    // Link the global identity for this number (fill-empty merge — a club
+    // never overwrites what another club or the account contributed).
+    const person = await this.identity.ensurePerson(dto.phone, {
+      firstName: names.firstName,
+      lastName: names.lastName,
+    });
+
     const row = await this.prisma.membership.create({
       data: {
         clubId,
         userId,
-        firstName: dto.firstName.trim(),
-        lastName: dto.lastName.trim(),
+        personId: person?.id ?? null,
+        firstName: names.firstName,
+        lastName: names.lastName,
         phone: dto.phone ?? null,
         roles: clubRoles,
         isClubAdmin: false,
@@ -221,11 +241,14 @@ export class MembershipsService {
     const failed: BulkCreateFailure[] = [];
     const phonesInBatch = new Set<string>();
     for (const [index, row] of dto.members.entries()) {
+      // Resolved once per row so failure records carry a displayable name
+      // even when the row was submitted with the single `name` input.
+      const rowNames = resolveNames(row) ?? { firstName: row.name ?? '', lastName: '' };
       if (row.phone && phonesInBatch.has(row.phone)) {
         failed.push({
           index,
-          firstName: row.firstName,
-          lastName: row.lastName,
+          firstName: rowNames.firstName,
+          lastName: rowNames.lastName,
           phone: row.phone,
           code: 'DUPLICATE_PHONE_IN_BATCH',
           message: 'Another row in this batch already uses this phone number',
@@ -239,8 +262,8 @@ export class MembershipsService {
         if (err instanceof ConflictException || err instanceof BadRequestException) {
           const failure: BulkCreateFailure = {
             index,
-            firstName: row.firstName,
-            lastName: row.lastName,
+            firstName: rowNames.firstName,
+            lastName: rowNames.lastName,
             ...rowFailure(err),
           };
           if (row.phone) failure.phone = row.phone;
@@ -287,11 +310,15 @@ export class MembershipsService {
     });
     if (!club) throw new NotFoundException(`No club with id "${args.clubId}"`);
 
+    // The user already exists, so their person is claimed (or becomes so).
+    const person = await this.identity.claimPerson(args.userId);
+
     try {
       const row = await this.prisma.membership.create({
         data: {
           clubId: args.clubId,
           userId: args.userId,
+          personId: person?.id ?? null,
           firstName: args.firstName,
           lastName: args.lastName,
           email: args.email,
@@ -338,8 +365,9 @@ export class MembershipsService {
     this.assertUpdate(subject, existing, 'member', 'update');
 
     const data: Prisma.MembershipUpdateInput = {};
-    if (dto.firstName !== undefined) data.firstName = dto.firstName.trim();
-    if (dto.lastName !== undefined) data.lastName = dto.lastName.trim();
+    const namePatch = resolveNamePatch(dto);
+    if (namePatch.firstName !== undefined) data.firstName = namePatch.firstName;
+    if (namePatch.lastName !== undefined) data.lastName = namePatch.lastName;
     if (dto.roles !== undefined) {
       // Preserve the ClubAdmin marker if it's already there — `roles` is a
       // roster-role list and toggling admin lives on its own endpoint.
@@ -369,6 +397,14 @@ export class MembershipsService {
           data.user = { connect: { id: user.id } };
         }
       }
+      // Re-resolve the global identity: a corrected number re-links this
+      // roster row to a different person; an unusable one unlinks it.
+      const person = await this.identity.ensurePerson(dto.phone, {
+        firstName: namePatch.firstName ?? existing.firstName,
+        lastName: namePatch.lastName ?? existing.lastName,
+        email: existing.email,
+      });
+      data.person = person ? { connect: { id: person.id } } : { disconnect: true };
     }
 
     const updated = await this.prisma.membership.update({
@@ -376,6 +412,14 @@ export class MembershipsService {
       data,
       include: MEMBERSHIP_AVATAR_INCLUDE,
     });
+    // Write-through to the shared person for unclaimed roster rows
+    // (IDENTITY_PLAN §5); a no-op once the account holder owns the number.
+    if (existing.personId) {
+      await this.identity.applyClubSource(existing.personId, {
+        firstName: namePatch.firstName,
+        lastName: namePatch.lastName,
+      });
+    }
     return toMemberWire(updated, this.storage);
   }
 

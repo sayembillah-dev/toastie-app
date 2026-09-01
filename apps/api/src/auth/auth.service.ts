@@ -1,8 +1,15 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { SessionResponse } from '@toastly/access';
 
 import { SubjectFactory } from '@/access';
+import { resolveNames } from '@/common';
+import { IdentityService } from '@/identity';
 import { PrismaService } from '@/prisma';
 
 import type { ChangePasswordDto } from './dto/change-password.dto';
@@ -21,12 +28,22 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly tokens: TokenService,
     private readonly subjectFactory: SubjectFactory,
+    private readonly identity: IdentityService,
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResult> {
     const phone = dto.phone;
     const email = dto.email ? dto.email.trim().toLowerCase() : null;
     const passwordHash = await this.tokens.hashPassword(dto.password);
+    // Single `name` input or the legacy first/last pair — one of them must
+    // produce at least a first name.
+    const names = resolveNames(dto);
+    if (!names) {
+      throw new BadRequestException({
+        code: 'NAME_REQUIRED',
+        message: 'Provide your full name',
+      });
+    }
 
     let user: { id: string };
     try {
@@ -35,8 +52,8 @@ export class AuthService {
           phone,
           email,
           passwordHash,
-          firstName: dto.firstName.trim(),
-          lastName: dto.lastName.trim(),
+          firstName: names.firstName,
+          lastName: names.lastName,
         },
         select: { id: true },
       });
@@ -70,6 +87,16 @@ export class AuthService {
       });
     } catch {
       // Officer tooling can relink the spare row by hand later.
+    }
+
+    // Claim the global identity behind this number: every guest/roster row
+    // clubs recorded pre-account now attaches to it, and the account's name
+    // becomes canonical everywhere. Best-effort for the same reason as the
+    // roster claim above — a sign-up must never fail over identity linking.
+    try {
+      await this.identity.claimPerson(user.id);
+    } catch {
+      // Officer tooling can relink by hand later.
     }
 
     const now = new Date();

@@ -13,7 +13,7 @@ export class SubmitGuestInviteDto {
   @IsString()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @MinLength(1)
-  @MaxLength(121)
+  @MaxLength(161)
   name!: string;
 
   @IsString()

@@ -109,6 +109,36 @@ export interface Guest {
   invitedBy?: string;
   /** Where they sit in the follow-up pipeline; the Kanban column they land in. */
   stage: GuestStage;
+  /** Linked to the global identity pool — shared details sync across clubs. */
+  sharedContact?: boolean;
+}
+
+/** Result of `GET /guests/lookup?phone=` — the number-first identity
+ * lookup powering the add-guest autofill card (IDENTITY_PLAN §7): the
+ * shared global profile, cross-club memberships, and this club's own
+ * history with the number. */
+export interface PersonLookup {
+  status: 'found' | 'not-found';
+  /** True when a registered account owns this number. */
+  claimed: boolean;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  bio?: string;
+  avatarUrl?: string;
+  whatsapp?: string;
+  organization?: string;
+  socials?: GuestSocial[];
+  memberOf: Array<{ clubId: string; clubName: string; roles: string[] }>;
+  yourClub: {
+    isGuest: boolean;
+    guestId?: string;
+    isMember: boolean;
+    visitCount: number;
+    roleCount: number;
+    speechCount: number;
+    lastVisit?: string;
+  };
 }
 
 /** Result of `GET /guests/:guestId/match` — what converting this guest
@@ -131,7 +161,9 @@ export interface ConvertGuestResult {
 }
 
 /** Fields the edit panel can write. Excludes the immutable id and derived
- * counters/dates the club records rather than the user typing them. */
+ * counters/dates the club records rather than the user typing them. `name`
+ * is the single "Full name" input — split server-side, wins over the
+ * first/last pair when both are sent. */
 export type UpdateGuestInput = Partial<
   Pick<
     Guest,
@@ -148,14 +180,17 @@ export type UpdateGuestInput = Partial<
     | 'invitedBy'
     | 'stage'
   >
->;
+> & { name?: string };
 
 /** Fields the "Add guest" drawer can write.
  *
- * Either `firstName` (manual entry) or `membershipId` (add existing member) is required.
- * Last name, avatar, socials, bio, notes can be filled in afterward via the edit panel.
+ * Either `name` (manual entry — split server-side into first/last) or
+ * `membershipId` (add existing member) is required. The legacy `firstName`
+ * variant still typechecks for older callers. Avatar, socials, bio, notes
+ * can be filled in afterward via the edit panel.
  * No `stage`: every guest starts at `new`. */
 export type CreateGuestInput =
+  | ({ name: string } & Partial<Pick<Guest, 'email' | 'phone' | 'whatsapp' | 'invitedBy'>>)
   | (Pick<Guest, 'firstName'> &
       Partial<Pick<Guest, 'lastName' | 'email' | 'phone' | 'whatsapp' | 'invitedBy'>>)
   | ({

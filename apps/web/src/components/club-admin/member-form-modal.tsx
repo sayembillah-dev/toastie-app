@@ -5,7 +5,12 @@ import { App, Button, Form, Input, Modal, Select } from 'antd';
 import { ReadOnly } from '@/components/permissions/read-only';
 import type { Member, OfficerRole } from '@/lib/education/members';
 import { OFFICER_ROLES } from '@/lib/education/members';
-import { NAME_MAX, phoneRules, requiredSelectRule, shortNameRules } from '@/lib/validation/rules';
+import {
+  FULL_NAME_MAX,
+  fullNameRules,
+  phoneRules,
+  requiredSelectRule,
+} from '@/lib/validation/rules';
 import { useCreateMemberMutation, useUpdateMemberMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -21,8 +26,8 @@ interface MemberFormModalProps {
 }
 
 interface FormValues {
-  firstName: string;
-  lastName: string;
+  /** Single "Full name" input — the API splits it on the first space. */
+  name: string;
   phone?: string;
   roles: OfficerRole[];
 }
@@ -67,16 +72,14 @@ function ModalBody({ member, onDone, onCancel }: ModalBodyProps) {
       if (member) {
         await updateMember({
           memberId: member.id,
-          firstName: values.firstName.trim(),
-          lastName: values.lastName.trim(),
+          name: values.name.trim(),
           phone: values.phone?.trim() || undefined,
           roles: values.roles,
         }).unwrap();
         message.success('Member updated');
       } else {
         await createMember({
-          firstName: values.firstName.trim(),
-          lastName: values.lastName.trim(),
+          name: values.name.trim(),
           phone: values.phone?.trim() || undefined,
           roles: values.roles,
         }).unwrap();
@@ -94,29 +97,14 @@ function ModalBody({ member, onDone, onCancel }: ModalBodyProps) {
       layout="vertical"
       disabled={busy}
       initialValues={{
-        firstName: member?.firstName ?? '',
-        lastName: member?.lastName ?? '',
+        name: member ? [member.firstName, member.lastName].filter(Boolean).join(' ') : '',
         phone: member?.phone ?? '',
         roles: member?.roles ?? ['Member'],
       }}
       className="flex flex-col gap-4"
     >
-      <Form.Item
-        label="First name"
-        name="firstName"
-        rules={shortNameRules('First name')}
-        className="!mb-0"
-      >
-        <Input id="member-first-name" placeholder="Aisha" maxLength={NAME_MAX} />
-      </Form.Item>
-
-      <Form.Item
-        label="Last name"
-        name="lastName"
-        rules={shortNameRules('Last name')}
-        className="!mb-0"
-      >
-        <Input id="member-last-name" placeholder="Patel" maxLength={NAME_MAX} />
+      <Form.Item label="Full name" name="name" rules={fullNameRules()} className="!mb-0">
+        <Input id="member-name" placeholder="e.g. Aisha Patel" maxLength={FULL_NAME_MAX} />
       </Form.Item>
 
       <Form.Item

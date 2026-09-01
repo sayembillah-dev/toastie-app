@@ -10,6 +10,7 @@ import { can, type PermissionSubject, scopeFilter } from '@toastly/access';
 
 import { ClubLineageCache } from '@/access';
 import { ActivityService } from '@/activity';
+import { IdentityService } from '@/identity';
 import { PrismaService } from '@/prisma';
 import { StorageService } from '@/storage';
 
@@ -57,6 +58,7 @@ export class ClubsService {
     private readonly lineageCache: ClubLineageCache,
     private readonly activity: ActivityService,
     private readonly storage: StorageService,
+    private readonly identity: IdentityService,
   ) {}
 
   /** Directory list, scoped to the caller's `club:read` reach. Unplaced
@@ -316,10 +318,15 @@ export class ClubsService {
     });
     if (!user) throw new NotFoundException(`No user with id "${userId}"`);
 
+    // Idempotent for an account that registered post-Phase-1; links the
+    // roster row to the global identity behind their number.
+    const person = await this.identity.claimPerson(userId);
+
     await this.prisma.membership.create({
       data: {
         clubId: club.id,
         userId,
+        personId: person?.id ?? null,
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,

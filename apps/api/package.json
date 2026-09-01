@@ -16,7 +16,8 @@
     "prisma:migrate": "dotenv -e ../../.env -- prisma migrate dev",
     "prisma:studio": "dotenv -e ../../.env -- prisma studio",
     "prisma:seed": "dotenv -e ../../.env -- prisma db seed",
-    "backfill:storage": "dotenv -e ../../.env -- ts-node --transpile-only prisma/backfill-storage.ts"
+    "backfill:storage": "dotenv -e ../../.env -- ts-node --transpile-only prisma/backfill-storage.ts",
+    "backfill:person": "dotenv -e ../../.env -- ts-node --transpile-only prisma/backfill-person.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1106.0",

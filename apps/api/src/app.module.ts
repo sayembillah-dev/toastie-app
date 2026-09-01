@@ -17,6 +17,7 @@ import { EducationModule } from './education';
 import { EvaluationsModule } from './evaluations';
 import { FinanceModule } from './finance';
 import { HealthController } from './health/health.controller';
+import { IdentityModule } from './identity';
 import { InventoryModule } from './inventory';
 import { InvitesModule } from './invites';
 import { JoinRequestsModule } from './join-requests';
@@ -60,6 +61,9 @@ import { UsersModule } from './users';
     // Global: every module owning a file column injects StorageService in its
     // serializers, so it is registered ahead of the feature modules.
     StorageModule,
+    // Global: the single writer of the Person identity table — every module
+    // that records a phone number injects IdentityService.
+    IdentityModule,
     AccessModule,
     ActivityModule,
     AuthModule,

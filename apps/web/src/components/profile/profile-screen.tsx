@@ -23,15 +23,15 @@ import {
   type ProfileSocialPlatform,
 } from '@/lib/profile/profile';
 import { uploadFile } from '@/lib/uploads';
-import { emailRules, normalizePhone, phoneRules, shortNameRules } from '@/lib/validation/rules';
+import { emailRules, fullNameRules, normalizePhone, phoneRules } from '@/lib/validation/rules';
 import { useGetMyProfileQuery, useUpdateMyProfileMutation } from '@/store/api';
 import { getApiErrorMessage, getFieldErrors } from '@/store/api-error';
 import { useAppDispatch } from '@/store/hooks';
 import { profileUpdated } from '@/store/session-slice';
 
 interface FormValues {
-  firstName: string;
-  lastName: string;
+  /** Single "Full name" input — the API splits it on the first space. */
+  name: string;
   email?: string;
   phone: string;
   // Deliberately not a form field: the photo is a `File` held in component
@@ -44,8 +44,7 @@ interface FormValues {
 
 function deserialize(profile: Profile): FormValues {
   return {
-    firstName: profile.firstName,
-    lastName: profile.lastName,
+    name: [profile.firstName, profile.lastName].filter(Boolean).join(' '),
     email: profile.email ?? '',
     phone: profile.phone,
     bio: profile.bio ?? '',
@@ -253,8 +252,7 @@ function ProfileForm({ profile }: { profile: Profile }) {
 
     try {
       const result = await updateProfile({
-        firstName: values.firstName.trim(),
-        lastName: values.lastName.trim(),
+        name: values.name.trim(),
         bio: values.bio?.trim() || undefined,
         ...(avatarUrl !== undefined ? { avatarUrl } : {}),
         socials: cleanedSocials,
@@ -344,14 +342,9 @@ function ProfileForm({ profile }: { profile: Profile }) {
         </div>
 
         <div className="mt-4 rounded-xl border border-line bg-canvas p-5">
-          <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-            <Form.Item label="First name" name="firstName" rules={shortNameRules('First name')}>
-              <Input placeholder="First name" />
-            </Form.Item>
-            <Form.Item label="Last name" name="lastName" rules={shortNameRules('Last name')}>
-              <Input placeholder="Last name" />
-            </Form.Item>
-          </div>
+          <Form.Item label="Full name" name="name" rules={fullNameRules()}>
+            <Input placeholder="e.g. Sayem Billah" autoComplete="name" />
+          </Form.Item>
 
           <Form.Item label="Email" name="email" rules={emailRules()}>
             <Input placeholder="name@example.com" type="email" />

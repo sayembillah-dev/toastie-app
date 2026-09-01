@@ -10,6 +10,8 @@ import {
 } from '@nestjs/common';
 import { Prisma, type ClubRole as PrismaClubRole, type Prospect } from '@prisma/client';
 import { can, type PermissionSubject } from '@toastly/access';
+import { resolveNamePatch, resolveNames, splitFullName } from '@/common';
+import { IdentityService } from '@/identity';
 import { InvitesService } from '@/invites';
 import {
   MEMBERSHIP_AVATAR_INCLUDE,
@@ -33,11 +35,14 @@ import type {
 import {
   type ContactLogWire,
   type ConvertGuestResultWire,
+  emptyPersonLookup,
   type GuestMatchWire,
   type GuestWire,
+  type PersonLookupWire,
   toContactLogWire,
   toGuestWire,
   toGuestWires,
+  toPersonLookupWire,
   toVisitLogWire,
   type VisitLogWire,
 } from './serializers';
@@ -61,6 +66,7 @@ export class PeopleService {
     private readonly memberships: MembershipsService,
     private readonly invites: InvitesService,
     private readonly storage: StorageService,
+    private readonly identity: IdentityService,
   ) {}
 
   /** ------------------------------------------------------------ guests -- */
@@ -193,23 +199,37 @@ export class PeopleService {
       email = membership.user?.email ?? null;
       phone = membership.phone;
     } else {
-      // Manual guest entry — firstName is required
-      if (!dto.firstName) {
+      // Manual guest entry — a name is required (single `name` input or the
+      // legacy first/last pair).
+      const names = resolveNames(dto);
+      if (!names) {
         throw new BadRequestException({
           code: 'MISSING_FIRST_NAME',
-          message: 'Either firstName or membershipId is required',
+          message: 'Either name or membershipId is required',
         });
       }
-      firstName = dto.firstName;
-      lastName = dto.lastName ?? '';
+      firstName = names.firstName;
+      lastName = names.lastName;
       email = dto.email ?? null;
       phone = dto.phone ?? null;
     }
 
     if (dto.avatarUrl) this.storage.assertOwnedKey(dto.avatarUrl, 'guestAvatar', clubId);
+    // Resolve the global identity for this number first — the guest row is
+    // born linked, and still-empty person fields are filled from this entry.
+    const person = await this.identity.ensurePerson(phone, {
+      firstName,
+      lastName,
+      email,
+      whatsapp: dto.whatsapp,
+      organization: dto.organization,
+      bio: dto.bio,
+      socials: dto.socials,
+    });
     const row = await this.prisma.prospect.create({
       data: {
         clubId,
+        personId: person?.id ?? null,
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         email: email?.trim() || null,
@@ -320,14 +340,23 @@ export class PeopleService {
       });
     }
 
-    const [firstName = '', ...rest] = dto.name.split(/\s+/);
+    const { firstName, lastName } = splitFullName(dto.name);
+    // Same identity link as the authed quick-add — a self-invited guest joins
+    // the global pool too.
+    const person = await this.identity.ensurePerson(dto.phone, {
+      firstName,
+      lastName,
+      organization: dto.organization,
+      bio: dto.bio,
+    });
     const row = await this.prisma.prospect.create({
       data: {
         clubId: club.id,
+        personId: person?.id ?? null,
         // A single-word name leaves lastName empty, same as the quick-add
         // drawer; the caps mirror the authed guest DTOs.
         firstName: firstName.slice(0, 60),
-        lastName: rest.join(' ').slice(0, 60),
+        lastName: lastName.slice(0, 60),
         phone: dto.phone,
         organization: dto.organization?.trim() || null,
         bio: dto.bio?.trim() || null,
@@ -336,6 +365,79 @@ export class PeopleService {
       },
     });
     return { id: row.id };
+  }
+
+  /** Number-first lookup (IDENTITY_PLAN §7): everything the global pool
+   * knows about a phone number — shared profile, cross-club memberships —
+   * plus this club's own history with it. Powers the add-guest/add-member
+   * autofill card. Available to anyone who may add guests OR members. */
+  async lookupPerson(
+    subject: PermissionSubject,
+    clubId: string,
+    rawPhone: string,
+  ): Promise<PersonLookupWire> {
+    if (
+      !can(subject, 'create', 'guest', { clubId }) &&
+      !can(subject, 'create', 'member', { clubId })
+    ) {
+      throw new ForbiddenException({
+        code: 'PERMISSION_DENIED',
+        message: 'You do not have permission to look people up',
+      });
+    }
+    const person = await this.identity.findByPhone(rawPhone);
+    if (!person) return emptyPersonLookup();
+
+    const [memberships, guestsHere, memberHere] = await Promise.all([
+      this.prisma.membership.findMany({
+        where: { personId: person.id, status: 'active' },
+        select: { clubId: true, roles: true, club: { select: { name: true } } },
+      }),
+      this.prisma.prospect.findMany({
+        where: { personId: person.id, clubId },
+        select: { id: true },
+      }),
+      this.prisma.membership.findFirst({
+        where: { personId: person.id, clubId, status: 'active' },
+        select: { id: true },
+      }),
+    ]);
+
+    const guestIds = guestsHere.map((g) => g.id);
+    const [visitCount, roleCount, speechCount, lastVisitRow] =
+      guestIds.length > 0
+        ? await Promise.all([
+            this.prisma.meetingGuestAttendance.count({
+              where: { guestId: { in: guestIds }, present: true },
+            }),
+            this.prisma.meetingRoleAssignment.count({ where: { guestId: { in: guestIds } } }),
+            this.prisma.meetingSpeaker.count({ where: { guestId: { in: guestIds } } }),
+            this.prisma.meetingGuestAttendance.findFirst({
+              where: { guestId: { in: guestIds } },
+              orderBy: { meeting: { dateTime: 'desc' } },
+              select: { meeting: { select: { dateTime: true } } },
+            }),
+          ])
+        : [0, 0, 0, null];
+
+    return toPersonLookupWire(
+      person,
+      {
+        memberOf: memberships.map((m) => ({
+          clubId: m.clubId,
+          clubName: m.club.name,
+          roles: m.roles.map(String),
+        })),
+        isGuest: guestsHere.length > 0,
+        guestId: guestsHere[0]?.id,
+        isMember: memberHere !== null,
+        visitCount,
+        roleCount,
+        speechCount,
+        lastVisit: lastVisitRow?.meeting.dateTime.toISOString(),
+      },
+      this.storage,
+    );
   }
 
   private assertCanCreateGuest(subject: PermissionSubject, clubId: string): void {
@@ -358,10 +460,24 @@ export class PeopleService {
     this.assertGuest(subject, existing, 'update');
 
     const data: Prisma.ProspectUpdateInput = {};
-    if (dto.firstName !== undefined) data.firstName = dto.firstName.trim();
-    if (dto.lastName !== undefined) data.lastName = dto.lastName.trim();
+    const namePatch = resolveNamePatch(dto);
+    if (namePatch.firstName !== undefined) data.firstName = namePatch.firstName;
+    if (namePatch.lastName !== undefined) data.lastName = namePatch.lastName;
     if (dto.email !== undefined) data.email = dto.email.trim() || null;
-    if (dto.phone !== undefined) data.phone = dto.phone;
+    if (dto.phone !== undefined) {
+      data.phone = dto.phone;
+      // Re-resolve the global identity: fixing a typo'd number re-links this
+      // guest to a different person; an unusable one keeps the row club-local.
+      const person = await this.identity.ensurePerson(dto.phone, {
+        firstName: namePatch.firstName ?? existing.firstName,
+        lastName: namePatch.lastName ?? existing.lastName,
+        email: existing.email,
+        whatsapp: existing.whatsapp,
+        organization: existing.organization,
+        bio: existing.bio,
+      });
+      data.person = person ? { connect: { id: person.id } } : { disconnect: true };
+    }
     if (dto.whatsapp !== undefined) data.whatsapp = dto.whatsapp;
     if (dto.organization !== undefined) data.organization = dto.organization.trim() || null;
     if (dto.avatarUrl !== undefined) {
@@ -377,6 +493,20 @@ export class PeopleService {
     if (dto.stage !== undefined) data.stage = dto.stage;
 
     const row = await this.prisma.prospect.update({ where: { id: guestId }, data });
+    // Write-through to the shared person (IDENTITY_PLAN §5): last non-empty
+    // club write wins while the number is unclaimed; once claimed, the
+    // account holder is authoritative and this is a no-op.
+    if (existing.personId) {
+      await this.identity.applyClubSource(existing.personId, {
+        firstName: namePatch.firstName,
+        lastName: namePatch.lastName,
+        email: dto.email?.trim(),
+        whatsapp: dto.whatsapp,
+        organization: dto.organization,
+        bio: dto.bio,
+        avatarUrl: dto.avatarUrl,
+      });
+    }
     if (dto.avatarUrl !== undefined && existing.avatarUrl && existing.avatarUrl !== row.avatarUrl) {
       await this.storage.remove(existing.avatarUrl);
     }
@@ -459,6 +589,9 @@ export class PeopleService {
         data: {
           clubId: existing.clubId,
           userId: match.status === 'existing-user' ? match.user.id : undefined,
+          // Carry the guest's global identity onto the roster row — same
+          // person, new club-scoped role.
+          personId: existing.personId,
           firstName: existing.firstName,
           lastName: existing.lastName,
           email: existing.email,

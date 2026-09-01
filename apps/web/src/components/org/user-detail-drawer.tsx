@@ -25,7 +25,7 @@ import { useMemo, useState } from 'react';
 import { PersonAvatar } from '@/components/ui/person-avatar';
 import { OFFICER_ROLES, type OfficerRole } from '@/lib/education/members';
 import { generatePassword } from '@/lib/org/password';
-import { emailRules, normalizePhone, phoneRules, shortNameRules } from '@/lib/validation/rules';
+import { emailRules, fullNameRules, normalizePhone, phoneRules } from '@/lib/validation/rules';
 import {
   MEMBER_TYPES,
   type MemberType,
@@ -181,8 +181,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 /* --------------------------------------------------------- profile -- */
 
 interface ProfileValues {
-  firstName: string;
-  lastName: string;
+  /** Single "Full name" input — the API splits it on the first space. */
+  name: string;
   email: string;
   phone: string;
   tiMemberNumber: string;
@@ -209,8 +209,7 @@ function ProfileSection({
     try {
       const updated = await updateProfile({
         userId: user.id,
-        firstName: values.firstName.trim(),
-        lastName: values.lastName.trim(),
+        name: values.name.trim(),
         email: values.email.trim() || undefined,
         phone: normalizePhone(values.phone),
         tiMemberNumber: values.tiMemberNumber.trim() || undefined,
@@ -247,32 +246,16 @@ function ProfileSection({
       layout="vertical"
       disabled={isLoading}
       initialValues={{
-        firstName: user.firstName,
-        lastName: user.lastName,
+        name: [user.firstName, user.lastName].filter(Boolean).join(' '),
         email: user.email ?? '',
         phone: user.phone,
         tiMemberNumber: user.tiMemberNumber ?? '',
       }}
       className="flex flex-col gap-3"
     >
-      <div className="grid grid-cols-2 gap-3">
-        <Form.Item
-          label="First name"
-          name="firstName"
-          rules={shortNameRules('First name')}
-          className="!mb-0"
-        >
-          <Input id="ud-first-name" />
-        </Form.Item>
-        <Form.Item
-          label="Last name"
-          name="lastName"
-          rules={shortNameRules('Last name')}
-          className="!mb-0"
-        >
-          <Input id="ud-last-name" />
-        </Form.Item>
-      </div>
+      <Form.Item label="Full name" name="name" rules={fullNameRules()} className="!mb-0">
+        <Input id="ud-name" placeholder="e.g. Jane Doe" />
+      </Form.Item>
       <Form.Item label="Email" name="email" rules={emailRules()} className="!mb-0">
         <Input id="ud-email" type="email" />
       </Form.Item>

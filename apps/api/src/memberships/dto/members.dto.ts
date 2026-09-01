@@ -21,15 +21,28 @@ import { OFFICER_ROLES, type OfficerRole } from '../role-mapping';
 const NAME_MAX = 60;
 
 export class CreateMemberDto {
+  /** The single "Full name" input — split on the first space server-side
+   * (`splitFullName`). Wins over the legacy pair when both are sent. */
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @MinLength(1)
-  @MaxLength(NAME_MAX)
-  firstName!: string;
+  @MaxLength(161)
+  name?: string;
 
+  /** Legacy pair — optional now that `name` is the canonical input; the
+   * service rejects a row that carries neither. */
+  @IsOptional()
   @IsString()
   @MinLength(1)
   @MaxLength(NAME_MAX)
-  lastName!: string;
+  firstName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(NAME_MAX)
+  lastName?: string;
 
   /** Optional, but it is the claim key: the moment a `User` registers (or
    * already exists) with this number, this roster row — and every agenda,
@@ -68,6 +81,14 @@ export class BulkCreateMembersDto {
 }
 
 export class UpdateMemberDto {
+  /** Single "Full name" input — split server-side, wins over the pair. */
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(161)
+  name?: string;
+
   @IsOptional()
   @IsString()
   @MinLength(1)

@@ -13,7 +13,7 @@ import {
   SOCIAL_PLATFORMS,
 } from '@/lib/people/guests';
 import { uploadFile } from '@/lib/uploads';
-import { emailRules, normalizePhone, phoneRules, shortNameRules } from '@/lib/validation/rules';
+import { emailRules, fullNameRules, normalizePhone, phoneRules } from '@/lib/validation/rules';
 import { useUpdateGuestMutation } from '@/store/api';
 import { getApiErrorMessage, getFieldErrors } from '@/store/api-error';
 
@@ -24,8 +24,8 @@ interface GuestEditPanelProps {
 }
 
 interface FormValues {
-  firstName: string;
-  lastName?: string;
+  /** Single "Full name" input — the API splits it on the first space. */
+  name: string;
   email?: string;
   phone?: string;
   whatsappSameAsPhone: boolean;
@@ -42,8 +42,7 @@ interface FormValues {
  * and back must be a no-op. */
 function deserialize(guest: Guest): FormValues {
   return {
-    firstName: guest.firstName,
-    lastName: guest.lastName,
+    name: [guest.firstName, guest.lastName].filter(Boolean).join(' '),
     email: guest.email ?? '',
     phone: guest.phone ?? '',
     whatsappSameAsPhone: !guest.whatsapp,
@@ -223,8 +222,7 @@ export function GuestEditPanel({ guest, open, onClose }: GuestEditPanelProps) {
     try {
       await updateGuest({
         guestId: guest.id,
-        firstName: values.firstName.trim(),
-        lastName: values.lastName?.trim() ?? '',
+        name: values.name.trim(),
         email: values.email?.trim() || undefined,
         phone: values.phone ? normalizePhone(values.phone) : undefined,
         whatsapp: values.whatsappSameAsPhone
@@ -321,18 +319,9 @@ export function GuestEditPanel({ guest, open, onClose }: GuestEditPanelProps) {
             />
           </Form.Item>
 
-          <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-            <Form.Item label="First name" name="firstName" rules={shortNameRules('First name')}>
-              <Input placeholder="First name" />
-            </Form.Item>
-            <Form.Item
-              label="Last name"
-              name="lastName"
-              rules={shortNameRules('Last name', { required: false })}
-            >
-              <Input placeholder="Last name" />
-            </Form.Item>
-          </div>
+          <Form.Item label="Full name" name="name" rules={fullNameRules()}>
+            <Input placeholder="e.g. Sayem Billah" autoComplete="name" />
+          </Form.Item>
 
           <Form.Item label="Email" name="email" rules={emailRules()}>
             <Input placeholder="name@example.com" type="email" />

@@ -25,6 +25,7 @@ import {
   type ConvertGuestResultWire,
   type GuestMatchWire,
   type GuestWire,
+  type PersonLookupWire,
   type VisitLogWire,
 } from './serializers';
 
@@ -80,6 +81,18 @@ export class GuestsController {
   > {
     const clubId = requireClubContext(ctx);
     return this.people.searchMembersForGuestAdd(ctx.subject, clubId, query);
+  }
+
+  /** Number-first identity lookup (IDENTITY_PLAN §7): powers the
+   * add-guest/add-member autofill card — "we already know this number". */
+  @Requires('guest', 'create')
+  @Get('lookup')
+  lookup(
+    @CurrentContext() ctx: RequestContext,
+    @Query('phone') phone?: string,
+  ): Promise<PersonLookupWire> {
+    const clubId = requireClubContext(ctx);
+    return this.people.lookupPerson(ctx.subject, clubId, phone ?? '');
   }
 
   @Requires('guest', 'read')

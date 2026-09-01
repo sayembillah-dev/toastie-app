@@ -137,3 +137,28 @@ export interface CreateUserResultWire extends UserWire {
    * token so the API doesn't need to know its own public origin. */
   credentialShare: { token: string };
 }
+
+/** `GET /profile/history` (IDENTITY_PLAN §7a) — the account holder's full
+ * cross-club footprint, guest-era and member-era rows unioned into one
+ * chronological feed. Club-private CRM (stage/notes/logs) never appears. */
+export interface MyHistoryEventWire {
+  date: string;
+  meetingId: string;
+  meetingLabel: string;
+  clubId: string;
+  clubName: string;
+  kind: 'visit' | 'role' | 'speech';
+  /** Role key or speech title. */
+  detail?: string;
+  era: 'guest' | 'member';
+}
+
+export interface MyHistoryWire {
+  events: MyHistoryEventWire[];
+  stats: {
+    clubsTouched: number;
+    meetingsAttended: number;
+    roles: number;
+    speeches: number;
+  };
+}
