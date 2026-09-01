@@ -2,7 +2,11 @@ import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/commo
 
 import { actorMembershipIdFor, CurrentContext, type RequestContext, Requires } from '@/access';
 
-import { CreatePreparedSpeakerDto, UpdatePreparedSpeakerDto } from './dto/prepared-speakers.dto';
+import {
+  CreatePreparedSpeakerDto,
+  ReorderPreparedSpeakersDto,
+  UpdatePreparedSpeakerDto,
+} from './dto/prepared-speakers.dto';
 import { PreparedSpeakersService } from './prepared-speakers.service';
 import { type PreparedSpeakerWire } from './serializers';
 
@@ -28,6 +32,22 @@ export class PreparedSpeakersController {
   ): Promise<PreparedSpeakerWire> {
     const clubId = ctx.clubId;
     return this.speakers.create(
+      ctx.subject,
+      meetingId,
+      clubId ? actorMembershipIdFor(ctx, clubId) : null,
+      dto,
+    );
+  }
+
+  @Requires('meetingRole', 'update')
+  @Post('reorder')
+  reorder(
+    @CurrentContext() ctx: RequestContext,
+    @Param('meetingId') meetingId: string,
+    @Body() dto: ReorderPreparedSpeakersDto,
+  ): Promise<PreparedSpeakerWire[]> {
+    const clubId = ctx.clubId;
+    return this.speakers.reorder(
       ctx.subject,
       meetingId,
       clubId ? actorMembershipIdFor(ctx, clubId) : null,

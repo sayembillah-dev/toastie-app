@@ -1497,6 +1497,45 @@ export const toastlyApi = createApi({
       ],
     }),
 
+    /** Bulk renumber from the tab's move up/down controls. Optimistically
+     * re-sorts the cached list (rewriting `order` too, so the draft
+     * hydration that Overview and the Agenda sheet read sees the new
+     * sequence immediately); the server response then lands the truth. */
+    reorderPreparedSpeakers: build.mutation<
+      PreparedSpeakerWire[],
+      { meetingId: string; speakerIds: string[] }
+    >({
+      query: ({ meetingId, speakerIds }) => ({
+        url: `/meetings/${meetingId}/prepared-speakers/reorder`,
+        method: 'POST',
+        body: { speakerIds },
+      }),
+      onQueryStarted: async ({ meetingId, speakerIds }, { dispatch, queryFulfilled }) => {
+        const patch = dispatch(
+          toastlyApi.util.updateQueryData('getPreparedSpeakers', meetingId, (draft) => {
+            const byId = new Map(draft.map((row) => [row.id, row]));
+            let position = 1;
+            for (const id of speakerIds) {
+              const row = byId.get(id);
+              if (row) row.order = position;
+              position += 1;
+            }
+            draft.sort((a, b) => a.order - b.order);
+          }),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+      invalidatesTags: (_rows, _error, { meetingId }) => [
+        { type: 'PreparedSpeaker', id: meetingId },
+        { type: 'PlannerRow', id: 'LIST' },
+        { type: 'ActivityLog', id: 'LIST' },
+      ],
+    }),
+
     deletePreparedSpeaker: build.mutation<null, { meetingId: string; speakerId: string }>({
       query: ({ meetingId, speakerId }) => ({
         url: `/meetings/${meetingId}/prepared-speakers/${speakerId}`,
@@ -2653,6 +2692,7 @@ export const {
   useGetPreparedSpeakersQuery,
   useCreatePreparedSpeakerMutation,
   useUpdatePreparedSpeakerMutation,
+  useReorderPreparedSpeakersMutation,
   useDeletePreparedSpeakerMutation,
   useGetTableTopicsQuery,
   useCreateTableTopicQuestionMutation,

@@ -1,4 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { can, type PermissionSubject } from '@toastly/access';
 
@@ -7,6 +12,7 @@ import { PrismaService } from '@/prisma';
 
 import type {
   CreatePreparedSpeakerDto,
+  ReorderPreparedSpeakersDto,
   UpdatePreparedSpeakerDto,
 } from './dto/prepared-speakers.dto';
 import { syncPlannerSpeakersFromMeeting } from './planner-mirror';
@@ -137,6 +143,66 @@ export class PreparedSpeakersService {
       });
     }
     return toPreparedSpeakerWire(row);
+  }
+
+  /** Bulk-renumbers the slots from the tab's move up/down controls. The whole
+   * lineup is submitted each time so the server, not the client, owns the
+   * final `order` sequence — and the agenda, the public page, and the
+   * planner's Speaker 1–4 mirror all follow it. */
+  async reorder(
+    subject: PermissionSubject,
+    meetingId: string,
+    actorMembershipId: string | null,
+    dto: ReorderPreparedSpeakersDto,
+  ): Promise<PreparedSpeakerWire[]> {
+    const meeting = await this.requireMeeting(meetingId);
+    this.assert(subject, meeting.clubId, 'update');
+
+    const existing = await this.prisma.meetingSpeaker.findMany({
+      where: { clubId: meeting.clubId, meetingId: meeting.id },
+      select: { id: true },
+    });
+    const known = new Set(existing.map((row) => row.id));
+    const submitted = new Set(dto.speakerIds);
+    if (
+      submitted.size !== dto.speakerIds.length ||
+      submitted.size !== known.size ||
+      dto.speakerIds.some((id) => !known.has(id))
+    ) {
+      throw new BadRequestException(
+        'speakerIds must list every prepared speaker of this meeting exactly once',
+      );
+    }
+
+    /* @@unique([clubId, meetingId, order]) forbids two rows sharing an order
+     * even mid-transaction, so renumber in two passes: park every row at a
+     * scratch (negative) order first, then land each at its final position. */
+    await this.prisma.$transaction(async (tx) => {
+      for (const [index, id] of dto.speakerIds.entries()) {
+        await tx.meetingSpeaker.update({ where: { id }, data: { order: -(index + 1) } });
+      }
+      for (const [index, id] of dto.speakerIds.entries()) {
+        await tx.meetingSpeaker.update({
+          where: { id },
+          data: { order: index + 1, updatedAt: new Date() },
+        });
+      }
+      await syncPlannerSpeakersFromMeeting(tx, meeting.clubId, meeting.id);
+      await this.activity.record(
+        {
+          clubId: meeting.clubId,
+          actorMembershipId,
+          category: 'meeting',
+          action: 'reordered prepared speakers',
+          summary: `Reordered the prepared speakers for Meeting ${meeting.meetingNumber}`,
+          entityType: 'meeting',
+          entityId: meeting.id,
+        },
+        tx,
+      );
+    });
+
+    return this.list(subject, meetingId);
   }
 
   async delete(

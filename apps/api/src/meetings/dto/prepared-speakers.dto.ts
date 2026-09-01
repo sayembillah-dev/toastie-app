@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsIn,
   IsInt,
   IsOptional,
@@ -18,6 +19,15 @@ export const SPEAKER_STATUSES = ['requested', 'confirmed', 'delivered'] as const
  * "Add speaker" drops a blank card at the next open slot, same as the old
  * Redux-only `speakerAdded` action did. */
 export class CreatePreparedSpeakerDto {}
+
+/** Body for `POST /meetings/:meetingId/prepared-speakers/reorder`. Must name
+ * every speaker of the meeting exactly once, in the desired order — a
+ * partial list would silently renumber rows the caller may never have seen. */
+export class ReorderPreparedSpeakersDto {
+  @IsArray()
+  @IsString({ each: true })
+  speakerIds!: string[];
+}
 
 /** Body for `PATCH /meetings/:meetingId/prepared-speakers/:speakerId`. Every
  * field optional and independently omittable — the tab saves whichever

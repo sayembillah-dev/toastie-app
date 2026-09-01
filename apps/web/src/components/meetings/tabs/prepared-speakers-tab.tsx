@@ -2,6 +2,7 @@
 
 import {
   CaretDown,
+  CaretUp,
   ChatCircleDots,
   Copy,
   DownloadSimple,
@@ -34,6 +35,7 @@ import {
   useGetGuestsQuery,
   useGetMembersQuery,
   useGetPreparedSpeakersQuery,
+  useReorderPreparedSpeakersMutation,
   useUpdatePreparedSpeakerMutation,
 } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
@@ -244,6 +246,10 @@ interface SpeakerCardProps {
   onToggle: () => void;
   onPatch: (patch: Partial<PreparedSpeakerWire>) => void;
   onDelete: () => void;
+  /** Reorder callbacks — `undefined` at the list's edges, where the matching
+   * button renders disabled. */
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }
 
 function SpeakerCard({
@@ -257,6 +263,8 @@ function SpeakerCard({
   onToggle,
   onPatch,
   onDelete,
+  onMoveUp,
+  onMoveDown,
 }: SpeakerCardProps) {
   const { message } = App.useApp();
   const idPrefix = `speaker-${speaker.id}`;
@@ -346,6 +354,35 @@ function SpeakerCard({
             )}
           </span>
         </button>
+        {/* Move controls rather than drag-and-drop: arrows work the same on a
+         * phone touchscreen as on a desktop pointer, and every move saves
+         * straight through the reorder endpoint like the rest of the tab. */}
+        <div className="flex shrink-0 items-center">
+          <Button
+            type="text"
+            size="small"
+            aria-label={`Move speaker #${index} up`}
+            disabled={!onMoveUp}
+            icon={
+              <CaretUp size={16} weight="bold" className={onMoveUp ? 'text-ink-soft' : undefined} />
+            }
+            onClick={onMoveUp}
+          />
+          <Button
+            type="text"
+            size="small"
+            aria-label={`Move speaker #${index} down`}
+            disabled={!onMoveDown}
+            icon={
+              <CaretDown
+                size={16}
+                weight="bold"
+                className={onMoveDown ? 'text-ink-soft' : undefined}
+              />
+            }
+            onClick={onMoveDown}
+          />
+        </div>
         <Select
           size="small"
           variant="borderless"
@@ -546,9 +583,10 @@ interface PreparedSpeakersTabProps {
 
 /** Prepared Speakers tab — an inline editor per speaker with a member/guest
  * picker, pathway/project cascade (which drives the level and duration
- * bounds), and a quick-add row at the bottom with no cap on how many slots a
- * meeting can hold. Every field saves straight through the API as it's
- * changed — text fields on blur, pickers immediately — matching the Roles
+ * bounds), move up/down controls that persist the running order, and a
+ * quick-add row at the bottom with no cap on how many slots a meeting can
+ * hold. Every field saves straight through the API as it's changed — text
+ * fields on blur, pickers and reorders immediately — matching the Roles
  * tab's no-Save-button pattern. Speakers persist server-side
  * (`MeetingSpeaker`) and mirror with the planner row this meeting was
  * created from. */
@@ -560,6 +598,7 @@ export function PreparedSpeakersTab({ meeting }: PreparedSpeakersTabProps) {
   const [createSpeaker, { isLoading: isCreating }] = useCreatePreparedSpeakerMutation();
   const [updateSpeaker] = useUpdatePreparedSpeakerMutation();
   const [deleteSpeaker] = useDeletePreparedSpeakerMutation();
+  const [reorderSpeakers] = useReorderPreparedSpeakersMutation();
 
   /* New cards open expanded so the form is ready to fill; existing ones
    * default collapsed (absent from the set) since a term's worth of
@@ -591,6 +630,21 @@ export function PreparedSpeakersTab({ meeting }: PreparedSpeakersTabProps) {
     } catch (err) {
       message.error(getApiErrorMessage(err, 'Could not delete the speaker'));
     }
+  }
+
+  /* A move is just the current order with one adjacent pair swapped — the
+   * server renumbers authoritatively from the submitted id list, and the
+   * mutation's optimistic cache update flows through the draft hydration to
+   * the agenda and the PDF before the response even lands. */
+  function handleMove(speakerId: string, direction: -1 | 1) {
+    const ids = list.map((speaker) => speaker.id);
+    const from = ids.indexOf(speakerId);
+    const to = from + direction;
+    if (from < 0 || to < 0 || to >= ids.length) return;
+    [ids[from], ids[to]] = [ids[to], ids[from]];
+    reorderSpeakers({ meetingId: meeting.id, speakerIds: ids })
+      .unwrap()
+      .catch((err) => message.error(getApiErrorMessage(err, 'Could not reorder the speakers')));
   }
 
   function toggle(speakerId: string) {
@@ -643,6 +697,14 @@ export function PreparedSpeakersTab({ meeting }: PreparedSpeakersTabProps) {
                   onToggle={() => toggle(speaker.id)}
                   onPatch={(patch) => handlePatch(speaker.id, patch)}
                   onDelete={() => handleDelete(speaker.id)}
+                  onMoveUp={
+                    list.length > 1 && index > 0 ? () => handleMove(speaker.id, -1) : undefined
+                  }
+                  onMoveDown={
+                    list.length > 1 && index < list.length - 1
+                      ? () => handleMove(speaker.id, 1)
+                      : undefined
+                  }
                 />
               ))}
             </div>
