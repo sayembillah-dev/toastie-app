@@ -36,7 +36,41 @@ export interface GuestWire {
   sharedContact?: boolean;
 }
 
-export async function toGuestWire(row: Prospect, storage: StorageService): Promise<GuestWire> {
+/** Loads the linked identity row alongside the Prospect so `toGuestWire`
+ * can serve the shared profile fields. Cheap: `personId` is an indexed FK
+ * to a single row. */
+export const GUEST_PERSON_INCLUDE = { person: true } as const;
+
+/** A `Prospect` optionally loaded with its `Person` — the relation key is
+ * optional so queries that skip the include still typecheck (their wire
+ * just lacks the shared fields). */
+export type ProspectWithPerson = Prospect & { person?: Person | null };
+
+/** First non-blank string wins — `Person` fields are preferred for linked
+ * guests, the Prospect's own columns are the club-local fallback. */
+function firstText(...values: Array<string | null | undefined>): string | undefined {
+  return values.find((v) => v?.trim()) ?? undefined;
+}
+
+export async function toGuestWire(
+  row: ProspectWithPerson,
+  storage: StorageService,
+): Promise<GuestWire> {
+  /* Shared-contact merge (IDENTITY_PLAN §5): when this guest is linked to
+   * the identity pool, the details that sync across clubs — bio, socials,
+   * avatar, whatsapp, organization, email — read from `Person` first, so
+   * the profile page shows everything the pool knows rather than only what
+   * this club typed in. Name stays club-local: each club owns how its
+   * roster displays a person (Robert vs Bob). */
+  const person = row.person ?? null;
+  const email = firstText(person?.email, row.email);
+  const whatsapp = firstText(person?.whatsapp, row.whatsapp);
+  const organization = firstText(person?.organization, row.organization);
+  const avatarUrl = firstText(person?.avatarUrl, row.avatarUrl);
+  const bio = firstText(person?.bio, row.bio);
+  const personSocials = parseSocials(person?.socials);
+  const socials = personSocials.length > 0 ? personSocials : parseSocials(row.socials);
+
   const wire: GuestWire = {
     id: row.id,
     clubId: row.clubId,
@@ -48,20 +82,22 @@ export async function toGuestWire(row: Prospect, storage: StorageService): Promi
     stage: row.stage,
   };
   if (row.personId) wire.sharedContact = true;
-  if (row.email) wire.email = row.email;
+  if (email) wire.email = email;
   if (row.phone) wire.phone = row.phone;
-  if (row.whatsapp) wire.whatsapp = row.whatsapp;
-  if (row.organization) wire.organization = row.organization;
-  if (row.avatarUrl) wire.avatarUrl = await storage.resolveUrl(row.avatarUrl);
-  if (row.bio) wire.bio = row.bio;
+  if (whatsapp) wire.whatsapp = whatsapp;
+  if (organization) wire.organization = organization;
+  if (avatarUrl) wire.avatarUrl = await storage.resolveUrl(avatarUrl);
+  if (bio) wire.bio = bio;
   if (row.notes) wire.notes = row.notes;
   if (row.invitedBy) wire.invitedBy = row.invitedBy;
-  const socials = parseSocials(row.socials);
   if (socials.length > 0) wire.socials = socials;
   return wire;
 }
 
-export function toGuestWires(rows: Prospect[], storage: StorageService): Promise<GuestWire[]> {
+export function toGuestWires(
+  rows: ProspectWithPerson[],
+  storage: StorageService,
+): Promise<GuestWire[]> {
   return Promise.all(rows.map((row) => toGuestWire(row, storage)));
 }
 

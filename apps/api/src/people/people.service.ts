@@ -36,9 +36,11 @@ import {
   type ContactLogWire,
   type ConvertGuestResultWire,
   emptyPersonLookup,
+  GUEST_PERSON_INCLUDE,
   type GuestMatchWire,
   type GuestWire,
   type PersonLookupWire,
+  type ProspectWithPerson,
   toContactLogWire,
   toGuestWire,
   toGuestWires,
@@ -82,6 +84,7 @@ export class PeopleService {
     }
     const rows = await this.prisma.prospect.findMany({
       where: { clubId },
+      include: GUEST_PERSON_INCLUDE,
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
     });
     return toGuestWires(rows, this.storage);
@@ -243,6 +246,7 @@ export class PeopleService {
         invitedBy: dto.invitedBy?.trim() || null,
         stage: 'new',
       },
+      include: GUEST_PERSON_INCLUDE,
     });
     return toGuestWire(row, this.storage);
   }
@@ -492,7 +496,11 @@ export class PeopleService {
     if (dto.invitedBy !== undefined) data.invitedBy = dto.invitedBy.trim() || null;
     if (dto.stage !== undefined) data.stage = dto.stage;
 
-    const row = await this.prisma.prospect.update({ where: { id: guestId }, data });
+    const row = await this.prisma.prospect.update({
+      where: { id: guestId },
+      data,
+      include: GUEST_PERSON_INCLUDE,
+    });
     // Write-through to the shared person (IDENTITY_PLAN §5): last non-empty
     // club write wins while the number is unclaimed; once claimed, the
     // account holder is authoritative and this is a no-op.
@@ -786,8 +794,11 @@ export class PeopleService {
 
   /** ---------------------------------------------------------- helpers -- */
 
-  private async loadGuest(guestId: string): Promise<Prospect> {
-    const row = await this.prisma.prospect.findUnique({ where: { id: guestId } });
+  private async loadGuest(guestId: string): Promise<ProspectWithPerson> {
+    const row = await this.prisma.prospect.findUnique({
+      where: { id: guestId },
+      include: GUEST_PERSON_INCLUDE,
+    });
     if (!row) throw new NotFoundException(`No guest with id "${guestId}"`);
     return row;
   }
