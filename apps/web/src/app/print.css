@@ -43,6 +43,18 @@
     display: none !important;
   }
 
+  /* The agenda's person popovers are screen-only: the overlay is portaled to
+   * <body>, so an open one would otherwise land on the PDF, and the trigger's
+   * dotted underline would print on every name. */
+  .ant-popover {
+    display: none !important;
+  }
+
+  .person-tip {
+    text-decoration: none !important;
+    cursor: default;
+  }
+
   /* Release the shell's viewport-height / overflow constraints so the agenda can
    * run onto as many sheets as it needs. */
   .h-screen {

@@ -20,7 +20,6 @@ import { findProject, getProjectDuration, getProjectsForPathway } from '@/lib/ed
 import type { Meeting } from '@/lib/meetings/meetings';
 import {
   evaluatorAssignee,
-  MAX_SPEAKERS_PER_MEETING,
   type PreparedSpeakerWire,
   SPEAKER_STATUSES,
   type SpeakerStatus,
@@ -38,8 +37,6 @@ import {
   useUpdatePreparedSpeakerMutation,
 } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
-
-const MAX_SPEAKERS = MAX_SPEAKERS_PER_MEETING;
 
 /** Official Pathways two-letter abbreviations, used on the Path option so the
  * dropdown reads "Dynamic Leadership (DL)" like the club forms do. */
@@ -549,11 +546,12 @@ interface PreparedSpeakersTabProps {
 
 /** Prepared Speakers tab — an inline editor per speaker with a member/guest
  * picker, pathway/project cascade (which drives the level and duration
- * bounds), and a quick-add row at the bottom capped at MAX_SPEAKERS. Every
- * field saves straight through the API as it's changed — text fields on
- * blur, pickers immediately — matching the Roles tab's no-Save-button
- * pattern. Speakers persist server-side (`MeetingSpeaker`) and mirror with
- * the planner row this meeting was created from. */
+ * bounds), and a quick-add row at the bottom with no cap on how many slots a
+ * meeting can hold. Every field saves straight through the API as it's
+ * changed — text fields on blur, pickers immediately — matching the Roles
+ * tab's no-Save-button pattern. Speakers persist server-side
+ * (`MeetingSpeaker`) and mirror with the planner row this meeting was
+ * created from. */
 export function PreparedSpeakersTab({ meeting }: PreparedSpeakersTabProps) {
   const { message } = App.useApp();
   const { data: members, isLoading: membersLoading } = useGetMembersQuery();
@@ -571,10 +569,8 @@ export function PreparedSpeakersTab({ meeting }: PreparedSpeakersTabProps) {
 
   const isLoading = membersLoading || speakersLoading;
   const list = speakers ?? [];
-  const canAdd = list.length < MAX_SPEAKERS;
 
   async function handleAdd() {
-    if (!canAdd) return;
     try {
       const created = await createSpeaker({ meetingId: meeting.id }).unwrap();
       setExpandedIds((prev) => new Set(prev).add(created.id));
@@ -613,13 +609,15 @@ export function PreparedSpeakersTab({ meeting }: PreparedSpeakersTabProps) {
           <div>
             <h2 className="text-base font-semibold text-ink">Prepared Speakers</h2>
             <p className="mt-1 text-xs text-ink-soft">
-              Add up to {MAX_SPEAKERS} speakers. Level and duration follow the selected Pathways
-              project.
+              Add as many speakers as the meeting needs. Level and duration follow the selected
+              Pathways project.
             </p>
           </div>
-          <span className="shrink-0 rounded-full bg-fill px-2.5 py-1 text-[11px] font-semibold text-ink-soft">
-            {list.length}/{MAX_SPEAKERS}
-          </span>
+          {list.length > 0 ? (
+            <span className="shrink-0 rounded-full bg-fill px-2.5 py-1 text-[11px] font-semibold text-ink-soft">
+              {list.length}
+            </span>
+          ) : null}
         </header>
 
         <ReadOnly resource="meeting" display="block">
@@ -657,10 +655,9 @@ export function PreparedSpeakersTab({ meeting }: PreparedSpeakersTabProps) {
               type="dashed"
               icon={<Plus size={16} weight="bold" />}
               loading={isCreating}
-              disabled={!canAdd}
               onClick={handleAdd}
             >
-              Add speaker ({list.length}/{MAX_SPEAKERS})
+              Add speaker
             </Button>
           </div>
         </ReadOnly>

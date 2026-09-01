@@ -1,23 +1,33 @@
 'use client';
 
 import { DownloadSimple } from '@phosphor-icons/react/dist/ssr';
-import { Button } from 'antd';
+import { Button, Popover } from 'antd';
 import Image from 'next/image';
 import { Fragment, useMemo } from 'react';
 
+import { PersonAvatar } from '@/components/ui/person-avatar';
 import { bannerImageCss } from '@/lib/club/banner';
 import type { ClubBannerPos } from '@/lib/club/club-profile';
-import type { AgendaRow } from '@/lib/meetings/agenda';
-import { buildAgenda, CLUB, holderName, speakerPerson } from '@/lib/meetings/agenda';
+import { getInitials } from '@/lib/education/members';
+import type { AgendaPerson, AgendaRow } from '@/lib/meetings/agenda';
+import {
+  buildAgenda,
+  CLUB,
+  holderName,
+  holderPerson,
+  speakerPerson,
+  speechSlotPerson,
+} from '@/lib/meetings/agenda';
 import type { MeetingDraft } from '@/lib/meetings/draft';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { buildRoles } from '@/lib/meetings/roles';
-import { useGetClubProfileQuery } from '@/store/api';
+import { getGuestInitials } from '@/lib/people/guests';
+import { useGetClubProfileQuery, useGetGuestsQuery } from '@/store/api';
 import { useAppSelector } from '@/store/hooks';
 import { selectMeetingDraft } from '@/store/meeting-draft-slice';
 
 import tmLogo from '../../../assets/tm.png';
-import { useNameOf } from './use-name-of';
+import { useMemberOf, useNameOf } from './use-name-of';
 
 /* The printed agenda is its own visual language — navy Toastmasters branding on
  * an A4 sheet — so it uses literal colours and pixel sizes rather than the app's
@@ -228,27 +238,124 @@ function RailName({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** What the popover shows — the person's face, name, and bio. Resolved once
+ * at the sheet level from the roster/guest lists the meeting views already
+ * hold, so a name that matches nothing (a stale id) simply renders as plain
+ * text with no popover. */
+interface PersonTipInfo {
+  bio?: string;
+  avatarUrl?: string | null;
+  initials: string;
+}
+
+type TipResolver = (person: AgendaPerson) => PersonTipInfo | undefined;
+
+/** One clickable name on the sheet. The popover is screen-only chrome:
+ * portaled outside the page and hidden by `@media print`, while the trigger
+ * itself inherits the cell's typography and loses its underline when
+ * printing — so the PDF looks exactly as it did before names were
+ * clickable. */
+function PersonTip({ person, tipOf }: { person: AgendaPerson; tipOf: TipResolver }) {
+  const tip = tipOf(person);
+  if (!tip) return <>{person.name}</>;
+
+  return (
+    <Popover
+      trigger="click"
+      placement="topLeft"
+      content={
+        <div className="w-60 max-w-[76vw]">
+          <div className="flex items-center gap-2.5">
+            <PersonAvatar src={tip.avatarUrl} initials={tip.initials} sizeClass="size-9" />
+            <div className="min-w-0 text-sm font-semibold leading-tight text-ink">
+              {person.name}
+            </div>
+          </div>
+          <p className="mt-2 whitespace-pre-line text-xs leading-relaxed text-ink-soft">
+            {tip.bio?.trim() || 'No bio added yet.'}
+          </p>
+        </div>
+      }
+    >
+      <button
+        type="button"
+        aria-label={`About ${person.name}`}
+        className="person-tip"
+        style={{
+          font: 'inherit',
+          color: 'inherit',
+          background: 'none',
+          border: 0,
+          padding: 0,
+          cursor: 'pointer',
+          textAlign: 'left',
+          textDecoration: 'underline dotted',
+          textUnderlineOffset: 2,
+        }}
+      >
+        {person.name}
+      </button>
+    </Popover>
+  );
+}
+
+/** A person cell: one popover trigger per identity, comma-joined exactly like
+ * the `person` string it replaces; falls back to the plain string when the
+ * cell carries no identities (typed guest names, unfilled slots). */
+function PersonList({
+  people,
+  fallback,
+  tipOf,
+}: {
+  people: AgendaPerson[] | undefined;
+  fallback: string | undefined;
+  tipOf: TipResolver;
+}) {
+  if (!people || people.length === 0) return <>{fallback}</>;
+  /* Keys are unique per cell without an index: the only multi-person cell is
+   * the evaluations line, which buildAgenda already dedupes. */
+  return (
+    <>
+      {people.map((person, index) => (
+        <Fragment key={person.memberId ?? person.guestId ?? person.name}>
+          {index > 0 ? ', ' : null}
+          <PersonTip person={person} tipOf={tipOf} />
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
 interface SheetRailProps {
   meeting: Meeting;
   draft: MeetingDraft;
   nameOf: (memberId: string | undefined) => string;
+  tipOf: TipResolver;
 }
 
 /** Left rail: the officers and role-holders, the club mission, and the word of
  * the day — everything the Roles, Prepared Speakers and Theme tabs collected. */
-function SheetRail({ meeting, draft, nameOf }: SheetRailProps) {
+function SheetRail({ meeting, draft, nameOf, tipOf }: SheetRailProps) {
   /* Optional roles print only when somebody actually holds them — an empty
    * "Hakmaster —" row on every agenda would be pure noise. */
   const roles = buildRoles(meeting).filter((role) => !role.optional || draft.roles[role.key]);
   const { word } = draft;
 
-  const evaluators = [
-    ...new Set(
-      draft.speakers
-        .map((speaker) => speakerPerson(nameOf, speaker.evaluatorId, speaker.evaluatorName))
-        .filter(Boolean),
-    ),
-  ];
+  /* Every speech evaluator named once — the same dedupe the run-of-show's
+   * evaluations line uses, one row per person here. A typed-name guest with
+   * no roster row still prints (as plain text — there is no bio to pop). */
+  const evaluators: AgendaPerson[] = [];
+  for (const speaker of draft.speakers) {
+    const entry = speechSlotPerson(
+      nameOf,
+      speaker.evaluatorId,
+      speaker.evaluatorGuestId,
+      speaker.evaluatorName,
+    ) ?? { name: speakerPerson(nameOf, speaker.evaluatorId, speaker.evaluatorName) };
+    if (entry.name && !evaluators.some((seen) => seen.name === entry.name)) {
+      evaluators.push(entry);
+    }
+  }
 
   return (
     <div
@@ -259,17 +366,30 @@ function SheetRail({ meeting, draft, nameOf }: SheetRailProps) {
         padding: 10,
       }}
     >
-      {roles.map((role) => (
-        <RailSection key={role.key} title={role.label}>
-          <RailName>{holderName(nameOf, draft.roles[role.key]) || '—'}</RailName>
-        </RailSection>
-      ))}
+      {roles.map((role) => {
+        const person = holderPerson(nameOf, draft.roles[role.key]);
+        return (
+          <RailSection key={role.key} title={role.label}>
+            <RailName>
+              {person ? (
+                <PersonTip person={person} tipOf={tipOf} />
+              ) : (
+                holderName(nameOf, draft.roles[role.key]) || '—'
+              )}
+            </RailName>
+          </RailSection>
+        );
+      })}
 
       <RailSection title="Prepared Speech Evaluators">
         {evaluators.length === 0 ? (
           <RailName>—</RailName>
         ) : (
-          evaluators.map((name) => <RailName key={name}>{name}</RailName>)
+          evaluators.map((person) => (
+            <RailName key={person.memberId ?? person.guestId ?? person.name}>
+              <PersonTip person={person} tipOf={tipOf} />
+            </RailName>
+          ))
         )}
       </RailSection>
 
@@ -277,12 +397,24 @@ function SheetRail({ meeting, draft, nameOf }: SheetRailProps) {
         {draft.speakers.length === 0 ? (
           <RailName>—</RailName>
         ) : (
-          draft.speakers.map((speaker, index) => (
-            <div key={speaker.id} style={{ fontSize: 9.5, marginBottom: 3, fontStyle: 'italic' }}>
-              {index + 1}.&nbsp;
-              {speakerPerson(nameOf, speaker.memberId, speaker.speakerName) || 'To be confirmed'}
-            </div>
-          ))
+          draft.speakers.map((speaker, index) => {
+            const person = speechSlotPerson(
+              nameOf,
+              speaker.memberId,
+              speaker.guestId,
+              speaker.speakerName,
+            );
+            return (
+              <div key={speaker.id} style={{ fontSize: 9.5, marginBottom: 3, fontStyle: 'italic' }}>
+                {index + 1}.&nbsp;
+                {person ? (
+                  <PersonTip person={person} tipOf={tipOf} />
+                ) : (
+                  speakerPerson(nameOf, speaker.memberId, speaker.speakerName) || 'To be confirmed'
+                )}
+              </div>
+            );
+          })
         )}
       </RailSection>
 
@@ -333,7 +465,7 @@ const LINE_CELL: React.CSSProperties = {
   verticalAlign: 'top',
 };
 
-function SheetTable({ rows }: { rows: AgendaRow[] }) {
+function SheetTable({ rows, tipOf }: { rows: AgendaRow[]; tipOf: TipResolver }) {
   return (
     <div style={{ flex: '1 1 0%', padding: '10px 12px 12px' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -355,7 +487,9 @@ function SheetTable({ rows }: { rows: AgendaRow[] }) {
                   {formatClock(row.startsAt)}
                 </td>
                 <td style={BLOCK_CELL}>{row.title}</td>
-                <td style={{ ...BLOCK_CELL, fontWeight: 600, width: '30%' }}>{row.person}</td>
+                <td style={{ ...BLOCK_CELL, fontWeight: 600, width: '30%' }}>
+                  <PersonList people={row.people} fallback={row.person} tipOf={tipOf} />
+                </td>
                 <td style={{ ...BLOCK_CELL, fontWeight: 'normal', textAlign: 'center', width: 32 }}>
                   {row.displayMinutes}
                 </td>
@@ -374,7 +508,9 @@ function SheetTable({ rows }: { rows: AgendaRow[] }) {
                   >
                     {line.label}
                   </td>
-                  <td style={{ ...LINE_CELL, fontWeight: 600 }}>{line.person}</td>
+                  <td style={{ ...LINE_CELL, fontWeight: 600 }}>
+                    <PersonList people={line.people} fallback={line.person} tipOf={tipOf} />
+                  </td>
                   <td style={{ ...LINE_CELL, textAlign: 'center' }}>{line.minutes}</td>
                 </tr>
               ))}
@@ -398,8 +534,31 @@ interface AgendaPreviewProps {
 export function AgendaPreview({ meeting }: AgendaPreviewProps) {
   const draft = useAppSelector((state) => selectMeetingDraft(state, meeting.id));
   const nameOf = useNameOf();
+  const memberOf = useMemberOf();
+  const { data: guests } = useGetGuestsQuery();
 
   const rows = useMemo(() => buildAgenda(meeting, draft, nameOf), [meeting, draft, nameOf]);
+
+  /* Resolves a printed name's identity to what the popover shows — face,
+   * name, bio. Members read from the roster (`Member.bio` comes from the
+   * shared identity server-side), guests from the club's guest list. A name
+   * with no resolvable identity renders as plain text instead. */
+  const tipOf = useMemo<TipResolver>(() => {
+    const guestById = new Map((guests ?? []).map((guest) => [guest.id, guest]));
+    return (person) => {
+      if (person.memberId) {
+        const member = memberOf(person.memberId);
+        if (!member) return undefined;
+        return { bio: member.bio, avatarUrl: member.avatarUrl, initials: getInitials(member) };
+      }
+      if (person.guestId) {
+        const guest = guestById.get(person.guestId);
+        if (!guest) return undefined;
+        return { bio: guest.bio, avatarUrl: guest.avatarUrl, initials: getGuestInitials(guest) };
+      }
+      return undefined;
+    };
+  }, [memberOf, guests]);
 
   /* The browser's own print pipeline is the PDF writer — it already knows how to
    * paginate the sheet, and it keeps the page vector-sharp and selectable. */
@@ -439,8 +598,8 @@ export function AgendaPreview({ meeting }: AgendaPreviewProps) {
         >
           <SheetHeader meeting={meeting} theme={draft.theme.trim() || meeting.theme} />
           <div style={{ display: 'flex' }}>
-            <SheetRail meeting={meeting} draft={draft} nameOf={nameOf} />
-            <SheetTable rows={rows} />
+            <SheetRail meeting={meeting} draft={draft} nameOf={nameOf} tipOf={tipOf} />
+            <SheetTable rows={rows} tipOf={tipOf} />
           </div>
         </div>
       </div>

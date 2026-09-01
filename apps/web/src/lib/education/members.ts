@@ -68,6 +68,10 @@ export interface Member {
    * Read-only: it is minted per response and expires, so it is never sent
    * back on a member update. The photo is owned by the profile screen. */
   avatarUrl?: string;
+  /** Short public-facing paragraph — sourced from the member's shared
+   * identity (`Person`), falling back to their account profile. Shown on the
+   * agenda's person popovers. Absent when the person has written none. */
+  bio?: string;
   /** Per-`resource:action` overrides on top of the role-based grants in
    * `@toastly/access`. Keys look like `"transaction:update"` and the value is
    * either `'allow'` or `'deny'`; only entries a Club Admin has explicitly

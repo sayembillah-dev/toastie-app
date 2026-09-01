@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { can, type PermissionSubject } from '@toastly/access';
 
@@ -14,14 +9,14 @@ import type {
   CreatePreparedSpeakerDto,
   UpdatePreparedSpeakerDto,
 } from './dto/prepared-speakers.dto';
-import { MAX_SPEAKERS_PER_MEETING } from './dto/prepared-speakers.dto';
 import { syncPlannerSpeakersFromMeeting } from './planner-mirror';
 import { type PreparedSpeakerWire, toPreparedSpeakerWire } from './serializers';
 
 /** Handles `/meetings/:meetingId/prepared-speakers` — the Prepared Speakers
  * tab's speech slots. Gated by `meetingRole` (same roles that manage the
- * Roles tab manage this) rather than a dedicated resource key. Ordered 1–4,
- * matching the planner's Speaker 1–4 columns that seed and mirror it. */
+ * Roles tab manage this) rather than a dedicated resource key. A meeting can
+ * hold any number of slots, ordered from 1 up; the planner's Speaker 1–4
+ * columns seed and mirror the first four, the rest live on the meeting only. */
 @Injectable()
 export class PreparedSpeakersService {
   constructor(
@@ -49,23 +44,15 @@ export class PreparedSpeakersService {
     const meeting = await this.requireMeeting(meetingId);
     this.assert(subject, meeting.clubId, 'create');
 
+    /* No cap on speakers per meeting — the slot takes the lowest free order,
+     * so a deletion in the middle is filled back in before the count grows. */
     const existing = await this.prisma.meetingSpeaker.findMany({
       where: { clubId: meeting.clubId, meetingId: meeting.id },
       select: { order: true },
     });
     const taken = new Set(existing.map((row) => row.order));
-    let order = 0;
-    for (let candidate = 1; candidate <= MAX_SPEAKERS_PER_MEETING; candidate++) {
-      if (!taken.has(candidate)) {
-        order = candidate;
-        break;
-      }
-    }
-    if (order === 0) {
-      throw new BadRequestException(
-        `Meeting ${meeting.meetingNumber} already has ${MAX_SPEAKERS_PER_MEETING} prepared speakers`,
-      );
-    }
+    let order = 1;
+    while (taken.has(order)) order += 1;
 
     const row = await this.prisma.$transaction(async (tx) => {
       const speaker = await tx.meetingSpeaker.create({

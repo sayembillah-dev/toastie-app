@@ -4,22 +4,28 @@ import type { StorageService } from '@/storage/storage.service';
 
 import { type OfficerRole, toOfficerRoles } from './role-mapping';
 
-/** Include this on every `membership.findX` so the roster can show faces.
+/** Include this on every `membership.findX` so the roster can show faces and
+ * bios.
  *
  * `Membership` denormalises `firstName`/`lastName`/`email` from `User`, but
- * deliberately not the avatar: a photo changes far more often than a name,
- * and a denormalised copy would need syncing on every profile save. The
- * relation is nullable because a Club Admin can add a roster row by hand
- * before that person ever signs up — those have no account, and so no photo. */
+ * deliberately not the avatar or the bio: both change far more often than a
+ * name, and a denormalised copy would need syncing on every profile save. The
+ * `user` relation is nullable because a Club Admin can add a roster row by
+ * hand before that person ever signs up — those have no account, and so no
+ * photo. The `person` link is the shared identity (IDENTITY_PLAN §5): it can
+ * carry a bio even for an unclaimed row, from the person's guest era or
+ * another club. */
 export const MEMBERSHIP_AVATAR_INCLUDE = {
-  user: { select: { avatarUrl: true } },
+  user: { select: { avatarUrl: true, bio: true } },
+  person: { select: { bio: true } },
 } as const;
 
-/** A `Membership` row loaded with `MEMBERSHIP_AVATAR_INCLUDE`. The relation is
- * optional in the type so the few queries that genuinely don't need it still
- * typecheck — they just yield a member with no photo. */
+/** A `Membership` row loaded with `MEMBERSHIP_AVATAR_INCLUDE`. The relations
+ * are optional in the type so the few queries that genuinely don't need them
+ * still typecheck — they just yield a member with no photo and no bio. */
 export type MembershipWithUser = Membership & {
-  user?: { avatarUrl: string | null } | null;
+  user?: { avatarUrl: string | null; bio: string | null } | null;
+  person?: { bio: string | null } | null;
 };
 
 /** Wire shape for `GET/POST /members` — string-identical to the web
@@ -42,6 +48,10 @@ export interface MemberWire {
    * when the roster row has no account yet, or that person never set one —
    * the UI falls back to initials. */
   avatarUrl?: string;
+  /** Short public-facing paragraph, shown on the agenda's person popovers.
+   * Read from the shared `Person` identity first (it syncs across clubs),
+   * falling back to the account's own profile bio. */
+  bio?: string;
   roles: OfficerRole[];
   isClubAdmin: boolean;
   status: 'active' | 'removed';
@@ -72,6 +82,9 @@ export async function toMemberWire(
 
   const avatar = await storage.resolveOptional(row.user?.avatarUrl);
   if (avatar) wire.avatarUrl = avatar;
+
+  const bio = [row.person?.bio, row.user?.bio].find((v) => v?.trim());
+  if (bio) wire.bio = bio;
 
   const overrides = parseOverrides(row.grantOverrides);
   if (Object.keys(overrides).length > 0) wire.overrides = overrides;

@@ -23,7 +23,6 @@ import { splitLocalDateTime, toInstant } from '@/lib/meetings/datetime';
 import type { DraftSpeaker, MeetingDraft } from '@/lib/meetings/draft';
 import type { Meeting, MeetingStatus } from '@/lib/meetings/meetings';
 import { DEFAULT_START_TIME } from '@/lib/meetings/meetings';
-import { MAX_SPEAKERS_PER_MEETING } from '@/lib/meetings/prepared-speakers';
 import { buildRoles } from '@/lib/meetings/roles';
 import { useUpdateMeetingMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
@@ -32,9 +31,10 @@ import { selectMeetingDraft } from '@/store/meeting-draft-slice';
 
 import { useMemberOf, useNameOf } from './use-name-of';
 
-/** A full slate is every prepared-speaker slot the meeting offers — the
- * readiness meter reads anything at or above it as a full house. */
-const TARGET_SPEAKERS = MAX_SPEAKERS_PER_MEETING;
+/** What the readiness meter calls a full slate. Meetings can book any number
+ * of prepared speakers now — four is simply the point at which the meter
+ * stops asking for more, and extra speakers never push it past 100%. */
+const TARGET_SPEAKERS = 4;
 
 const DATE_FMT = new Intl.DateTimeFormat('en-GB', {
   weekday: 'long',
