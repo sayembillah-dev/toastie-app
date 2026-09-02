@@ -204,49 +204,18 @@ export class PublicMeetingsController {
     };
   }
 
-  /** Backs the Ah Counter/Timer/Grammarian pages' identity gate — same
-   * (id, token) gate as `getSpeaker`. `role` is the `RoleKind` slug
-   * (`ah-counter`/`timer`/`grammarian`), which is string-identical to
-   * `MeetingRoleAssignment.roleKey` for these roles (see `lib/meetings/roles.ts`
-   * on the client). */
-  @Get(':meetingId/roles/:role')
-  async getRoleAssignment(
-    @Param('meetingId') meetingId: string,
-    @Param('role') role: string,
-    @Query('t') token: string | undefined,
-  ): Promise<PublicRoleAssignmentWire> {
-    if (!token) {
-      throw new NotFoundException('No meeting matches that share link');
-    }
-    const meeting = await this.prisma.meeting.findFirst({
-      where: { id: meetingId, shareToken: token },
-      select: { clubId: true },
-    });
-    if (!meeting) {
-      throw new NotFoundException('No meeting matches that share link');
-    }
-
-    const assignment = await this.prisma.meetingRoleAssignment.findFirst({
-      where: { meetingId, clubId: meeting.clubId, roleKey: role },
-      select: {
-        roleKey: true,
-        membership: { select: { firstName: true, lastName: true } },
-        guest: { select: { firstName: true, lastName: true } },
-      },
-    });
-
-    return {
-      roleKey: role,
-      name: assignment ? fullName(assignment.membership ?? assignment.guest) : '',
-    };
-  }
-
   /** Backs the public Ah Counter/Timer "Take from agenda" button — same
    * (id, token) gate as `getSpeaker`/`getRoleAssignment`. Order and field
    * shape are chosen so `fromPublicAgendaSpeakerSources` on the client can
    * turn this straight into the same `AgendaSpeakerSource[]` the authenticated
    * tab builds from `buildAgendaSpeakerSources`, so both surfaces seed
-   * identically off this same query. */
+   * identically off this same query.
+   *
+   * ROUTE ORDER: this static path MUST stay declared before
+   * `:meetingId/roles/:role` — Nest matches routes in declaration order,
+   * so the parameterized route would otherwise swallow `agenda-speakers`
+   * as a `:role` value and return a `PublicRoleAssignmentWire` object
+   * where the client expects an array. */
   @Get(':meetingId/roles/agenda-speakers')
   async getAgendaSpeakerSources(
     @Param('meetingId') meetingId: string,
@@ -345,6 +314,43 @@ export class PublicMeetingsController {
     }
 
     return sources;
+  }
+
+  /** Backs the Ah Counter/Timer/Grammarian pages' identity gate — same
+   * (id, token) gate as `getSpeaker`. `role` is the `RoleKind` slug
+   * (`ah-counter`/`timer`/`grammarian`), which is string-identical to
+   * `MeetingRoleAssignment.roleKey` for these roles (see `lib/meetings/roles.ts`
+   * on the client). */
+  @Get(':meetingId/roles/:role')
+  async getRoleAssignment(
+    @Param('meetingId') meetingId: string,
+    @Param('role') role: string,
+    @Query('t') token: string | undefined,
+  ): Promise<PublicRoleAssignmentWire> {
+    if (!token) {
+      throw new NotFoundException('No meeting matches that share link');
+    }
+    const meeting = await this.prisma.meeting.findFirst({
+      where: { id: meetingId, shareToken: token },
+      select: { clubId: true },
+    });
+    if (!meeting) {
+      throw new NotFoundException('No meeting matches that share link');
+    }
+
+    const assignment = await this.prisma.meetingRoleAssignment.findFirst({
+      where: { meetingId, clubId: meeting.clubId, roleKey: role },
+      select: {
+        roleKey: true,
+        membership: { select: { firstName: true, lastName: true } },
+        guest: { select: { firstName: true, lastName: true } },
+      },
+    });
+
+    return {
+      roleKey: role,
+      name: assignment ? fullName(assignment.membership ?? assignment.guest) : '',
+    };
   }
 
   /** Public agenda endpoint — anonymous, gated by `status === 'published'`

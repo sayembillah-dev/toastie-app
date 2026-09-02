@@ -587,6 +587,13 @@ export const toastlyApi = createApi({
         url: `/public/meetings/${meetingId}/roles/agenda-speakers?t=${encodeURIComponent(token)}`,
         method: 'GET',
       }),
+      /* Belt-and-suspenders: this value feeds `.map` directly in
+       * `fromPublicAgendaSpeakerSources` on the public role pages, so a
+       * wrong-shaped body (route shadowing, a proxy error envelope, …)
+       * must degrade to "no agenda speakers" instead of crashing a live
+       * meeting page. */
+      transformResponse: (response: unknown) =>
+        Array.isArray(response) ? (response as PublicAgendaSpeakerSource[]) : [],
     }),
 
     /* Public agenda endpoint — matched by `isPublicUrl` the same as
