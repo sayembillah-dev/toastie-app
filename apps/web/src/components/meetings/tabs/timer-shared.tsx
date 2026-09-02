@@ -85,12 +85,15 @@ export const BRACKET_RANK: Record<BracketColor, number> = {
 /** Distinct vibration pattern per bracket, fired the moment a running
  * speaker's clock crosses into green/yellow/red — the timer keeper is
  * usually watching the speaker, not the screen, so thresholds must be
- * distinguishable by feel alone: one long pulse at green, two at yellow,
- * and a triple pulse stretching over ~3s at red. */
+ * distinguishable by feel alone. Each pattern runs ~4s, and "intensity"
+ * comes from pulse density (the API can't control motor amplitude, and
+ * rapid re-engagement feels far stronger than one flat drone): heavy
+ * near-second thumps at green, a quicker burst at yellow, and an urgent
+ * machine-gun rattle at red. */
 const BRACKET_VIBRATION: Record<Exclude<BracketColor, 'default'>, VibratePattern> = {
-  green: 1000,
-  yellow: [700, 200, 700],
-  red: [800, 250, 800, 250, 800],
+  green: [900, 150, 900, 150, 900, 150, 900],
+  yellow: [550, 120, 550, 120, 550, 120, 550, 120, 550, 120, 550],
+  red: [330, 80, 330, 80, 330, 80, 330, 80, 330, 80, 330, 80, 330, 80, 330, 80, 330, 80, 330],
 };
 
 /** Vibrates the device with the bracket's pattern. Silent no-op where the
