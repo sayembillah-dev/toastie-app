@@ -98,6 +98,11 @@ export function MeetingFeatureGrid({ tabs, progress }: MeetingFeatureGridProps) 
         placement="right"
         size="100%"
         destroyOnHidden={false}
+        /* Any sheet opened from inside a pane (speaker details, QR share,
+         * timer's add-speaker) unconditionally tells its parent drawer to
+         * push — rc-drawer only honors `push` on the drawer being pushed.
+         * distance: 0 here keeps this full-screen drawer still. */
+        push={false}
         title={
           displayTab ? (
             <span className="inline-flex items-center gap-2">
@@ -106,6 +111,7 @@ export function MeetingFeatureGrid({ tabs, progress }: MeetingFeatureGridProps) 
             </span>
           ) : null
         }
+        extra={displayTab?.headerExtra}
         styles={{
           body: { padding: 16, paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' },
         }}

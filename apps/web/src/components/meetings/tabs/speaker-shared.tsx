@@ -288,9 +288,10 @@ export function EvaluationQrModal({
 }
 
 /** The mobile chrome around `EvaluationQrBody` — a bottom sheet, matching
- * the details sheet it usually sits on top of. `push={false}` because this
- * renders inside the meeting's right-hand feature drawer, and antd's default
- * nested-drawer push would shove that parent sideways. */
+ * the details sheet it usually sits on top of. `push={false}` so any sheet
+ * nested inside this one can't shove it sideways; stopping THIS sheet from
+ * pushing its parents is the parents' own `push={false}` (rc-drawer reads
+ * the push config from the drawer being pushed, not the one opening). */
 export function EvaluationQrSheet({
   open,
   onClose,

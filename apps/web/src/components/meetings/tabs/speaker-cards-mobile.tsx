@@ -252,9 +252,9 @@ export function SpeakerListMobile({
       {/* One sheet for the whole list — the form's state is all server-side
        * (blur-commit writes through), so `destroyOnHidden` is safe and keeps
        * the DOM clean between opens. `key` remounts the form per speaker.
-       * `push={false}`: this renders inside the meeting's feature drawer,
-       * and antd's default nested-drawer push would shove that parent
-       * sideways when this sheet opens. */}
+       * `push={false}`: opening this sheet makes rc-drawer tell the parent
+       * feature drawer to push — the parent's own `push={false}` is what
+       * stops that; this only guards against sheets nested inside this one. */}
       <Drawer
         open={openSpeaker !== null}
         onClose={() => setOpenId(null)}

@@ -26,6 +26,7 @@ import { GrammarianTab } from '@/components/meetings/tabs/grammarian-tab';
 import { OverviewTab } from '@/components/meetings/tabs/overview-tab';
 import { PreparedSpeakersTab } from '@/components/meetings/tabs/prepared-speakers-tab';
 import { RolesTab } from '@/components/meetings/tabs/roles-tab';
+import { ShareRoleButton } from '@/components/meetings/tabs/share-role-button';
 import { TableTopicsTab } from '@/components/meetings/tabs/table-topics-tab';
 import { ThemeTab } from '@/components/meetings/tabs/theme-tab';
 import { TimerTab } from '@/components/meetings/tabs/timer-tab';
@@ -63,6 +64,10 @@ export interface TabDef {
   label: string;
   Icon: React.ComponentType<{ size?: number; weight?: 'regular' | 'bold' | 'fill' }>;
   content: React.ReactNode;
+  /** Rendered on the right of the mobile feature drawer's header (antd
+   * Drawer's `extra`). Desktop tabs ignore it — their panes carry their own
+   * action rows. */
+  headerExtra?: React.ReactNode;
 }
 
 /* Tabs are built per meeting so sections that depend on meeting data (e.g.
@@ -112,6 +117,14 @@ function buildTabs(meeting: Meeting): TabDef[] {
       label: 'Timer',
       Icon: Timer,
       content: <TimerTab meetingId={meeting.id} />,
+      headerExtra: (
+        <ShareRoleButton
+          meetingId={meeting.id}
+          kind="timer"
+          roleLabel="Timer"
+          ariaLabel="Share Timer role"
+        />
+      ),
     },
     {
       key: 'ah-counter',

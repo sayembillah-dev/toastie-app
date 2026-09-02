@@ -1,21 +1,19 @@
 'use client';
 
-import {
-  ArrowCounterClockwise,
-  ClipboardText,
-  DotsThreeVertical,
-  PencilSimple,
-  Play,
-  Stop,
-  TrashSimple,
-  X,
-} from '@phosphor-icons/react/dist/ssr';
-import type { InputRef } from 'antd';
-import { Button, Dropdown, Input, Select, Tabs } from 'antd';
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { ClipboardText, Play, X } from '@phosphor-icons/react/dist/ssr';
+import { Button, Select } from 'antd';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 
 import { AssigneeSelect } from '@/components/education/assignee-select';
 import { ShareRoleButton } from '@/components/meetings/tabs/share-role-button';
+import {
+  assigneeToDraft,
+  bracketFromDuration,
+  computeElapsed,
+  SpeakerListRow,
+  TimerCard,
+} from '@/components/meetings/tabs/timer-shared';
+import { SpeakerViewMobile } from '@/components/meetings/tabs/timer-speakers-mobile';
 import type { Member } from '@/lib/education/members';
 import type { Assignee } from '@/lib/education/planner';
 import {
@@ -23,7 +21,6 @@ import {
   fromPublicAgendaSpeakerSources,
 } from '@/lib/meetings/agenda-speaker-sources';
 import {
-  type Bracket,
   parseRoleState,
   readRoleStateRaw,
   subscribeToRoleState,
@@ -34,7 +31,7 @@ import {
 } from '@/lib/meetings/role-state';
 import { useRoleStateSync } from '@/lib/meetings/role-state-sync';
 import type { Guest } from '@/lib/people/guests';
-import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
+import { useIsMobile } from '@/lib/ui/use-is-mobile';
 import {
   useGetGuestsQuery,
   useGetMeetingRolesQuery,
@@ -42,216 +39,6 @@ import {
   useGetPreparedSpeakersQuery,
   useGetPublicAgendaSpeakerSourcesQuery,
 } from '@/store/api';
-
-const TYPE_BRACKETS: Record<TimerSpeakerType, Bracket> = {
-  'Prepared Speaker': { green: 5 * 60, yellow: 6 * 60, red: 7 * 60 },
-  'Ice Breaker': { green: 4 * 60, yellow: 5 * 60, red: 6 * 60 },
-  'Table Topic': { green: 60, yellow: 90, red: 2 * 60 },
-  'Speech Evaluator': { green: 2 * 60, yellow: 150, red: 3 * 60 },
-  'TT Evaluator': { green: 2 * 60, yellow: 150, red: 3 * 60 },
-  'General Evaluator': { green: 5 * 60, yellow: 6 * 60, red: 7 * 60 },
-};
-
-/** A prepared speaker's own bracket, once "Take from agenda" derives it from
- * the project's timed range — green/red at the bounds, yellow at the
- * midpoint, matching the proportions of the hardcoded defaults above. */
-function bracketFromDuration(bounds: { min: number; max: number }): Bracket {
-  const green = bounds.min * 60;
-  const red = bounds.max * 60;
-  return { green, yellow: Math.round((green + red) / 2), red };
-}
-
-/** Resolves an `AssigneeSelect` pick into the speaker draft this tab stores —
- * a member arrives with only its id, so the display name is looked up here;
- * a guest already carries its own resolved name. */
-function assigneeToDraft(
-  assignee: Assignee,
-  members: Member[],
-): { memberId?: string; guestId?: string; name: string } {
-  if (assignee.kind === 'member') {
-    const member = members.find((m) => m.id === assignee.memberId);
-    return {
-      memberId: assignee.memberId,
-      name: member ? `${member.firstName} ${member.lastName}` : 'Unknown member',
-    };
-  }
-  return { guestId: assignee.guestId, name: assignee.name };
-}
-
-function formatTime(seconds: number): string {
-  const total = Math.max(0, Math.floor(seconds));
-  const mm = Math.floor(total / 60);
-  const ss = total % 60;
-  return `${mm.toString().padStart(2, '0')}:${ss.toString().padStart(2, '0')}`;
-}
-
-function formatShortTime(seconds: number): string {
-  const total = Math.max(0, Math.floor(seconds));
-  const mm = Math.floor(total / 60);
-  const ss = total % 60;
-  return `${mm}:${ss.toString().padStart(2, '0')}`;
-}
-
-type TimingResult = 'Under time' | 'In time' | 'Over time';
-
-function classifyResult(elapsed: number, brackets: Bracket): TimingResult {
-  if (elapsed < brackets.green) return 'Under time';
-  if (elapsed <= brackets.red + 30) return 'In time';
-  return 'Over time';
-}
-
-type BracketColor = 'default' | 'green' | 'yellow' | 'red';
-
-function currentBracketColor(elapsed: number, brackets: Bracket): BracketColor {
-  if (elapsed >= brackets.red) return 'red';
-  if (elapsed >= brackets.yellow) return 'yellow';
-  if (elapsed >= brackets.green) return 'green';
-  return 'default';
-}
-
-function computeElapsed(speaker: TimerSpeaker, now: number): number {
-  if (speaker.status === 'running' && speaker.startedAt !== undefined) {
-    return speaker.elapsed + Math.max(0, (now - speaker.startedAt) / 1000);
-  }
-  return speaker.elapsed;
-}
-
-interface BracketCardProps {
-  label: string;
-  seconds: number;
-  color: 'green' | 'yellow' | 'red';
-  active: boolean;
-}
-
-function BracketCard({ label, seconds, color, active }: BracketCardProps) {
-  const styles = {
-    green: {
-      bg: 'bg-emerald-50',
-      border: 'border-emerald-100',
-      text: 'text-emerald-700',
-      ring: 'ring-emerald-400',
-    },
-    yellow: {
-      bg: 'bg-amber-50',
-      border: 'border-amber-100',
-      text: 'text-amber-700',
-      ring: 'ring-amber-400',
-    },
-    red: {
-      bg: 'bg-red-50',
-      border: 'border-red-100',
-      text: 'text-red-700',
-      ring: 'ring-red-400',
-    },
-  }[color];
-
-  return (
-    <div
-      className={`rounded-xl border py-2.5 text-center transition-shadow ${styles.bg} ${styles.border} ${
-        active ? `ring-2 ${styles.ring}` : ''
-      }`}
-    >
-      <div className={`text-[10px] font-semibold uppercase tracking-widest ${styles.text}`}>
-        {label}
-      </div>
-      <div className={`mt-0.5 font-mono text-base font-semibold tabular-nums ${styles.text}`}>
-        {formatShortTime(seconds)}
-      </div>
-    </div>
-  );
-}
-
-interface TimerCardProps {
-  speaker: TimerSpeaker;
-  elapsed: number;
-  onStart: () => void;
-  onStop: () => void;
-  onReset: () => void;
-}
-
-function TimerCard({ speaker, elapsed, onStart, onStop, onReset }: TimerCardProps) {
-  const brackets = speaker.brackets ?? TYPE_BRACKETS[speaker.type];
-  const bracketColor = currentBracketColor(elapsed, brackets);
-  const running = speaker.status === 'running';
-
-  const timerColorClass =
-    bracketColor === 'red'
-      ? 'text-red-600'
-      : bracketColor === 'yellow'
-        ? 'text-amber-500'
-        : bracketColor === 'green'
-          ? 'text-emerald-600'
-          : 'text-ink';
-
-  return (
-    <article className="rounded-2xl border border-line bg-canvas p-4 sm:p-6">
-      <div className="mb-4">
-        <span className="inline-flex items-center rounded-full bg-fill px-2.5 py-1 text-[10px] font-semibold uppercase tracking-widest text-ink-muted">
-          {speaker.type}
-        </span>
-        <h3 className="mt-2 text-lg font-semibold text-ink">{speaker.name}</h3>
-      </div>
-
-      <div
-        className={`text-center font-mono text-7xl font-bold leading-none tabular-nums sm:text-8xl ${timerColorClass}`}
-      >
-        {formatTime(elapsed)}
-      </div>
-
-      <div className="mt-6 grid grid-cols-3 gap-2 sm:gap-3">
-        <BracketCard
-          label="Green"
-          seconds={brackets.green}
-          color="green"
-          active={bracketColor === 'green'}
-        />
-        <BracketCard
-          label="Yellow"
-          seconds={brackets.yellow}
-          color="yellow"
-          active={bracketColor === 'yellow'}
-        />
-        <BracketCard
-          label="Red"
-          seconds={brackets.red}
-          color="red"
-          active={bracketColor === 'red'}
-        />
-      </div>
-
-      <div className="mt-6 flex flex-col gap-3">
-        <Button
-          type="primary"
-          size="large"
-          block
-          icon={<Play size={16} weight="fill" />}
-          onClick={onStart}
-          disabled={running}
-        >
-          Start
-        </Button>
-        <div className="grid grid-cols-2 gap-3">
-          <Button
-            size="large"
-            icon={<Stop size={16} weight="fill" />}
-            onClick={onStop}
-            disabled={!running}
-          >
-            Stop
-          </Button>
-          <Button
-            size="large"
-            icon={<ArrowCounterClockwise size={16} weight="bold" />}
-            onClick={onReset}
-            disabled={elapsed === 0 && speaker.status === 'idle'}
-          >
-            Reset
-          </Button>
-        </div>
-      </div>
-    </article>
-  );
-}
 
 interface AddSpeakerFormProps {
   members: Member[];
@@ -307,125 +94,6 @@ function AddSpeakerForm({ members, guests, onCommit, onCancel }: AddSpeakerFormP
           />
         </div>
       </div>
-    </div>
-  );
-}
-
-interface SpeakerListRowProps {
-  speaker: TimerSpeaker;
-  isActive: boolean;
-  isEditing: boolean;
-  editingName: string;
-  onSelect: () => void;
-  onRename: () => void;
-  onDelete: () => void;
-  onEditingNameChange: (name: string) => void;
-  onSaveRename: () => void;
-  onCancelRename: () => void;
-}
-
-function SpeakerListRow({
-  speaker,
-  isActive,
-  isEditing,
-  editingName,
-  onSelect,
-  onRename,
-  onDelete,
-  onEditingNameChange,
-  onSaveRename,
-  onCancelRename,
-}: SpeakerListRowProps) {
-  const editRef = useRef<InputRef>(null);
-  const doneTime = speaker.status === 'done' ? formatShortTime(speaker.elapsed) : null;
-
-  useEffect(() => {
-    if (isEditing) editRef.current?.focus({ cursor: 'end' });
-  }, [isEditing]);
-
-  return (
-    <div
-      className={`flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors ${
-        isActive ? 'border-line-strong bg-fill' : 'border-line bg-canvas hover:bg-fill/60'
-      }`}
-    >
-      {isEditing ? (
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <Input
-            ref={editRef}
-            size="middle"
-            value={editingName}
-            onChange={(event) => onEditingNameChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                onSaveRename();
-              } else if (event.key === 'Escape') {
-                event.preventDefault();
-                onCancelRename();
-              }
-            }}
-            maxLength={80}
-          />
-          <Button size="small" onClick={onCancelRename}>
-            Cancel
-          </Button>
-          <Button
-            size="small"
-            type="primary"
-            onClick={onSaveRename}
-            disabled={editingName.trim().length === 0}
-          >
-            Save
-          </Button>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={onSelect}
-          aria-current={isActive ? 'true' : undefined}
-          className="min-w-0 flex-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
-        >
-          <div className="truncate text-sm font-semibold text-ink">{speaker.name}</div>
-          <div className="text-xs text-ink-muted">{speaker.type}</div>
-        </button>
-      )}
-
-      {!isEditing && doneTime ? (
-        <div className="shrink-0 text-right">
-          <div className="font-mono text-sm font-semibold tabular-nums text-ink">{doneTime}</div>
-          <div className="text-[11px] text-ink-muted">Done</div>
-        </div>
-      ) : null}
-
-      {!isEditing ? (
-        <Dropdown
-          trigger={['click']}
-          menu={{
-            items: [
-              { key: 'rename', icon: <PencilSimple size={14} />, label: 'Rename' },
-              {
-                key: 'delete',
-                icon: <TrashSimple size={14} />,
-                label: 'Delete',
-                danger: true,
-              },
-            ],
-            onClick: ({ key }) => {
-              if (key === 'rename') onRename();
-              else if (key === 'delete') onDelete();
-            },
-          }}
-        >
-          <button
-            type="button"
-            aria-label={`More options for ${speaker.name}`}
-            className="flex size-8 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-fill focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
-          >
-            <DotsThreeVertical size={18} weight="bold" />
-          </button>
-        </Dropdown>
-      ) : null}
     </div>
   );
 }
@@ -557,67 +225,6 @@ function SpeakerView({
   );
 }
 
-const RESULT_COLORS: Record<TimingResult, string> = {
-  'Under time': 'text-red-600',
-  'In time': 'text-emerald-700',
-  'Over time': 'text-red-600',
-};
-
-function ReportView({ speakers }: { speakers: TimerSpeaker[] }) {
-  const done = speakers.filter((speaker) => speaker.status === 'done');
-
-  if (done.length === 0) {
-    return (
-      <div className="rounded-xl border border-dashed border-line-strong px-6 py-10 text-center">
-        <p className="text-sm font-medium text-ink">No results yet</p>
-        <p className="mt-1 text-xs text-ink-muted">
-          Timing a speaker to completion adds them here.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="overflow-hidden rounded-2xl border border-line bg-canvas">
-      <div className="border-b border-line px-4 py-3">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-muted">
-          Session Report
-        </span>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[520px] text-sm">
-          <thead>
-            <tr className="border-b border-line text-xs font-medium text-ink-muted">
-              <th className="sticky left-0 z-10 bg-canvas px-4 py-3 text-left">Speaker</th>
-              <th className="px-4 py-3 text-left">Type</th>
-              <th className="px-4 py-3 text-right">Time</th>
-              <th className="px-4 py-3 text-right">Result</th>
-            </tr>
-          </thead>
-          <tbody>
-            {done.map((speaker) => {
-              const brackets = speaker.brackets ?? TYPE_BRACKETS[speaker.type];
-              const result = classifyResult(speaker.elapsed, brackets);
-              return (
-                <tr key={speaker.id} className="border-b border-line last:border-b-0">
-                  <td className="sticky left-0 z-10 bg-canvas px-4 py-3 font-medium text-ink">
-                    {speaker.name}
-                  </td>
-                  <td className="px-4 py-3 text-ink-soft">{speaker.type}</td>
-                  <td className="px-4 py-3 text-right font-mono font-semibold tabular-nums text-ink">
-                    {formatShortTime(speaker.elapsed)}
-                  </td>
-                  <td className={`px-4 py-3 text-right ${RESULT_COLORS[result]}`}>{result}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
 interface TimerViewProps {
   meetingId: string;
   showShare: boolean;
@@ -643,7 +250,7 @@ export function TimerView({ meetingId, showShare, token = '' }: TimerViewProps) 
     { meetingId, token },
     { skip: showShare || !meetingId || !token },
   );
-  const { activeKey, onChange } = usePersistentTab('timer-view', 'speaker');
+  const isMobile = useIsMobile();
 
   const subscribe = useCallback(
     (notify: () => void) => subscribeToRoleState('timer', meetingId, notify),
@@ -662,14 +269,16 @@ export function TimerView({ meetingId, showShare, token = '' }: TimerViewProps) 
   const [editingName, setEditingName] = useState('');
   const [now, setNow] = useState(0);
 
-  const activeSpeaker = speakers.find((speaker) => speaker.id === activeId) ?? null;
-  const isRunning = activeSpeaker?.status === 'running';
+  /* Tick while ANY speaker is running, not just the selected one — starting
+   * a clock and then selecting another row leaves the first speaker running
+   * in the background, and the mobile list rows show live elapsed time. */
+  const anyRunning = speakers.some((speaker) => speaker.status === 'running');
 
   useEffect(() => {
-    if (!isRunning) return;
+    if (!anyRunning) return;
     const interval = window.setInterval(() => setNow(Date.now()), 250);
     return () => window.clearInterval(interval);
-  }, [isRunning, activeId]);
+  }, [anyRunning, activeId]);
 
   function handleAdd(draft: {
     memberId?: string;
@@ -877,48 +486,61 @@ export function TimerView({ meetingId, showShare, token = '' }: TimerViewProps) 
 
   return (
     <section className="mx-auto max-w-4xl">
-      <Tabs
-        activeKey={activeKey}
-        onChange={onChange}
-        size="middle"
-        items={[
-          {
-            key: 'speaker',
-            label: 'Speaker',
-            children: (
-              <SpeakerView
-                speakers={speakers}
-                activeId={activeId}
-                now={now}
-                members={members ?? []}
-                guests={guests ?? []}
-                adding={adding}
-                editingId={editingId}
-                editingName={editingName}
-                onStartAdd={() => setAdding(true)}
-                onCancelAdd={() => setAdding(false)}
-                onAdd={handleAdd}
-                onSelect={handleSelect}
-                onRename={handleRename}
-                onDelete={handleDelete}
-                onEditingNameChange={setEditingName}
-                onSaveRename={handleSaveRename}
-                onCancelRename={handleCancelRename}
-                onStart={handleStart}
-                onStop={handleStop}
-                onReset={handleReset}
-                onTakeFromAgenda={handleTakeFromAgenda}
-                shareSlot={shareSlot}
-              />
-            ),
-          },
-          {
-            key: 'report',
-            label: 'Report',
-            children: <ReportView speakers={speakers} />,
-          },
-        ]}
-      />
+      {/* Breakpoint not resolved yet (server / first client frame) — show a
+       * placeholder rather than guessing a layout. */}
+      {isMobile === null ? (
+        <div className="flex flex-col gap-3" aria-hidden="true">
+          <div className="h-9 animate-pulse rounded-xl bg-fill" />
+          <div className="h-72 animate-pulse rounded-2xl bg-fill" />
+          <div className="h-14 animate-pulse rounded-xl bg-fill" />
+        </div>
+      ) : isMobile ? (
+        <SpeakerViewMobile
+          speakers={speakers}
+          activeId={activeId}
+          now={now}
+          members={members ?? []}
+          guests={guests ?? []}
+          editingId={editingId}
+          editingName={editingName}
+          onAdd={handleAdd}
+          onSelect={handleSelect}
+          onRename={handleRename}
+          onDelete={handleDelete}
+          onEditingNameChange={setEditingName}
+          onSaveRename={handleSaveRename}
+          onCancelRename={handleCancelRename}
+          onStart={handleStart}
+          onStop={handleStop}
+          onReset={handleReset}
+          onTakeFromAgenda={handleTakeFromAgenda}
+        />
+      ) : (
+        <SpeakerView
+          speakers={speakers}
+          activeId={activeId}
+          now={now}
+          members={members ?? []}
+          guests={guests ?? []}
+          adding={adding}
+          editingId={editingId}
+          editingName={editingName}
+          onStartAdd={() => setAdding(true)}
+          onCancelAdd={() => setAdding(false)}
+          onAdd={handleAdd}
+          onSelect={handleSelect}
+          onRename={handleRename}
+          onDelete={handleDelete}
+          onEditingNameChange={setEditingName}
+          onSaveRename={handleSaveRename}
+          onCancelRename={handleCancelRename}
+          onStart={handleStart}
+          onStop={handleStop}
+          onReset={handleReset}
+          onTakeFromAgenda={handleTakeFromAgenda}
+          shareSlot={shareSlot}
+        />
+      )}
     </section>
   );
 }
