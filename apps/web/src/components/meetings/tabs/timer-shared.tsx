@@ -227,6 +227,10 @@ export interface SpeakerListRowProps {
    * row shows its elapsed time ticking. Desktop omits it: its TimerCard is
    * always on screen, so a second clock in the row would be noise. */
   now?: number;
+  /** Subtle background tint identifying the speaker-type group — the mobile
+   * list groups by type without headers, so color does the grouping.
+   * Desktop omits it (flat white rows). */
+  tintClass?: string;
   onSelect: () => void;
   onRename: () => void;
   onDelete: () => void;
@@ -241,6 +245,7 @@ export function SpeakerListRow({
   isEditing,
   editingName,
   now,
+  tintClass,
   onSelect,
   onRename,
   onDelete,
@@ -262,7 +267,9 @@ export function SpeakerListRow({
   return (
     <div
       className={`flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors ${
-        isActive ? 'border-line-strong bg-fill' : 'border-line bg-canvas hover:bg-fill/60'
+        isActive
+          ? 'border-line-strong bg-fill'
+          : `border-line ${tintClass ?? 'bg-canvas'} hover:bg-fill/60`
       }`}
     >
       {isEditing ? (

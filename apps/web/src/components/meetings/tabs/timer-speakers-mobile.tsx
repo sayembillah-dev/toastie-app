@@ -147,6 +147,20 @@ export interface SpeakerViewMobileProps {
   onTakeFromAgenda?: () => void;
 }
 
+/** Subtle per-type card tints — the mobile list groups speakers by type
+ * without headers, so background color does the grouping. Prepared Speaker
+ * stays on plain canvas: it's the most common type, and the calmest list is
+ * one where the majority looks default. Tints are 50-level pastels, matching
+ * the bracket cards on TimerCard. */
+const TYPE_TINTS: Record<TimerSpeakerType, string> = {
+  'Prepared Speaker': 'bg-canvas',
+  'Ice Breaker': 'bg-sky-50',
+  'Table Topic': 'bg-amber-50',
+  'Speech Evaluator': 'bg-emerald-50',
+  'TT Evaluator': 'bg-violet-50',
+  'General Evaluator': 'bg-rose-50',
+};
+
 /** Mobile face of the Timer's Speaker pane — the speaker list stays front
  * and center; tapping a row opens its clock (the shared TimerCard) in a
  * bottom sheet, and adding a speaker moves to a floating action button
@@ -180,6 +194,12 @@ export function SpeakerViewMobile({
    * (role state, so desktop/public stay in sync) and opens the sheet. */
   const [timerOpen, setTimerOpen] = useState(false);
   const active = speakers.find((speaker) => speaker.id === activeId) ?? null;
+  /* Group by speaker type at render time — role state keeps its own order;
+   * this is presentation only. `sort` is stable, so speakers of one type
+   * keep their insertion order. */
+  const sorted = [...speakers].sort(
+    (a, b) => TIMER_SPEAKER_TYPES.indexOf(a.type) - TIMER_SPEAKER_TYPES.indexOf(b.type),
+  );
   const elapsed = active ? computeElapsed(active, now) : 0;
 
   function handleSelect(id: string) {
@@ -198,7 +218,7 @@ export function SpeakerViewMobile({
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {speakers.map((speaker) => (
+          {sorted.map((speaker) => (
             <SpeakerListRow
               key={speaker.id}
               speaker={speaker}
@@ -206,6 +226,7 @@ export function SpeakerViewMobile({
               isEditing={speaker.id === editingId}
               editingName={editingName}
               now={now}
+              tintClass={TYPE_TINTS[speaker.type]}
               onSelect={() => handleSelect(speaker.id)}
               onRename={() => onRename(speaker.id)}
               onDelete={() => onDelete(speaker.id)}
