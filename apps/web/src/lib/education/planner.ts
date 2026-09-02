@@ -26,7 +26,8 @@ export type AssigneeField =
   | 'generalEvaluator'
   | 'timer'
   | 'ahCounter'
-  | 'grammarian';
+  | 'grammarian'
+  | 'harkmaster';
 
 /** Drives the wire (un)packing below — every assignee field, in no
  * particular order. */
@@ -46,6 +47,7 @@ const ASSIGNEE_FIELDS: AssigneeField[] = [
   'timer',
   'ahCounter',
   'grammarian',
+  'harkmaster',
 ];
 
 export interface PlannerRow {
@@ -71,6 +73,7 @@ export interface PlannerRow {
   timer: Assignee | null;
   ahCounter: Assignee | null;
   grammarian: Assignee | null;
+  harkmaster: Assignee | null;
   theme: string;
   notes: string;
   /** Set once "Create meeting" succeeds — the join the grid uses to shade a
@@ -98,6 +101,7 @@ export function createEmptyRow(id: string, meetingNumber: number | null = null):
     timer: null,
     ahCounter: null,
     grammarian: null,
+    harkmaster: null,
     theme: '',
     notes: '',
     meetingId: null,
@@ -105,7 +109,7 @@ export function createEmptyRow(id: string, meetingNumber: number | null = null):
 }
 
 /** Wire shape from `GET/POST/PATCH /planner-rows` — `assignees` travels as
- * one JSON blob rather than 15 columns; `fromPlannerRowWire` unpacks it into
+ * one JSON blob rather than 16 columns; `fromPlannerRowWire` unpacks it into
  * the flat shape every component already works with. */
 export interface PlannerRowWire {
   id: string;
@@ -149,7 +153,7 @@ export function fromPlannerRowWire(wire: PlannerRowWire): PlannerRow {
   return row;
 }
 
-/** Packs the row's 15 assignee fields into the JSON shape the API stores. */
+/** Packs the row's 16 assignee fields into the JSON shape the API stores. */
 export function toAssigneesJson(row: PlannerRow): Partial<Record<AssigneeField, Assignee | null>> {
   const out: Partial<Record<AssigneeField, Assignee | null>> = {};
   for (const field of ASSIGNEE_FIELDS) out[field] = row[field];

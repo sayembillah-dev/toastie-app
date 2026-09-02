@@ -41,11 +41,11 @@ export function buildRoles(meeting: Meeting): RoleDef[] {
     { key: 'timer', label: 'Timer' },
     { key: 'grammarian', label: 'Grammarian' },
     {
-      key: 'hakmaster',
-      label: 'Hakmaster',
+      key: 'harkmaster',
+      label: 'Harkmaster',
       optional: true,
       description:
-        'The Hakmaster listens carefully to the whole meeting and writes questions as it goes. At the end of the meeting they ask those questions to the audience — to find out who was listening most attentively.',
+        'The Harkmaster listens carefully to the whole meeting and writes questions as it goes. At the end of the meeting they ask those questions to the audience — to find out who was listening most attentively.',
     },
   ];
 }

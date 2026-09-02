@@ -77,6 +77,7 @@ const ROLE_GROUPS: Array<{ title: string; fields: RoleField[] }> = [
       { field: 'timer', label: 'Timer' },
       { field: 'ahCounter', label: 'Ah-counter' },
       { field: 'grammarian', label: 'Grammarian' },
+      { field: 'harkmaster', label: 'Harkmaster' },
     ],
   },
 ];

@@ -88,7 +88,7 @@ function isSpeakerComplete(speaker: DraftSpeaker): boolean {
 }
 
 function buildReadiness(meeting: Meeting, draft: MeetingDraft): Readiness {
-  /* Optional roles (e.g. Hakmaster) are excluded — a meeting is ready without
+  /* Optional roles (e.g. Harkmaster) are excluded — a meeting is ready without
    * them, so an unassigned optional role must never read as a gap. */
   const roles = buildRoles(meeting).filter((role) => !role.optional);
   const unassigned = roles.filter((role) => !draft.roles[role.key]);

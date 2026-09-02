@@ -11,7 +11,7 @@ export const MEETING_ROLES = [
   'Ah Counter',
   'Timer',
   'Sergeant at Arms',
-  'Hakmaster',
+  'Harkmaster',
 ] as const;
 
 export type MeetingRole = (typeof MEETING_ROLES)[number];

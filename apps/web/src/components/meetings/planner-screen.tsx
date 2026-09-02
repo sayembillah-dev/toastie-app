@@ -74,6 +74,7 @@ const GROUPED_ASSIGNEE_COLUMNS: AssigneeCol[] = [
   { field: 'timer', label: 'Timer', minWidth: 170, tint: 'slate' },
   { field: 'ahCounter', label: 'Ah-counter', minWidth: 170, tint: 'slate' },
   { field: 'grammarian', label: 'Grammarian', minWidth: 200, tint: 'slate' },
+  { field: 'harkmaster', label: 'Harkmaster', minWidth: 200, tint: 'slate' },
 ];
 
 const ALL_ASSIGNEE_COLUMNS: AssigneeCol[] = [TMOD_COLUMN, ...GROUPED_ASSIGNEE_COLUMNS];

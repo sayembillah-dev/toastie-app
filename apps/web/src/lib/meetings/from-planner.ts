@@ -17,6 +17,7 @@ export const ROLE_BY_FIELD: Array<[keyof PlannerRow, string]> = [
   ['timer', 'timer'],
   ['ahCounter', 'ah-counter'],
   ['grammarian', 'grammarian'],
+  ['harkmaster', 'harkmaster'],
 ];
 
 /** The four speaker/evaluator pairs, in agenda order. */
