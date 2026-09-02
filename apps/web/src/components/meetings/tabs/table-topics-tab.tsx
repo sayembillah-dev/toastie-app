@@ -267,7 +267,10 @@ export function TableTopicsTab({ meetingId }: TableTopicsTabProps) {
 
   return (
     <section className="mx-auto max-w-3xl">
-      <div className="rounded-2xl border border-line bg-canvas p-4 sm:p-6">
+      {/* Panel chrome (border/surface/padding) starts at `md` — on phones
+       * this renders inside the full-width drawer, which already provides
+       * both. */}
+      <div className="md:rounded-2xl md:border md:border-line md:bg-canvas md:p-6">
         <header className="mb-4 flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-ink">Table Topic Questions</h2>

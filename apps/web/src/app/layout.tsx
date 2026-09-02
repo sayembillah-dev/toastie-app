@@ -42,7 +42,11 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className="min-h-screen antialiased">
+      {/* suppressHydrationWarning: browser extensions (e.g. ColorZilla's
+       * cz-shortcut-listen) mutate <body> before hydration; the mismatch is
+       * attribute-only and one level deep, which is exactly what this
+       * silences — real tree mismatches still warn. */}
+      <body className="min-h-screen antialiased" suppressHydrationWarning>
         <StoreProvider>
           <AntdProvider>{children}</AntdProvider>
         </StoreProvider>

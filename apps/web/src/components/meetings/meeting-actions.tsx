@@ -22,9 +22,10 @@ interface MeetingActionsProps {
   meeting: Meeting;
 }
 
-/**
- * The meeting's commit bar, sitting above the tabs so it is reachable from
- * whichever one you happen to be on.
+/** Everything the meeting's commit actions do — status writes that carry the
+ * Theme tab's working theme/word along, the public agenda link, and delete —
+ * extracted so the desktop commit bar and the mobile action strip share one
+ * implementation and can never drift on behavior.
  *
  * "Save as Draft" keeps the meeting off the club view while the run of show is
  * still being assembled; "Publish" makes it the version the club sees. Both are
@@ -32,7 +33,7 @@ interface MeetingActionsProps {
  * working theme back onto the meeting record — that is the one piece of the
  * draft the record itself owns, and it is what the roster card shows.
  */
-export function MeetingActions({ meeting }: MeetingActionsProps) {
+export function useMeetingActions(meeting: Meeting) {
   const draft = useAppSelector((state) => selectMeetingDraft(state, meeting.id));
   /* Which button is mid-flight — both share one mutation, so a single
    * `isLoading` could not say which spinner to show. */
@@ -93,7 +94,7 @@ export function MeetingActions({ meeting }: MeetingActionsProps) {
   /* No share token on this link — once published, the agenda is meant for
    * anyone with the meeting id, the same way the club roster page itself
    * has no token. */
-  async function handleCopyAgendaLink() {
+  async function copyAgendaLink() {
     const origin = typeof window !== 'undefined' && window.location ? window.location.origin : '';
     const url = `${origin}/meetings/${meeting.id}/agenda`;
     try {
@@ -133,6 +134,16 @@ export function MeetingActions({ meeting }: MeetingActionsProps) {
       },
     });
   };
+
+  return { isPublished, pending, isDeleting, commit, copyAgendaLink, confirmDelete };
+}
+
+/** The meeting's commit bar, sitting above the tabs so it is reachable from
+ * whichever one you happen to be on. Desktop-only — phones mount
+ * `MeetingActionsMobile` instead; both speak through `useMeetingActions`. */
+export function MeetingActions({ meeting }: MeetingActionsProps) {
+  const { isPublished, pending, isDeleting, commit, copyAgendaLink, confirmDelete } =
+    useMeetingActions(meeting);
 
   return (
     <div className="print-hidden mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-canvas px-4 py-3">
@@ -190,7 +201,7 @@ export function MeetingActions({ meeting }: MeetingActionsProps) {
             size="middle"
             icon={<LinkIcon size={14} weight="bold" />}
             onClick={() => {
-              void handleCopyAgendaLink();
+              void copyAgendaLink();
             }}
           >
             Copy public agenda link

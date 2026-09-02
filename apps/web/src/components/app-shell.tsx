@@ -539,7 +539,19 @@ export function AppShell({ children, actions, notificationCount = 0 }: AppShellP
             />
             <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-line-strong" />
 
-            <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1 text-sm">
+            {/* Mobile shows only the current page as a plain title — the
+             * trail truncates to noise on a narrow header, and the back
+             * arrow beside it already covers the "up" step the parent crumb
+             * would offer. Not a link: it points at the page you're on.
+             * Desktop keeps the full interactive trail below. */}
+            <span className="min-w-0 truncate text-sm font-medium text-ink md:hidden">
+              {trail[trail.length - 1]?.title}
+            </span>
+
+            <nav
+              aria-label="Breadcrumb"
+              className="hidden min-w-0 items-center gap-1 text-sm md:flex"
+            >
               {trail.map((crumb, index) => {
                 const isLast = index === trail.length - 1;
                 return (

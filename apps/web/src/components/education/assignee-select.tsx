@@ -1,17 +1,18 @@
 'use client';
 
-import { UserCircle, UserPlus } from '@phosphor-icons/react/dist/ssr';
 import { Select } from 'antd';
 import { useMemo, useState } from 'react';
 
+import { PersonAvatar } from '@/components/ui/person-avatar';
 import type { Member } from '@/lib/education/members';
 import type { Assignee } from '@/lib/education/planner';
-import { getGuestFullName } from '@/lib/people/guests';
+import { getGuestFullName, getGuestInitials } from '@/lib/people/guests';
 
 interface GuestOption {
   id: string;
   firstName: string;
   lastName: string;
+  avatarUrl?: string;
 }
 
 interface AssigneeSelectProps {
@@ -67,7 +68,12 @@ export function AssigneeSelect({
         value: `m:${m.id}`,
         label: (
           <span className="inline-flex items-center gap-1.5">
-            <UserCircle size={12} weight="bold" className="text-ink-muted" />
+            <PersonAvatar
+              src={m.avatarUrl}
+              initials={getGuestInitials(m)}
+              sizeClass="size-5"
+              textClass="text-[9px]"
+            />
             {m.firstName} {m.lastName}
           </span>
         ),
@@ -79,7 +85,12 @@ export function AssigneeSelect({
         value: `gid:${g.id}`,
         label: (
           <span className="inline-flex items-center gap-1.5">
-            <UserPlus size={12} weight="bold" className="text-ink-muted" />
+            <PersonAvatar
+              src={g.avatarUrl}
+              initials={getGuestInitials(g)}
+              sizeClass="size-5"
+              textClass="text-[9px]"
+            />
             {g.firstName} {g.lastName}
           </span>
         ),
@@ -91,12 +102,7 @@ export function AssigneeSelect({
     if (allowFreeformGuest && trimmed && guestOptions.length === 0) {
       guestOptions.push({
         value: `g:${trimmed}`,
-        label: (
-          <span className="inline-flex items-center gap-1.5">
-            <UserPlus size={12} weight="bold" className="text-ink-muted" />
-            Add <span className="font-medium">&ldquo;{trimmed}&rdquo;</span> as guest
-          </span>
-        ),
+        label: <span className="text-ink-soft">Add &ldquo;{trimmed}&rdquo; as guest</span>,
       });
     }
 
@@ -112,7 +118,13 @@ export function AssigneeSelect({
           value: currentKey,
           label: (
             <span className="inline-flex items-center gap-1.5">
-              <UserPlus size={12} weight="bold" className="text-ink-muted" />
+              {/* Name-only guest — there is no roster row to hang a photo on,
+               * so initials are all we can ever show here. */}
+              <PersonAvatar
+                initials={value.name.charAt(0).toUpperCase()}
+                sizeClass="size-5"
+                textClass="text-[9px]"
+              />
               {value.name}
               <span className="text-[10px] uppercase tracking-wide text-ink-muted">Guest</span>
             </span>

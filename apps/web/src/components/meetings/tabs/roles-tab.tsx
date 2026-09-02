@@ -1,6 +1,6 @@
 'use client';
 
-import { Info, UserCircle } from '@phosphor-icons/react/dist/ssr';
+import { Info } from '@phosphor-icons/react/dist/ssr';
 import { App, Popover } from 'antd';
 import { useMemo } from 'react';
 import { AssigneeSelect } from '@/components/education/assignee-select';
@@ -50,14 +50,11 @@ export function RolesTab({ meeting }: RolesTabProps) {
   }
 
   return (
-    <section className="mx-auto max-w-4xl rounded-2xl border border-line bg-canvas p-5 sm:p-6">
+    /* Panel chrome (border/surface/padding) starts at `md` — on phones this
+     * renders inside the full-width drawer, which already provides both. */
+    <section className="mx-auto max-w-4xl md:rounded-2xl md:border md:border-line md:bg-canvas md:p-6">
       <header className="mb-5">
         <h2 className="text-base font-semibold text-ink">Meeting roles</h2>
-        <p className="mt-1 text-xs text-ink-soft">
-          Assign each meeting role from the club roster or the Guests list. The Toastmaster label
-          follows the meeting time — <span className="font-medium text-ink">Day</span> before 5 PM,{' '}
-          <span className="font-medium text-ink">Evening</span> after.
-        </p>
       </header>
 
       {/* Single column on phones so each picker gets full width; two columns
@@ -72,7 +69,6 @@ export function RolesTab({ meeting }: RolesTabProps) {
                   htmlFor={inputId}
                   className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-ink"
                 >
-                  <UserCircle size={12} weight="bold" className="text-ink-muted" />
                   {role.label}
                   {role.optional ? (
                     <span className="font-normal text-ink-muted">(optional)</span>

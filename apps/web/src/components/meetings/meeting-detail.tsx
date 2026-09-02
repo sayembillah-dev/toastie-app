@@ -15,7 +15,10 @@ import {
 import { Tabs } from 'antd';
 import { notFound, useParams } from 'next/navigation';
 import { useEffect } from 'react';
+import { TARGET_SPEAKERS } from '@/components/meetings/at-a-glance';
 import { MeetingActions } from '@/components/meetings/meeting-actions';
+import { MeetingActionsMobile } from '@/components/meetings/meeting-actions-mobile';
+import { MeetingFeatureGrid } from '@/components/meetings/meeting-feature-grid';
 import { AhCounterTab } from '@/components/meetings/tabs/ah-counter-tab';
 import { AttendanceTab } from '@/components/meetings/tabs/attendance-tab';
 import { ChecklistTab } from '@/components/meetings/tabs/checklist-tab';
@@ -31,18 +34,31 @@ import { AccessGate } from '@/components/permissions/access-gate';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { toDraftSpeakers } from '@/lib/meetings/prepared-speakers';
 import { toRoleHolderMap } from '@/lib/meetings/role-assignments';
+import { buildRoles } from '@/lib/meetings/roles';
+import { useIsMobile } from '@/lib/ui/use-is-mobile';
 import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
 import {
+  useGetAttendanceMembersQuery,
+  useGetChecklistQuery,
   useGetGuestsQuery,
   useGetMeetingQuery,
   useGetMeetingRolesQuery,
+  useGetMembersQuery,
   useGetPreparedSpeakersQuery,
+  useGetTableTopicsQuery,
 } from '@/store/api';
 import { getApiErrorMessage, isNotFoundError } from '@/store/api-error';
-import { useAppDispatch } from '@/store/hooks';
-import { draftHydrated, rolesHydrated, speakersHydrated } from '@/store/meeting-draft-slice';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import {
+  draftHydrated,
+  rolesHydrated,
+  selectMeetingDraft,
+  speakersHydrated,
+} from '@/store/meeting-draft-slice';
 
-interface TabDef {
+/* Exported for the mobile card grid, which renders the same defs as cards
+ * and drawer titles — one source of truth, two presentations. */
+export interface TabDef {
   key: string;
   label: string;
   Icon: React.ComponentType<{ size?: number; weight?: 'regular' | 'bold' | 'fill' }>;
@@ -68,12 +84,6 @@ function buildTabs(meeting: Meeting): TabDef[] {
       content: <ChecklistTab meetingId={meeting.id} />,
     },
     {
-      key: 'theme',
-      label: 'Theme',
-      Icon: Palette,
-      content: <ThemeTab meeting={meeting} />,
-    },
-    {
       key: 'roles',
       label: 'Roles',
       Icon: UsersThree,
@@ -86,22 +96,28 @@ function buildTabs(meeting: Meeting): TabDef[] {
       content: <PreparedSpeakersTab meeting={meeting} />,
     },
     {
+      key: 'theme',
+      label: 'Theme',
+      Icon: Palette,
+      content: <ThemeTab meeting={meeting} />,
+    },
+    {
       key: 'table-topics',
       label: 'Table Topics',
       Icon: Lightbulb,
       content: <TableTopicsTab meetingId={meeting.id} />,
     },
     {
-      key: 'ah-counter',
-      label: 'Ah Counter',
-      Icon: SpeakerHigh,
-      content: <AhCounterTab meetingId={meeting.id} />,
-    },
-    {
       key: 'timer',
       label: 'Timer',
       Icon: Timer,
       content: <TimerTab meetingId={meeting.id} />,
+    },
+    {
+      key: 'ah-counter',
+      label: 'Ah Counter',
+      Icon: SpeakerHigh,
+      content: <AhCounterTab meetingId={meeting.id} />,
     },
     {
       key: 'grammarian',
@@ -124,7 +140,15 @@ function DetailContent({ meeting }: { meeting: Meeting }) {
   const { data: roleRows } = useGetMeetingRolesQuery(meeting.id);
   const { data: speakerRows } = useGetPreparedSpeakersQuery(meeting.id);
   const { data: guests } = useGetGuestsQuery();
-  const { activeKey, onChange } = usePersistentTab('tab', 'overview');
+  const isMobile = useIsMobile();
+  /* The mobile cards' completion rings each read a different slice — these
+   * queries dedupe with the drawer tabs' own through the RTK cache, so they
+   * double as prefetching for the moment a card is tapped. */
+  const draft = useAppSelector((state) => selectMeetingDraft(state, meeting.id));
+  const { data: checklist } = useGetChecklistQuery(meeting.id);
+  const { data: topics } = useGetTableTopicsQuery(meeting.id);
+  const { data: attendanceMembers } = useGetAttendanceMembersQuery(meeting.id);
+  const { data: roster } = useGetMembersQuery();
 
   /* Seed the working draft from the saved record once the meeting lands.
    * Done here rather than inside the Theme tab because Overview's readiness
@@ -160,32 +184,116 @@ function DetailContent({ meeting }: { meeting: Meeting }) {
     );
   }, [dispatch, meeting.id, speakerRows, guests]);
 
+  /* One completion ratio per card — what "done" means is per module by
+   * design. Theme/roles/speakers mirror the At a Glance readiness checks
+   * (optional roles excluded there, so excluded here too); checklist, topics
+   * and attendance track their own rows; the live tools (Ah Counter, Timer,
+   * Grammarian) stay `null` — a bare track ring — because meeting-wide
+   * "done" doesn't exist for work that only happens during the meeting.
+   * `null` while a query is in flight reads the same: no verdict yet. */
+  const cardProgress: Record<string, number | null> = {};
+
+  const themeParts = [draft.theme.trim() || meeting.theme, draft.word.word, draft.word.meaning];
+  const themeRatio = themeParts.filter((part) => part.trim()).length / themeParts.length;
+
+  const requiredRoles = buildRoles(meeting).filter((role) => !role.optional);
+  const rolesRatio =
+    roleRows === undefined || requiredRoles.length === 0
+      ? null
+      : requiredRoles.filter((role) => {
+          const row = roleRows.find((entry) => entry.roleKey === role.key);
+          return Boolean(row?.membershipId || row?.guestId);
+        }).length / requiredRoles.length;
+
+  const speakersRatio =
+    speakerRows === undefined
+      ? null
+      : Math.min(speakerRows.length, TARGET_SPEAKERS) / TARGET_SPEAKERS;
+
+  /* Overview reads as the mean of the setup ratios, the same way the At a
+   * Glance panel averages its checks. */
+  const setupRatios = [themeRatio, rolesRatio, speakersRatio].filter(
+    (ratio): ratio is number => ratio !== null,
+  );
+  cardProgress.overview =
+    setupRatios.length > 0
+      ? setupRatios.reduce((sum, ratio) => sum + ratio, 0) / setupRatios.length
+      : null;
+  cardProgress.theme = themeRatio;
+  cardProgress.roles = rolesRatio;
+  cardProgress['prepared-speakers'] = speakersRatio;
+  cardProgress.checklist =
+    checklist === undefined || checklist.length === 0
+      ? null
+      : checklist.filter((item) => item.done).length / checklist.length;
+  cardProgress['table-topics'] =
+    topics === undefined || topics.length === 0
+      ? null
+      : topics.filter((topic) => topic.asked).length / topics.length;
+  cardProgress.attendance =
+    attendanceMembers === undefined || roster === undefined || roster.length === 0
+      ? null
+      : attendanceMembers.filter((row) => row.present).length / roster.length;
+
   return (
     <div className="mx-auto max-w-6xl">
-      <MeetingActions meeting={meeting} />
+      {/* The commit bar has its own mobile presentation — while the
+       * breakpoint is unknown, hold its height so the grid below doesn't
+       * jump when it resolves. */}
+      {isMobile === null ? (
+        <div
+          className="mb-4 h-15 animate-pulse rounded-2xl border border-line bg-fill"
+          aria-hidden
+        />
+      ) : isMobile ? (
+        <MeetingActionsMobile meeting={meeting} />
+      ) : (
+        <MeetingActions meeting={meeting} />
+      )}
 
-      {/* antd's arrow-scroll controls only cover mouse/keyboard — the nav
-       * strip's own touch handler never calls preventDefault (see
-       * @rc-component/tabs's useTouchMove), so a swipe here falls through to
-       * whatever ancestor is horizontally scrollable. That ancestor is meant
-       * to be nothing: `main` in app-shell.tsx sets `overflow-x-hidden`
-       * precisely so a swipe on this strip has nowhere to leak into. */}
-      <Tabs
-        activeKey={activeKey}
-        onChange={onChange}
-        size="middle"
-        items={tabs.map(({ key, label, Icon, content }) => ({
-          key,
-          label: (
-            <span className="inline-flex items-center gap-1.5">
-              <Icon size={14} weight="bold" />
-              {label}
-            </span>
-          ),
-          children: content,
-        }))}
-      />
+      {/* `null` means the breakpoint has not reported yet (first client
+       * frame) — hold a placeholder rather than guess a form factor and
+       * flash the wrong one. */}
+      {isMobile === null ? (
+        <div className="h-96 animate-pulse rounded-2xl border border-line bg-fill" aria-hidden />
+      ) : isMobile ? (
+        <MeetingFeatureGrid tabs={tabs} progress={cardProgress} />
+      ) : (
+        <DesktopMeetingTabs tabs={tabs} />
+      )}
     </div>
+  );
+}
+
+/** The desktop presentation — the tab strip. Mobile mounts the card grid
+ * instead; the two never coexist, so each owns its `usePersistentTab` call
+ * with its own default (desktop opens on Overview, mobile on the grid with
+ * no drawer), and a `?tab=<key>` link means the same section to both. */
+function DesktopMeetingTabs({ tabs }: { tabs: TabDef[] }) {
+  const { activeKey, onChange } = usePersistentTab('tab', 'overview');
+
+  return (
+    /* antd's arrow-scroll controls only cover mouse/keyboard — the nav
+     * strip's own touch handler never calls preventDefault (see
+     * @rc-component/tabs's useTouchMove), so a swipe here falls through to
+     * whatever ancestor is horizontally scrollable. That ancestor is meant
+     * to be nothing: `main` in app-shell.tsx sets `overflow-x-hidden`
+     * precisely so a swipe on this strip has nowhere to leak into. */
+    <Tabs
+      activeKey={activeKey}
+      onChange={onChange}
+      size="middle"
+      items={tabs.map(({ key, label, Icon, content }) => ({
+        key,
+        label: (
+          <span className="inline-flex items-center gap-1.5">
+            <Icon size={14} weight="bold" />
+            {label}
+          </span>
+        ),
+        children: content,
+      }))}
+    />
   );
 }
 

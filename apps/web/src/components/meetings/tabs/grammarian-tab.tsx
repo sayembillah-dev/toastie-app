@@ -84,7 +84,10 @@ export function GrammarianView({ meetingId, showShare, token = '' }: GrammarianV
 
   return (
     <section className="mx-auto max-w-3xl">
-      <div className="rounded-2xl border border-line bg-canvas p-5 sm:p-6">
+      {/* Panel chrome (border/surface/padding) starts at `md` — on phones
+       * this renders inside the full-width drawer, which already provides
+       * both. */}
+      <div className="md:rounded-2xl md:border md:border-line md:bg-canvas md:p-6">
         <header className="mb-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-ink">Grammarian log</h2>

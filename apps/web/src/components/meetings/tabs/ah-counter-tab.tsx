@@ -352,7 +352,9 @@ function SpeakersView({
   shareSlot,
 }: SpeakersViewProps) {
   return (
-    <div className="rounded-2xl border border-line bg-canvas p-4 sm:p-6">
+    /* Panel chrome (border/surface/padding) starts at `md` — on phones this
+     * renders inside the full-width drawer, which already provides both. */
+    <div className="md:rounded-2xl md:border md:border-line md:bg-canvas md:p-6">
       <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-muted">
           Counts

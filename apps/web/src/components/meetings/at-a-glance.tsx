@@ -34,7 +34,9 @@ import { useMemberOf, useNameOf } from './use-name-of';
 /** What the readiness meter calls a full slate. Meetings can book any number
  * of prepared speakers now — four is simply the point at which the meter
  * stops asking for more, and extra speakers never push it past 100%. */
-const TARGET_SPEAKERS = 4;
+/* Exported so the mobile card grid's Prepared Speakers ring targets the same
+ * lineup size as the readiness panel. */
+export const TARGET_SPEAKERS = 4;
 
 const DATE_FMT = new Intl.DateTimeFormat('en-GB', {
   weekday: 'long',

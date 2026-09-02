@@ -113,7 +113,9 @@ export function ThemeTab({ meeting }: ThemeTabProps) {
   }
 
   return (
-    <section className="mx-auto max-w-2xl rounded-2xl border border-line bg-canvas p-5 sm:p-6">
+    /* Panel chrome (border/surface/padding) starts at `md` — on phones this
+     * renders inside the full-width drawer, which already provides both. */
+    <section className="mx-auto max-w-2xl md:rounded-2xl md:border md:border-line md:bg-canvas md:p-6">
       <div className="mb-5">
         <h2 className="text-base font-semibold text-ink">Theme &amp; Word of the Day</h2>
         <p className="mt-1 text-xs text-ink-soft">
