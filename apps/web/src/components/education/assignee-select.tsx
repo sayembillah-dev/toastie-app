@@ -31,6 +31,12 @@ interface AssigneeSelectProps {
    * meeting's roles/speakers (Roles tab, Prepared Speakers tab) turn this
    * off — the planner grid, which only ever writes to itself, leaves it on. */
   allowFreeformGuest?: boolean;
+  /** Presentation: the planner grid keeps the default borderless/small look
+   * (it sits inside table cells); form surfaces like the speaker editor pass
+   * `variant="outlined" size="large"` so the picker reads as an input next
+   * to the other fields. */
+  variant?: 'outlined' | 'borderless';
+  size?: 'small' | 'middle' | 'large';
 }
 
 /** Serialise the union into a single Select value. `m:` is a member id,
@@ -56,6 +62,8 @@ export function AssigneeSelect({
   placeholder = 'Assign…',
   ariaLabel,
   allowFreeformGuest = true,
+  variant = 'borderless',
+  size = 'small',
 }: AssigneeSelectProps) {
   const [search, setSearch] = useState('');
   const trimmed = search.trim();
@@ -141,8 +149,8 @@ export function AssigneeSelect({
 
   return (
     <Select
-      variant="borderless"
-      size="small"
+      variant={variant}
+      size={size}
       className="planner-assignee-select w-full"
       value={toKey(value)}
       showSearch

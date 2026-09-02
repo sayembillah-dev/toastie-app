@@ -3,13 +3,10 @@
 import { Drawer } from 'antd';
 import { useState } from 'react';
 
+import { ProgressRing } from '@/components/ui/progress-ring';
 import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
 
 import type { TabDef } from './meeting-detail';
-
-/* Ring geometry: 44px chip, 3px arc, gap-free circle. */
-const RING_R = 19;
-const RING_C = 2 * Math.PI * RING_R;
 
 interface IconRingProps {
   Icon: TabDef['Icon'];
@@ -19,37 +16,13 @@ interface IconRingProps {
   ratio: number | null;
 }
 
-/** The card's icon with a completion ring around it — the progress arc grows
- * clockwise from twelve o'clock and turns emerald when the section is done. */
+/** The card's icon with a completion ring around it — the shared
+ * `ProgressRing` provides the arc, this adds the section icon inside. */
 function IconRing({ Icon, ratio }: IconRingProps) {
-  const complete = ratio !== null && ratio >= 1;
   return (
-    <span className="relative flex size-11 items-center justify-center text-ink-soft">
-      <svg viewBox="0 0 44 44" className="absolute inset-0 -rotate-90" aria-hidden="true">
-        <circle
-          cx="22"
-          cy="22"
-          r={RING_R}
-          fill="none"
-          strokeWidth={3}
-          className={ratio === null ? 'stroke-fill' : 'stroke-fill-strong'}
-        />
-        {ratio !== null && ratio > 0 ? (
-          <circle
-            cx="22"
-            cy="22"
-            r={RING_R}
-            fill="none"
-            strokeWidth={3}
-            strokeLinecap="round"
-            strokeDasharray={RING_C}
-            strokeDashoffset={RING_C * (1 - Math.min(ratio, 1))}
-            className={complete ? 'stroke-emerald-600' : 'stroke-ink'}
-          />
-        ) : null}
-      </svg>
+    <ProgressRing ratio={ratio}>
       <Icon size={18} weight="bold" />
-    </span>
+    </ProgressRing>
   );
 }
 
