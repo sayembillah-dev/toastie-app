@@ -37,6 +37,10 @@ interface FieldProps {
   id: string;
   label: string;
   helper?: string;
+  /** Current length + limit, rendered as a small counter beneath the control
+   * instead of antd's `showCount` (which sits inside Inputs and floats over
+   * TextArea corners). The control keeps its own `maxLength` for enforcement. */
+  count?: { length: number; max: number };
   Icon: React.ComponentType<{
     size?: number;
     weight?: 'regular' | 'bold' | 'fill';
@@ -47,7 +51,7 @@ interface FieldProps {
 
 /** Uniform label + control wrapper, borrowed from the Start-Pathway modal so
  * both places read as the same design system. */
-function Field({ id, label, helper, Icon, children }: FieldProps) {
+function Field({ id, label, helper, count, Icon, children }: FieldProps) {
   return (
     <div>
       <label htmlFor={id} className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-ink">
@@ -56,6 +60,11 @@ function Field({ id, label, helper, Icon, children }: FieldProps) {
       </label>
       {children}
       {helper ? <p className="mt-1.5 text-[11px] text-ink-muted">{helper}</p> : null}
+      {count ? (
+        <p className="mt-1 text-right text-[11px] leading-none tabular-nums text-ink-muted">
+          {count.length} / {count.max}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -116,108 +125,112 @@ export function ThemeTab({ meeting }: ThemeTabProps) {
     /* Panel chrome (border/surface/padding) starts at `md` — on phones this
      * renders inside the full-width drawer, which already provides both. */
     <section className="mx-auto max-w-2xl md:rounded-2xl md:border md:border-line md:bg-canvas md:p-6">
-      <div className="mb-5">
+      <div className="mb-6">
         <h2 className="text-base font-semibold text-ink">Theme &amp; Word of the Day</h2>
-        <p className="mt-1 text-xs text-ink-soft">
-          Set the meeting&apos;s theme and the grammarian&apos;s word of the day so members can
-          weave both into their speeches.
-        </p>
       </div>
 
-      <ReadOnly resource="meeting" display="block" className="flex flex-col gap-4">
-        <Field id="theme-of-the-day" label="Theme of the day" Icon={Palette}>
-          <Input
+      {/* The outer div owns the field layout — ReadOnly's className only
+       * exists so its wrapper can reproduce that layout for read-only
+       * viewers; for writers it renders bare children with no wrapper, so
+       * classes on ReadOnly alone would never reach the DOM. */}
+      <div className="flex flex-col gap-6">
+        <ReadOnly resource="meeting" display="block" className="flex flex-col gap-6">
+          <Field
             id="theme-of-the-day"
-            size="large"
-            placeholder="e.g. New Beginnings"
-            value={draft.theme}
-            onChange={(event) =>
-              dispatch(themeChanged({ meetingId: meeting.id, theme: event.target.value }))
-            }
-            maxLength={80}
-            showCount
-          />
-        </Field>
-
-        {/* Word + part-of-speech stack on phones and sit side-by-side on
-         * anything wider — the part-of-speech is short and reads well next to
-         * the word rather than beneath it. */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto]">
-          <Field id="word-of-the-day" label="Word of the day" Icon={TextAa}>
+            label="Theme of the day"
+            Icon={Palette}
+            count={{ length: draft.theme.length, max: 80 }}
+          >
             <Input
-              id="word-of-the-day"
+              id="theme-of-the-day"
               size="large"
-              placeholder="e.g. Ephemeral"
-              value={word.word}
+              placeholder="e.g. New Beginnings"
+              value={draft.theme}
+              onChange={(event) =>
+                dispatch(themeChanged({ meetingId: meeting.id, theme: event.target.value }))
+              }
+              maxLength={80}
+            />
+          </Field>
+
+          {/* Word + part-of-speech stack on phones and sit side-by-side on
+           * anything wider — the part-of-speech is short and reads well next to
+           * the word rather than beneath it. */}
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-[1fr_auto] sm:gap-4">
+            <Field id="word-of-the-day" label="Word of the day" Icon={TextAa}>
+              <Input
+                id="word-of-the-day"
+                size="large"
+                placeholder="e.g. Ephemeral"
+                value={word.word}
+                onChange={(event) =>
+                  dispatch(
+                    wordChanged({ meetingId: meeting.id, patch: { word: event.target.value } }),
+                  )
+                }
+                maxLength={40}
+              />
+            </Field>
+
+            <Field id="part-of-speech" label="Part of speech" Icon={BookOpen}>
+              <Select
+                id="part-of-speech"
+                size="large"
+                className="w-full sm:w-44"
+                placeholder="Select"
+                options={PARTS_OF_SPEECH.map((part) => ({ value: part, label: part }))}
+                value={word.partOfSpeech}
+                onChange={(value) =>
+                  dispatch(wordChanged({ meetingId: meeting.id, patch: { partOfSpeech: value } }))
+                }
+                allowClear
+              />
+            </Field>
+          </div>
+
+          <Field
+            id="word-meaning"
+            label="Meaning"
+            Icon={ChatCircleText}
+            count={{ length: word.meaning.length, max: 240 }}
+          >
+            <Input.TextArea
+              id="word-meaning"
+              size="large"
+              placeholder="A concise definition of the word."
+              value={word.meaning}
               onChange={(event) =>
                 dispatch(
-                  wordChanged({ meetingId: meeting.id, patch: { word: event.target.value } }),
+                  wordChanged({ meetingId: meeting.id, patch: { meaning: event.target.value } }),
                 )
               }
-              maxLength={40}
+              autoSize={{ minRows: 2, maxRows: 4 }}
+              maxLength={240}
             />
           </Field>
 
-          <Field id="part-of-speech" label="Part of speech" Icon={BookOpen}>
-            <Select
-              id="part-of-speech"
-              size="large"
-              className="w-full sm:w-44"
-              placeholder="Select"
-              options={PARTS_OF_SPEECH.map((part) => ({ value: part, label: part }))}
-              value={word.partOfSpeech}
-              onChange={(value) =>
-                dispatch(wordChanged({ meetingId: meeting.id, patch: { partOfSpeech: value } }))
-              }
-              allowClear
-            />
-          </Field>
-        </div>
-
-        <Field
-          id="word-meaning"
-          label="Meaning"
-          Icon={ChatCircleText}
-          helper="A short, plain-language definition that fits on one line when read aloud."
-        >
-          <Input.TextArea
-            id="word-meaning"
-            size="large"
-            placeholder="A concise definition of the word."
-            value={word.meaning}
-            onChange={(event) =>
-              dispatch(
-                wordChanged({ meetingId: meeting.id, patch: { meaning: event.target.value } }),
-              )
-            }
-            autoSize={{ minRows: 2, maxRows: 4 }}
-            maxLength={240}
-            showCount
-          />
-        </Field>
-
-        <Field
-          id="word-example"
-          label="Example sentence"
-          Icon={Quotes}
-          helper="A sentence that shows the word in use — bonus points if it hints at the theme."
-        >
-          <Input.TextArea
+          <Field
             id="word-example"
-            size="large"
-            placeholder="Show the word in context."
-            value={word.example}
-            onChange={(event) =>
-              dispatch(
-                wordChanged({ meetingId: meeting.id, patch: { example: event.target.value } }),
-              )
-            }
-            autoSize={{ minRows: 2, maxRows: 4 }}
-            maxLength={240}
-            showCount
-          />
-        </Field>
-      </ReadOnly>
+            label="Example sentence"
+            Icon={Quotes}
+            count={{ length: word.example.length, max: 240 }}
+          >
+            <Input.TextArea
+              id="word-example"
+              size="large"
+              placeholder="Show the word in context."
+              value={word.example}
+              onChange={(event) =>
+                dispatch(
+                  wordChanged({ meetingId: meeting.id, patch: { example: event.target.value } }),
+                )
+              }
+              autoSize={{ minRows: 2, maxRows: 4 }}
+              maxLength={240}
+            />
+          </Field>
+        </ReadOnly>
+      </div>
 
       {/* Full-width on phones so the button is an easy thumb target, and
        * right-aligned from sm up where the card has room. */}
