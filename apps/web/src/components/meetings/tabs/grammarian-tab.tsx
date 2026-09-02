@@ -5,15 +5,24 @@ import type { InputRef } from 'antd';
 import { Button, Input } from 'antd';
 import { useCallback, useRef, useState, useSyncExternalStore } from 'react';
 
+import { WotdSection } from '@/components/meetings/tabs/grammarian-wotd';
 import { ShareRoleButton } from '@/components/meetings/tabs/share-role-button';
 import {
   type GrammarianEntry,
+  type GrammarianWotdSpeaker,
   parseRoleState,
   readRoleStateRaw,
   subscribeToRoleState,
   updateRoleState,
 } from '@/lib/meetings/role-state';
 import { useRoleStateSync } from '@/lib/meetings/role-state-sync';
+import { useIsMobile } from '@/lib/ui/use-is-mobile';
+import {
+  useGetGuestsQuery,
+  useGetMeetingQuery,
+  useGetMembersQuery,
+  useGetPublicMeetingQuery,
+} from '@/store/api';
 
 const TIME_FMT = new Intl.DateTimeFormat('en-GB', {
   hour: '2-digit',
@@ -45,11 +54,69 @@ export function GrammarianView({ meetingId, showShare, token = '' }: GrammarianV
     () => null,
   );
   const state = parseRoleState('grammarian', raw);
-  const entries = state.entries;
+  const { entries, wotdSpeakers } = state;
 
+  const isMobile = useIsMobile();
   const [said, setSaid] = useState('');
   const [corrected, setCorrected] = useState('');
   const saidRef = useRef<InputRef>(null);
+
+  /* The word of the day belongs to the meeting record (set on the Theme
+   * tab) — read it from there, in-app and on the public page alike. Both
+   * queries dedupe through the RTK cache with the ones the page shells
+   * already made. */
+  const { data: meeting } = useGetMeetingQuery(meetingId, { skip: !showShare });
+  const { data: publicMeeting } = useGetPublicMeetingQuery(
+    { meetingId, token },
+    { skip: showShare || !meetingId || !token },
+  );
+  const wordOfDay = (showShare ? meeting?.word?.word : (publicMeeting?.word ?? '')) ?? '';
+
+  /* Roster for the word-of-the-day tracker — skipped on the public share
+   * page, where AssigneeSelect's freeform guest typing covers name entry. */
+  const { data: members } = useGetMembersQuery(undefined, { skip: !showShare });
+  const { data: guests } = useGetGuestsQuery(undefined, { skip: !showShare });
+
+  /* Plain derivations, no manual useMemo — React Compiler auto-memoizes, and
+   * hand-rolled memo over role-state values trips preserve-manual-memoization. */
+  const usedMemberIds = new Set(
+    wotdSpeakers.map((speaker) => speaker.memberId).filter((id): id is string => Boolean(id)),
+  );
+  const availableMembers = (members ?? []).filter((member) => !usedMemberIds.has(member.id));
+  const usedGuestIds = new Set(
+    wotdSpeakers.map((speaker) => speaker.guestId).filter((id): id is string => Boolean(id)),
+  );
+  const availableGuests = (guests ?? []).filter((guest) => !usedGuestIds.has(guest.id));
+
+  function handleWotdAdd(draft: { memberId?: string; guestId?: string; name: string }) {
+    const speaker: GrammarianWotdSpeaker = {
+      id: crypto.randomUUID(),
+      memberId: draft.memberId,
+      guestId: draft.guestId,
+      name: draft.name,
+      count: 0,
+    };
+    updateRoleState('grammarian', meetingId, (previous) => ({
+      ...previous,
+      wotdSpeakers: [...previous.wotdSpeakers, speaker],
+    }));
+  }
+
+  function handleWotdAdjust(id: string, delta: number) {
+    updateRoleState('grammarian', meetingId, (previous) => ({
+      ...previous,
+      wotdSpeakers: previous.wotdSpeakers.map((speaker) =>
+        speaker.id === id ? { ...speaker, count: Math.max(0, speaker.count + delta) } : speaker,
+      ),
+    }));
+  }
+
+  function handleWotdDelete(id: string) {
+    updateRoleState('grammarian', meetingId, (previous) => ({
+      ...previous,
+      wotdSpeakers: previous.wotdSpeakers.filter((speaker) => speaker.id !== id),
+    }));
+  }
 
   const canAdd = said.trim().length > 0 && corrected.trim().length > 0;
 
@@ -62,6 +129,7 @@ export function GrammarianView({ meetingId, showShare, token = '' }: GrammarianV
       createdAt: Date.now(),
     };
     updateRoleState('grammarian', meetingId, (previous) => ({
+      ...previous,
       entries: [entry, ...previous.entries],
     }));
     setSaid('');
@@ -71,6 +139,7 @@ export function GrammarianView({ meetingId, showShare, token = '' }: GrammarianV
 
   function handleDelete(id: string) {
     updateRoleState('grammarian', meetingId, (previous) => ({
+      ...previous,
       entries: previous.entries.filter((entry) => entry.id !== id),
     }));
   }
@@ -84,19 +153,27 @@ export function GrammarianView({ meetingId, showShare, token = '' }: GrammarianV
 
   return (
     <section className="mx-auto max-w-3xl">
+      <WotdSection
+        word={wordOfDay}
+        speakers={wotdSpeakers}
+        availableMembers={availableMembers}
+        availableGuests={availableGuests}
+        onAddSpeaker={handleWotdAdd}
+        onAdjust={handleWotdAdjust}
+        onDelete={handleWotdDelete}
+      />
+
       {/* Panel chrome (border/surface/padding) starts at `md` — on phones
        * this renders inside the full-width drawer, which already provides
        * both. */}
-      <div className="md:rounded-2xl md:border md:border-line md:bg-canvas md:p-6">
+      <div className="mt-5 md:rounded-2xl md:border md:border-line md:bg-canvas md:p-6">
         <header className="mb-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-ink">Grammarian log</h2>
-            <p className="mt-1 text-xs text-ink-soft">
-              Catch slips as they happen — write what was said, what it should be, and press Add.
-              Each entry is stamped with the time it was logged.
-            </p>
           </div>
-          {showShare ? (
+          {/* Mobile: share lives in the drawer header (`headerExtra`), so the
+           * in-pane button only renders for desktop. */}
+          {showShare && isMobile === false ? (
             <ShareRoleButton
               meetingId={meetingId}
               kind="grammarian"

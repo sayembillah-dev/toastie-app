@@ -101,12 +101,25 @@ export interface GrammarianEntry {
   createdAt: number;
 }
 
+/** One tracked speaker in the word-of-the-day counter. */
+export interface GrammarianWotdSpeaker {
+  id: string;
+  memberId?: string;
+  guestId?: string;
+  name: string;
+  count: number;
+}
+
 export interface GrammarianState {
   entries: GrammarianEntry[];
+  /** Per-speaker tally of word-of-the-day usage. The word itself is NOT here —
+   * it belongs to the meeting record (set on the Theme tab) and is read from
+   * there, so it can never drift between tabs. */
+  wotdSpeakers: GrammarianWotdSpeaker[];
 }
 
 export function emptyGrammarianState(): GrammarianState {
-  return { entries: [] };
+  return { entries: [], wotdSpeakers: [] };
 }
 
 export interface RoleStateByKind {

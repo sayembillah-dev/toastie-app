@@ -10,14 +10,17 @@ import { type MeetingRoleStateWire, type WordOfTheDayWire } from './serializers'
 
 /** Wire shape returned by `/public/meetings/:id` — a **minimal** projection.
  * Anonymous callers only see what the share pages actually render: the
- * meeting header (number, date, theme) and the containing club's name. No
- * roster, no emails, no membership ids. */
+ * meeting header (number, date, theme), the containing club's name, and the
+ * word of the day (the public Grammarian page tallies its usage — already
+ * public via `/agenda`). No roster, no emails, no membership ids. */
 export interface PublicMeetingWire {
   id: string;
   meetingNumber: number;
   dateTime: string;
   theme: string;
   clubName: string;
+  /** Word of the day — null until the Theme section sets one. */
+  word: string | null;
 }
 
 export interface PublicAgendaRoleWire {
@@ -136,6 +139,7 @@ export class PublicMeetingsController {
         meetingNumber: true,
         dateTime: true,
         theme: true,
+        word: true,
         club: { select: { name: true } },
       },
     });
@@ -148,6 +152,7 @@ export class PublicMeetingsController {
       dateTime: row.dateTime.toISOString(),
       theme: row.theme,
       clubName: row.club.name,
+      word: row.word,
     };
   }
 

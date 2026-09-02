@@ -35,6 +35,9 @@ export interface PublicMeeting {
   dateTime: string;
   theme: string;
   clubName: string;
+  /** Word of the day — null until the Theme tab sets one; the public
+   * Grammarian page tallies its usage. */
+  word: string | null;
 }
 
 /** Minimal projection served by

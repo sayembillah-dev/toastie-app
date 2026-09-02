@@ -145,6 +145,14 @@ function buildTabs(meeting: Meeting): TabDef[] {
       label: 'Grammarian',
       Icon: TextAa,
       content: <GrammarianTab meetingId={meeting.id} />,
+      headerExtra: (
+        <ShareRoleButton
+          meetingId={meeting.id}
+          kind="grammarian"
+          roleLabel="Grammarian"
+          ariaLabel="Share grammarian role"
+        />
+      ),
     },
     {
       key: 'attendance',
