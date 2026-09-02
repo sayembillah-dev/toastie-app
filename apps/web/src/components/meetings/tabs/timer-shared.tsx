@@ -74,6 +74,36 @@ export function currentBracketColor(elapsed: number, brackets: Bracket): Bracket
   return 'default';
 }
 
+/** Rank ordering so a bracket-escalation check is a numeric compare. */
+export const BRACKET_RANK: Record<BracketColor, number> = {
+  default: 0,
+  green: 1,
+  yellow: 2,
+  red: 3,
+};
+
+/** Distinct vibration pattern per bracket, fired the moment a running
+ * speaker's clock crosses into green/yellow/red — the timer keeper is
+ * usually watching the speaker, not the screen, so thresholds must be
+ * distinguishable by feel alone: one long pulse at green, two at yellow,
+ * and a triple pulse stretching over ~3s at red. */
+const BRACKET_VIBRATION: Record<Exclude<BracketColor, 'default'>, VibratePattern> = {
+  green: 1000,
+  yellow: [700, 200, 700],
+  red: [800, 250, 800, 250, 800],
+};
+
+/** Vibrates the device with the bracket's pattern. Silent no-op where the
+ * Vibration API is unavailable (desktop browsers, iOS Safari) or where the
+ * page hasn't seen a user gesture yet — Chrome gates `vibrate` behind
+ * sticky activation, always satisfied here since starting a timer is a
+ * tap. */
+export function vibrateBracket(color: BracketColor): void {
+  if (color === 'default') return;
+  if (typeof navigator === 'undefined' || !('vibrate' in navigator)) return;
+  navigator.vibrate(BRACKET_VIBRATION[color]);
+}
+
 export function computeElapsed(speaker: TimerSpeaker, now: number): number {
   if (speaker.status === 'running' && speaker.startedAt !== undefined) {
     return speaker.elapsed + Math.max(0, (now - speaker.startedAt) / 1000);

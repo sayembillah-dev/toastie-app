@@ -2,16 +2,21 @@
 
 import { ClipboardText, Play, X } from '@phosphor-icons/react/dist/ssr';
 import { Button, Select } from 'antd';
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import { AssigneeSelect } from '@/components/education/assignee-select';
 import { ShareRoleButton } from '@/components/meetings/tabs/share-role-button';
 import {
   assigneeToDraft,
+  BRACKET_RANK,
+  type BracketColor,
   bracketFromDuration,
   computeElapsed,
+  currentBracketColor,
   SpeakerListRow,
   TimerCard,
+  TYPE_BRACKETS,
+  vibrateBracket,
 } from '@/components/meetings/tabs/timer-shared';
 import { SpeakerViewMobile } from '@/components/meetings/tabs/timer-speakers-mobile';
 import type { Member } from '@/lib/education/members';
@@ -279,6 +284,29 @@ export function TimerView({ meetingId, showShare, token = '' }: TimerViewProps) 
     const interval = window.setInterval(() => setNow(Date.now()), 250);
     return () => window.clearInterval(interval);
   }, [anyRunning, activeId]);
+
+  /* Fire a phone vibration as each running speaker's clock crosses into
+   * green/yellow/red — the timer keeper is usually watching the speaker,
+   * not the screen. Ref-tracked per speaker so each threshold alerts once
+   * per run; the entry drops as soon as a speaker stops, re-arming the
+   * alerts for their next turn. Covers the in-app tab and the public
+   * share page alike, since both render this same view. */
+  const bracketAlertRef = useRef(new Map<string, BracketColor>());
+  useEffect(() => {
+    for (const speaker of speakers) {
+      if (speaker.status !== 'running') {
+        bracketAlertRef.current.delete(speaker.id);
+        continue;
+      }
+      const color = currentBracketColor(
+        computeElapsed(speaker, now),
+        speaker.brackets ?? TYPE_BRACKETS[speaker.type],
+      );
+      const previous = bracketAlertRef.current.get(speaker.id) ?? 'default';
+      if (BRACKET_RANK[color] > BRACKET_RANK[previous]) vibrateBracket(color);
+      bracketAlertRef.current.set(speaker.id, color);
+    }
+  }, [speakers, now]);
 
   function handleAdd(draft: {
     memberId?: string;
