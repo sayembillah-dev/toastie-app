@@ -19,6 +19,7 @@ import { TARGET_SPEAKERS } from '@/components/meetings/at-a-glance';
 import { MeetingActions } from '@/components/meetings/meeting-actions';
 import { MeetingActionsMobile } from '@/components/meetings/meeting-actions-mobile';
 import { MeetingFeatureGrid } from '@/components/meetings/meeting-feature-grid';
+import { MeetingSwitcher } from '@/components/meetings/meeting-switcher';
 import { AhCounterTab } from '@/components/meetings/tabs/ah-counter-tab';
 import { AttendanceTab } from '@/components/meetings/tabs/attendance-tab';
 import { ChecklistTab } from '@/components/meetings/tabs/checklist-tab';
@@ -380,7 +381,12 @@ export function MeetingDetailScreen() {
 
   return (
     <>
-      <PageBreadcrumb label={`Meeting #${meeting.meetingNumber}`} />
+      <PageBreadcrumb
+        label={`Meeting #${meeting.meetingNumber}`}
+        mobileTitle={
+          <MeetingSwitcher currentId={meeting.id} label={`Meeting #${meeting.meetingNumber}`} />
+        }
+      />
       <AccessGate resource="meeting">
         <DetailContent meeting={meeting} />
       </AccessGate>

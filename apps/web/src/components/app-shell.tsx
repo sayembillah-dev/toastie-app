@@ -34,6 +34,7 @@ import { Fragment, useMemo } from 'react';
 
 import { useSignOut } from '@/lib/auth/use-sign-out';
 import { useCan } from '@/lib/permissions/use-can';
+import { useMobileTitle } from '@/lib/ui/mobile-title-slot';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { selectActiveContextKey, selectSessionUser } from '@/store/session-slice';
 import {
@@ -235,6 +236,9 @@ interface SidebarBodyProps {
   account?: { name: string; avatarUrl?: string };
   /** Trailing control on the brand row: collapse on desktop, close on mobile. */
   brandAction: React.ReactNode;
+  /** Optional block rendered directly under the brand row — the mobile
+   * drawer uses it for the UnitSwitcher, which the header hides below md. */
+  underBrand?: React.ReactNode;
   /** Fires when a nav entry is followed, so the drawer can dismiss itself. */
   onNavigate?: () => void;
   /** Which set of nav entries to render. Null means the nav list is blank —
@@ -256,6 +260,7 @@ function SidebarBody({
   notificationCount,
   account,
   brandAction,
+  underBrand,
   onNavigate,
   navEntries,
   showSearch = true,
@@ -279,6 +284,11 @@ function SidebarBody({
         )}
         <span className={collapsed ? '' : 'ml-auto'}>{brandAction}</span>
       </div>
+
+      {/* Directly under the logo — the mobile drawer's UnitSwitcher. Sits
+       * above the search box, at the search row's px-2 inset so the edges
+       * line up. */}
+      {underBrand ? <div className="shrink-0 px-2 pb-2">{underBrand}</div> : null}
 
       {navEntries ? (
         <>
@@ -393,6 +403,7 @@ export function AppShell({ children, actions, notificationCount = 0 }: AppShellP
   const contextKey = useAppSelector(selectActiveContextKey);
   const activeUnit = unitKeyForContext(contextKey);
   const breadcrumbSlot = useAppSelector(selectBreadcrumb);
+  const mobileTitle = useMobileTitle();
   const sessionUser = useAppSelector(selectSessionUser);
   const account = sessionUser
     ? {
@@ -500,6 +511,7 @@ export function AppShell({ children, actions, notificationCount = 0 }: AppShellP
           showSearch={isPrimaryNav}
           onNavigate={closeMobileNav}
           onLogout={handleLogout}
+          underBrand={<UnitSwitcher block onSelected={closeMobileNav} />}
           brandAction={
             <Button
               type="text"
@@ -543,10 +555,17 @@ export function AppShell({ children, actions, notificationCount = 0 }: AppShellP
              * trail truncates to noise on a narrow header, and the back
              * arrow beside it already covers the "up" step the parent crumb
              * would offer. Not a link: it points at the page you're on.
-             * Desktop keeps the full interactive trail below. */}
-            <span className="min-w-0 truncate text-sm font-medium text-ink md:hidden">
-              {trail[trail.length - 1]?.title}
-            </span>
+             * Desktop keeps the full interactive trail below.
+             * A page can swap the plain text for an interactive control via
+             * the mobile-title slot (PageBreadcrumb's mobileTitle) — the
+             * meeting detail page uses it for its meeting switcher. */}
+            {mobileTitle ? (
+              <div className="min-w-0 md:hidden">{mobileTitle}</div>
+            ) : (
+              <span className="min-w-0 truncate text-sm font-medium text-ink md:hidden">
+                {trail[trail.length - 1]?.title}
+              </span>
+            )}
 
             <nav
               aria-label="Breadcrumb"
@@ -574,7 +593,12 @@ export function AppShell({ children, actions, notificationCount = 0 }: AppShellP
             </nav>
 
             <div className="ml-auto flex shrink-0 items-center gap-1">
-              <UnitSwitcher />
+              {/* Below md the switcher moves into the nav drawer, under the
+               * logo — a narrow header has no room for it next to the
+               * page title. */}
+              <span className="hidden md:flex">
+                <UnitSwitcher />
+              </span>
               {actions ? (
                 <>
                   <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-line-strong" />
