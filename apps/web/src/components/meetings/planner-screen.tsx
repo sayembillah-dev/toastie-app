@@ -14,20 +14,23 @@ import Link from 'next/link';
 import { Fragment, useMemo, useState } from 'react';
 import { AssigneeSelect } from '@/components/education/assignee-select';
 import { PlannerCreateMeetingModal } from '@/components/meetings/planner-create-meeting-modal';
+import { PlannerMobile } from '@/components/meetings/planner-mobile';
 import { ReadOnly } from '@/components/permissions/read-only';
 import dayjs from '@/lib/dayjs';
 import type { Member } from '@/lib/education/members';
 import type { Assignee, AssigneeField, PlannerRow } from '@/lib/education/planner';
 import {
+  ASSIGNEE_FIELD_LABELS,
   assigneeKey,
   assigneeLabel,
   fromPlannerRowWire,
   plannerRowLabel,
   toAssigneesJson,
 } from '@/lib/education/planner';
-import { localMonthKey } from '@/lib/meetings/datetime';
+import { localMonthKey, localMonthLabel } from '@/lib/meetings/datetime';
 import type { Meeting } from '@/lib/meetings/meetings';
 import type { Guest } from '@/lib/people/guests';
+import { useIsMobile } from '@/lib/ui/use-is-mobile';
 import { useBlurCommit } from '@/lib/use-blur-commit';
 import {
   useCreatePlannerRowMutation,
@@ -50,31 +53,32 @@ type Tint = 'none' | 'amber' | 'blue' | 'violet' | 'teal' | 'rose' | 'slate';
 
 interface AssigneeCol {
   field: AssigneeField;
-  label: string;
   minWidth: number;
   tint: Tint;
 }
 
-const TMOD_COLUMN: AssigneeCol = { field: 'tmod', label: 'TMOD', minWidth: 200, tint: 'none' };
+const TMOD_COLUMN: AssigneeCol = { field: 'tmod', minWidth: 200, tint: 'none' };
 
 /** Every column that lives inside a visual group. Order matters — it drives
- * the sub-header row and every tbody row's cell order. */
+ * the sub-header row and every tbody row's cell order. Labels come from
+ * `ASSIGNEE_FIELD_LABELS` so the desktop grid and the mobile cards can
+ * never drift apart on a rename. */
 const GROUPED_ASSIGNEE_COLUMNS: AssigneeCol[] = [
-  { field: 'ttm', label: 'TTM', minWidth: 200, tint: 'amber' },
-  { field: 'ttEvaluator', label: 'TT Evaluator', minWidth: 200, tint: 'amber' },
-  { field: 'speaker1', label: 'Speaker 1', minWidth: 200, tint: 'blue' },
-  { field: 'evaluator1', label: 'Evaluator 1', minWidth: 200, tint: 'blue' },
-  { field: 'speaker2', label: 'Speaker 2', minWidth: 200, tint: 'violet' },
-  { field: 'evaluator2', label: 'Evaluator 2', minWidth: 200, tint: 'violet' },
-  { field: 'speaker3', label: 'Speaker 3', minWidth: 200, tint: 'teal' },
-  { field: 'evaluator3', label: 'Evaluator 3', minWidth: 200, tint: 'teal' },
-  { field: 'speaker4', label: 'Speaker 4', minWidth: 200, tint: 'rose' },
-  { field: 'evaluator4', label: 'Evaluator 4', minWidth: 200, tint: 'rose' },
-  { field: 'generalEvaluator', label: 'General Evaluator', minWidth: 200, tint: 'slate' },
-  { field: 'timer', label: 'Timer', minWidth: 170, tint: 'slate' },
-  { field: 'ahCounter', label: 'Ah-counter', minWidth: 170, tint: 'slate' },
-  { field: 'grammarian', label: 'Grammarian', minWidth: 200, tint: 'slate' },
-  { field: 'harkmaster', label: 'Harkmaster', minWidth: 200, tint: 'slate' },
+  { field: 'ttm', minWidth: 200, tint: 'amber' },
+  { field: 'ttEvaluator', minWidth: 200, tint: 'amber' },
+  { field: 'speaker1', minWidth: 200, tint: 'blue' },
+  { field: 'evaluator1', minWidth: 200, tint: 'blue' },
+  { field: 'speaker2', minWidth: 200, tint: 'violet' },
+  { field: 'evaluator2', minWidth: 200, tint: 'violet' },
+  { field: 'speaker3', minWidth: 200, tint: 'teal' },
+  { field: 'evaluator3', minWidth: 200, tint: 'teal' },
+  { field: 'speaker4', minWidth: 200, tint: 'rose' },
+  { field: 'evaluator4', minWidth: 200, tint: 'rose' },
+  { field: 'generalEvaluator', minWidth: 200, tint: 'slate' },
+  { field: 'timer', minWidth: 170, tint: 'slate' },
+  { field: 'ahCounter', minWidth: 170, tint: 'slate' },
+  { field: 'grammarian', minWidth: 200, tint: 'slate' },
+  { field: 'harkmaster', minWidth: 200, tint: 'slate' },
 ];
 
 const ALL_ASSIGNEE_COLUMNS: AssigneeCol[] = [TMOD_COLUMN, ...GROUPED_ASSIGNEE_COLUMNS];
@@ -110,15 +114,6 @@ function subHeaderGroupClass(tint: Tint): string {
  * local clock — slicing the ISO string would group by UTC month and file a
  * late-evening meeting on the 31st under the following month. */
 const monthKey = localMonthKey;
-
-const MONTH_LABEL_FMT = new Intl.DateTimeFormat(undefined, {
-  month: 'long',
-  year: 'numeric',
-});
-
-function monthLabel(dateTime: string): string {
-  return MONTH_LABEL_FMT.format(new Date(dateTime));
-}
 
 const MEETING_MIN_W = 96;
 const DATE_MIN_W = 190;
@@ -259,7 +254,7 @@ function PlannerTableRow({
             ? 'bg-rose-50/70 group-hover:bg-rose-100/70'
             : cellClass;
           const conflictTooltip = isRepeatFromPrev
-            ? `${assigneeLabel(currAssignee, members)} was ${col.label} in the previous meeting.`
+            ? `${assigneeLabel(currAssignee, members)} was ${ASSIGNEE_FIELD_LABELS[col.field]} in the previous meeting.`
             : '';
           return (
             <td
@@ -283,8 +278,8 @@ function PlannerTableRow({
                 onChange={(next) => updateAssignee(row.id, col.field, next)}
                 members={members}
                 guests={guests}
-                placeholder={col.label}
-                ariaLabel={`${col.label} for ${rowLabel}`}
+                placeholder={ASSIGNEE_FIELD_LABELS[col.field]}
+                ariaLabel={`${ASSIGNEE_FIELD_LABELS[col.field]} for ${rowLabel}`}
               />
             </td>
           );
@@ -401,6 +396,13 @@ export function PlannerScreen() {
   const [updateRow] = useUpdatePlannerRowMutation();
   const [deleteRowMutation] = useDeletePlannerRowMutation();
 
+  /* The 16-column grid can't work on a phone, so below `md` the same data
+   * renders as per-meeting cards with a role lens (see planner-mobile.tsx).
+   * All queries, mutations and dialog state stay here — the fork is
+   * presentation-only. Hooked up here, before the error return, so the
+   * hook order never changes. */
+  const isMobile = useIsMobile();
+
   const rows = useMemo(() => (rowsData ?? []).map(fromPlannerRowWire), [rowsData]);
 
   /* The row the create dialog is reviewing. `open` is tracked separately from
@@ -504,149 +506,175 @@ export function PlannerScreen() {
         </p>
       </header>
 
-      <div className="flex flex-col gap-3">
-        <p className="text-sm text-ink-soft">
-          Assign members, invite guests, and note the theme. The meeting number stays pinned on the
-          left as you scroll through the roles. Rows shaded{' '}
-          <span className="font-medium text-emerald-700">green</span> already exist as meetings.
-        </p>
-
-        <div className="rounded-2xl border border-line bg-canvas shadow-sm">
-          {isLoading && rows.length === 0 ? (
-            <div className="p-4 sm:p-6">
-              <Skeleton active title={false} paragraph={{ rows: 4 }} />
-            </div>
-          ) : (
-            <ReadOnly resource="education" display="block">
-              {/* Both axes scroll inside this container so `position: sticky` on
-               * headers and left columns scopes to a single, predictable element. */}
-              <div className="max-h-[calc(100dvh-274px)] min-h-[420px] overflow-auto rounded-2xl">
-                <table className="border-separate border-spacing-0 text-sm">
-                  <thead>
-                    <tr>
-                      <th
-                        scope="col"
-                        className="sticky left-0 top-0 z-40 h-9 border-b border-r border-line-strong bg-sidebar px-3 text-left align-middle text-xs font-medium text-ink"
-                        style={{ minWidth: MEETING_MIN_W }}
-                      >
-                        Meeting No.
-                      </th>
-                      <th
-                        scope="col"
-                        className="sticky top-0 z-30 h-9 border-b border-line bg-sidebar px-3 text-left align-middle text-xs font-medium text-ink"
-                        style={{ minWidth: DATE_MIN_W }}
-                      >
-                        Date &amp; Time
-                      </th>
-                      <th
-                        scope="col"
-                        className="sticky top-0 z-30 h-9 border-b border-line bg-sidebar px-3 text-left align-middle text-xs font-medium text-ink"
-                        style={{ minWidth: TMOD_COLUMN.minWidth }}
-                      >
-                        TMOD
-                      </th>
-                      {GROUPED_ASSIGNEE_COLUMNS.map((col) => (
-                        <th
-                          key={col.field}
-                          scope="col"
-                          className={`sticky top-0 z-30 h-9 border-b border-line px-3 text-left align-middle text-xs font-medium ${subHeaderGroupClass(col.tint)}`}
-                          style={{ minWidth: col.minWidth }}
-                        >
-                          {col.label}
-                        </th>
-                      ))}
-                      <th
-                        scope="col"
-                        className="sticky top-0 z-30 h-9 border-b border-line bg-sidebar px-3 text-left align-middle text-xs font-medium text-ink"
-                        style={{ minWidth: 220 }}
-                      >
-                        Theme
-                      </th>
-                      <th
-                        scope="col"
-                        className="sticky top-0 z-30 h-9 border-b border-line bg-sidebar px-3 text-left align-middle text-xs font-medium text-ink"
-                        style={{ minWidth: 240 }}
-                      >
-                        Notes
-                      </th>
-                      <th
-                        scope="col"
-                        className="sticky right-0 top-0 z-40 h-9 border-b border-l border-line-strong bg-sidebar px-3 text-center align-middle text-xs font-medium text-ink"
-                        style={{ minWidth: ACTION_MIN_W }}
-                      >
-                        Action
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {rows.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={ALL_ASSIGNEE_COLUMNS.length + 5}
-                          className="border-b border-line px-4 py-10 text-center text-sm text-ink-muted"
-                        >
-                          No meetings planned yet — use &ldquo;Add meeting&rdquo; below to start a
-                          row.
-                        </td>
-                      </tr>
-                    ) : null}
-
-                    {rows.map((row, idx) => {
-                      const currMonth = monthKey(row.dateTime);
-                      const prevMonth = idx > 0 ? monthKey(rows[idx - 1].dateTime) : null;
-                      const monthDividerLabel =
-                        currMonth !== null && currMonth !== prevMonth
-                          ? monthLabel(row.dateTime as string)
-                          : null;
-                      return (
-                        <PlannerTableRow
-                          key={row.id}
-                          row={row}
-                          rowLabel={plannerRowLabel(row)}
-                          monthDividerLabel={monthDividerLabel}
-                          created={findCreated(row)}
-                          previousRow={previousRowById.get(row.id)}
-                          members={members}
-                          guests={guests}
-                          patchRow={patchRow}
-                          updateAssignee={updateAssignee}
-                          onCreateMeeting={() => setCreateDialog({ row, open: true })}
-                          onDelete={() => deleteRow(row.id)}
-                        />
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="flex items-center justify-between gap-3 border-t border-line bg-sidebar/60 px-3 py-2">
-                <span className="text-xs text-ink-muted">
-                  {rows.length} {rows.length === 1 ? 'meeting' : 'meetings'} planned
-                </span>
-                <Button
-                  type="text"
-                  size="small"
-                  loading={isCreatingRow}
-                  onClick={addRow}
-                  icon={<Plus size={14} weight="bold" />}
-                >
-                  Add meeting
-                </Button>
-              </div>
-            </ReadOnly>
-          )}
+      {/* Breakpoint not resolved yet (server / first client frame) — show a
+       * placeholder rather than guessing a layout. */}
+      {isMobile === null ? (
+        <div className="flex flex-col gap-3" aria-hidden="true">
+          <div className="h-4 w-2/3 animate-pulse rounded bg-fill" />
+          <div className="h-72 animate-pulse rounded-2xl bg-fill" />
         </div>
-
-        <PlannerCreateMeetingModal
-          open={createDialog.open}
-          row={createDialog.row}
+      ) : isMobile ? (
+        <PlannerMobile
+          rows={rows}
+          isLoading={isLoading}
+          isCreatingRow={isCreatingRow}
           members={members}
           guests={guests}
-          onClose={() => setCreateDialog((prev) => ({ ...prev, open: false }))}
-          onClosed={() => setCreateDialog({ row: null, open: false })}
+          findCreated={findCreated}
+          previousRowById={previousRowById}
+          addRow={addRow}
+          patchRow={patchRow}
+          updateAssignee={updateAssignee}
+          deleteRow={deleteRow}
+          onCreateMeeting={(row) => setCreateDialog({ row, open: true })}
         />
-      </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-ink-soft">
+            Assign members, invite guests, and note the theme. The meeting number stays pinned on
+            the left as you scroll through the roles. Rows shaded{' '}
+            <span className="font-medium text-emerald-700">green</span> already exist as meetings.
+          </p>
+
+          <div className="rounded-2xl border border-line bg-canvas shadow-sm">
+            {isLoading && rows.length === 0 ? (
+              <div className="p-4 sm:p-6">
+                <Skeleton active title={false} paragraph={{ rows: 4 }} />
+              </div>
+            ) : (
+              <ReadOnly resource="education" display="block">
+                {/* Both axes scroll inside this container so `position: sticky` on
+                 * headers and left columns scopes to a single, predictable element. */}
+                <div className="max-h-[calc(100dvh-274px)] min-h-[420px] overflow-auto rounded-2xl">
+                  <table className="border-separate border-spacing-0 text-sm">
+                    <thead>
+                      <tr>
+                        <th
+                          scope="col"
+                          className="sticky left-0 top-0 z-40 h-9 border-b border-r border-line-strong bg-sidebar px-3 text-left align-middle text-xs font-medium text-ink"
+                          style={{ minWidth: MEETING_MIN_W }}
+                        >
+                          Meeting No.
+                        </th>
+                        <th
+                          scope="col"
+                          className="sticky top-0 z-30 h-9 border-b border-line bg-sidebar px-3 text-left align-middle text-xs font-medium text-ink"
+                          style={{ minWidth: DATE_MIN_W }}
+                        >
+                          Date &amp; Time
+                        </th>
+                        <th
+                          scope="col"
+                          className="sticky top-0 z-30 h-9 border-b border-line bg-sidebar px-3 text-left align-middle text-xs font-medium text-ink"
+                          style={{ minWidth: TMOD_COLUMN.minWidth }}
+                        >
+                          {ASSIGNEE_FIELD_LABELS.tmod}
+                        </th>
+                        {GROUPED_ASSIGNEE_COLUMNS.map((col) => (
+                          <th
+                            key={col.field}
+                            scope="col"
+                            className={`sticky top-0 z-30 h-9 border-b border-line px-3 text-left align-middle text-xs font-medium ${subHeaderGroupClass(col.tint)}`}
+                            style={{ minWidth: col.minWidth }}
+                          >
+                            {ASSIGNEE_FIELD_LABELS[col.field]}
+                          </th>
+                        ))}
+                        <th
+                          scope="col"
+                          className="sticky top-0 z-30 h-9 border-b border-line bg-sidebar px-3 text-left align-middle text-xs font-medium text-ink"
+                          style={{ minWidth: 220 }}
+                        >
+                          Theme
+                        </th>
+                        <th
+                          scope="col"
+                          className="sticky top-0 z-30 h-9 border-b border-line bg-sidebar px-3 text-left align-middle text-xs font-medium text-ink"
+                          style={{ minWidth: 240 }}
+                        >
+                          Notes
+                        </th>
+                        <th
+                          scope="col"
+                          className="sticky right-0 top-0 z-40 h-9 border-b border-l border-line-strong bg-sidebar px-3 text-center align-middle text-xs font-medium text-ink"
+                          style={{ minWidth: ACTION_MIN_W }}
+                        >
+                          Action
+                        </th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {rows.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={ALL_ASSIGNEE_COLUMNS.length + 5}
+                            className="border-b border-line px-4 py-10 text-center text-sm text-ink-muted"
+                          >
+                            No meetings planned yet — use &ldquo;Add meeting&rdquo; below to start a
+                            row.
+                          </td>
+                        </tr>
+                      ) : null}
+
+                      {rows.map((row, idx) => {
+                        const currMonth = monthKey(row.dateTime);
+                        const prevMonth = idx > 0 ? monthKey(rows[idx - 1].dateTime) : null;
+                        const monthDividerLabel =
+                          currMonth !== null && currMonth !== prevMonth
+                            ? localMonthLabel(row.dateTime as string)
+                            : null;
+                        return (
+                          <PlannerTableRow
+                            key={row.id}
+                            row={row}
+                            rowLabel={plannerRowLabel(row)}
+                            monthDividerLabel={monthDividerLabel}
+                            created={findCreated(row)}
+                            previousRow={previousRowById.get(row.id)}
+                            members={members}
+                            guests={guests}
+                            patchRow={patchRow}
+                            updateAssignee={updateAssignee}
+                            onCreateMeeting={() => setCreateDialog({ row, open: true })}
+                            onDelete={() => deleteRow(row.id)}
+                          />
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 border-t border-line bg-sidebar/60 px-3 py-2">
+                  <span className="text-xs text-ink-muted">
+                    {rows.length} {rows.length === 1 ? 'meeting' : 'meetings'} planned
+                  </span>
+                  <Button
+                    type="text"
+                    size="small"
+                    loading={isCreatingRow}
+                    onClick={addRow}
+                    icon={<Plus size={14} weight="bold" />}
+                  >
+                    Add meeting
+                  </Button>
+                </div>
+              </ReadOnly>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Shared by both layouts — the mobile cards open it from their own
+       * overflow menu, so it lives outside the fork. */}
+      <PlannerCreateMeetingModal
+        open={createDialog.open}
+        row={createDialog.row}
+        members={members}
+        guests={guests}
+        onClose={() => setCreateDialog((prev) => ({ ...prev, open: false }))}
+        onClosed={() => setCreateDialog({ row: null, open: false })}
+      />
     </div>
   );
 }

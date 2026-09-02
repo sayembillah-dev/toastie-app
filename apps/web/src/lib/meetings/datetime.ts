@@ -47,3 +47,14 @@ export function localMonthKey(instant: string | null): string | null {
   const local = dayjs(instant);
   return local.isValid() ? local.format('YYYY-MM') : null;
 }
+
+const MONTH_LABEL_FMT = new Intl.DateTimeFormat(undefined, {
+  month: 'long',
+  year: 'numeric',
+});
+
+/** "September 2026" for an instant, read in the viewer's timezone — the
+ * planner's month dividers on both the desktop grid and the mobile cards. */
+export function localMonthLabel(instant: string): string {
+  return MONTH_LABEL_FMT.format(new Date(instant));
+}

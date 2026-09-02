@@ -50,6 +50,28 @@ const ASSIGNEE_FIELDS: AssigneeField[] = [
   'harkmaster',
 ];
 
+/** Display label per assignee field — the single source for the desktop
+ * grid's column headers and the mobile cards' role rows, so a role rename
+ * lands in both at once. */
+export const ASSIGNEE_FIELD_LABELS: Record<AssigneeField, string> = {
+  tmod: 'TMOD',
+  ttm: 'TTM',
+  ttEvaluator: 'TT Evaluator',
+  speaker1: 'Speaker 1',
+  evaluator1: 'Evaluator 1',
+  speaker2: 'Speaker 2',
+  evaluator2: 'Evaluator 2',
+  speaker3: 'Speaker 3',
+  evaluator3: 'Evaluator 3',
+  speaker4: 'Speaker 4',
+  evaluator4: 'Evaluator 4',
+  generalEvaluator: 'General Evaluator',
+  timer: 'Timer',
+  ahCounter: 'Ah-counter',
+  grammarian: 'Grammarian',
+  harkmaster: 'Harkmaster',
+};
+
 export interface PlannerRow {
   id: string;
   /** Typed in by the VPE, not derived: clubs number meetings on their own
