@@ -131,6 +131,14 @@ function buildTabs(meeting: Meeting): TabDef[] {
       label: 'Ah Counter',
       Icon: SpeakerHigh,
       content: <AhCounterTab meetingId={meeting.id} />,
+      headerExtra: (
+        <ShareRoleButton
+          meetingId={meeting.id}
+          kind="ah-counter"
+          roleLabel="Ah Counter"
+          ariaLabel="Share Ah Counter role"
+        />
+      ),
     },
     {
       key: 'grammarian',
