@@ -8,21 +8,13 @@ import { Fragment, useMemo } from 'react';
 import { PersonAvatar } from '@/components/ui/person-avatar';
 import { bannerImageCss, DEFAULT_BANNER_COLOR } from '@/lib/club/banner';
 import type { ClubBannerPos } from '@/lib/club/club-profile';
-import { getInitials } from '@/lib/education/members';
+import { getInitials, type OfficerRole } from '@/lib/education/members';
 import type { AgendaPerson, AgendaRow } from '@/lib/meetings/agenda';
-import {
-  buildAgenda,
-  CLUB,
-  holderName,
-  holderPerson,
-  speakerPerson,
-  speechSlotPerson,
-} from '@/lib/meetings/agenda';
+import { buildAgenda, CLUB, speakerPerson, speechSlotPerson } from '@/lib/meetings/agenda';
 import type { MeetingDraft } from '@/lib/meetings/draft';
 import type { Meeting } from '@/lib/meetings/meetings';
-import { buildRoles } from '@/lib/meetings/roles';
 import { getGuestInitials } from '@/lib/people/guests';
-import { useGetClubProfileQuery, useGetGuestsQuery } from '@/store/api';
+import { useGetClubProfileQuery, useGetGuestsQuery, useGetMembersQuery } from '@/store/api';
 import { useAppSelector } from '@/store/hooks';
 import { selectMeetingDraft } from '@/store/meeting-draft-slice';
 
@@ -49,9 +41,29 @@ const MONTHS = [
   'Dec',
 ] as const;
 
+const FULL_MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+] as const;
+
 /** `3-Jul-2026`, the format the club's printed agenda uses. */
 function formatSheetDate(date: Date): string {
   return `${date.getDate()}-${MONTHS[date.getMonth()]}-${date.getFullYear()}`;
+}
+
+/** `September 3, 2026` — the long date that opens the officer rail. */
+function formatRailDate(date: Date): string {
+  return `${FULL_MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
 }
 
 /** `11:30 AM` — 12-hour, no leading zero on the hour. */
@@ -175,10 +187,13 @@ function SheetHeader({ meeting, theme }: { meeting: Meeting; theme: string }) {
  * value(s). */
 function RailSection({
   title,
+  accent = RULE,
   children,
   gap = 11,
 }: {
   title: string;
+  /** Heading + rule colour — maroon for the club officers, navy elsewhere. */
+  accent?: string;
   children: React.ReactNode;
   gap?: number;
 }) {
@@ -188,8 +203,8 @@ function RailSection({
         style={{
           fontSize: 10,
           fontWeight: 'bold',
-          color: RULE,
-          borderBottom: `1px solid ${RULE}`,
+          color: accent,
+          borderBottom: `1px solid ${accent}`,
           paddingBottom: 2,
           marginBottom: 4,
         }}
@@ -297,6 +312,18 @@ function PersonList({
   );
 }
 
+/** Club officers as they print on the agenda rail — Toastmasters protocol
+ * order, with the long title each office carries on paper. */
+const OFFICER_PRINT_ORDER: Array<{ role: OfficerRole; label: string }> = [
+  { role: 'President', label: 'President' },
+  { role: 'VPE', label: 'VP Education' },
+  { role: 'VPM', label: 'VP Membership' },
+  { role: 'VPPR', label: 'VP Public Relations' },
+  { role: 'Secretary', label: 'Secretary' },
+  { role: 'Treasurer', label: 'Treasurer' },
+  { role: 'SAA', label: 'Sergeant at Arms' },
+];
+
 interface SheetRailProps {
   meeting: Meeting;
   draft: MeetingDraft;
@@ -304,13 +331,22 @@ interface SheetRailProps {
   tipOf: TipResolver;
 }
 
-/** Left rail: the officers and role-holders, the club mission, and the word of
- * the day — everything the Roles, Prepared Speakers and Theme tabs collected. */
+/** Left rail: the meeting date and the club's officers in protocol order,
+ * then the evaluators, prepared speakers, club mission, and word of the day.
+ * Meeting roles no longer print here — the run-of-show table already names
+ * each role-holder at their line. */
 function SheetRail({ meeting, draft, nameOf, tipOf }: SheetRailProps) {
-  /* Optional roles print only when somebody actually holds them — an empty
-   * "Harkmaster —" row on every agenda would be pure noise. */
-  const roles = buildRoles(meeting).filter((role) => !role.optional || draft.roles[role.key]);
+  const { data: members } = useGetMembersQuery();
   const { word } = draft;
+
+  /* An office prints even while vacant ('—'), and every holder when several
+   * members share one (small clubs double up). Only active roster rows count. */
+  const officers = OFFICER_PRINT_ORDER.map(({ role, label }) => ({
+    label,
+    holders: (members ?? []).filter(
+      (member) => member.status === 'active' && member.roles.includes(role),
+    ),
+  }));
 
   /* Every speech evaluator named once — the same dedupe the run-of-show's
    * evaluations line uses, one row per person here. A typed-name guest with
@@ -337,20 +373,27 @@ function SheetRail({ meeting, draft, nameOf, tipOf }: SheetRailProps) {
         padding: 10,
       }}
     >
-      {roles.map((role) => {
-        const person = holderPerson(nameOf, draft.roles[role.key]);
-        return (
-          <RailSection key={role.key} title={role.label}>
-            <RailName>
-              {person ? (
-                <PersonTip person={person} tipOf={tipOf} />
-              ) : (
-                holderName(nameOf, draft.roles[role.key]) || '—'
-              )}
-            </RailName>
-          </RailSection>
-        );
-      })}
+      {/* The meeting date opens the rail, over the officer list. */}
+      <div style={{ fontSize: 11, fontWeight: 'bold', color: '#111827', marginBottom: 11 }}>
+        {formatRailDate(new Date(meeting.dateTime))}
+      </div>
+
+      {officers.map(({ label, holders }) => (
+        <RailSection key={label} title={label} accent={DEFAULT_BANNER_COLOR}>
+          {holders.length === 0 ? (
+            <div style={{ fontSize: 9.5, color: '#1f2937', lineHeight: 1.4 }}>—</div>
+          ) : (
+            holders.map((member) => {
+              const name = `${member.firstName} ${member.lastName}`.trim();
+              return (
+                <div key={member.id} style={{ fontSize: 9.5, color: '#1f2937', lineHeight: 1.4 }}>
+                  <PersonTip person={{ memberId: member.id, name }} tipOf={tipOf} />
+                </div>
+              );
+            })
+          )}
+        </RailSection>
+      ))}
 
       <RailSection title="Prepared Speech Evaluators">
         {evaluators.length === 0 ? (
