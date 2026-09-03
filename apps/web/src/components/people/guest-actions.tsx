@@ -177,13 +177,13 @@ function MoveStageTrigger({ guest }: MoveStageTriggerProps) {
           open={open}
           onClose={close}
           placement="bottom"
-          height="auto"
+          size="auto"
           closable={false}
           styles={{
             body: { padding: 0 },
             /* Rounded top corners so the sheet reads as a card rising from the
              * bottom of the screen rather than a full-width surface. */
-            content: { borderTopLeftRadius: 16, borderTopRightRadius: 16 },
+            section: { borderTopLeftRadius: 16, borderTopRightRadius: 16 },
           }}
         >
           {menu}

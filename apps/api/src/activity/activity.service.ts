@@ -4,7 +4,11 @@ import { can, type PermissionSubject } from '@toastly/access';
 
 import { PrismaService } from '@/prisma';
 
-import { type ActivityCategory, type ActivityLogWire, toActivityLogWire } from './serializers';
+import { type ActivityCategory, type ActivityLogPageWire, toActivityLogWire } from './serializers';
+
+/** Default page size for the feed — small enough to stay fast on a phone
+ * connection, big enough that a busy day usually fits in one page. */
+const ACTIVITY_LOGS_PAGE_SIZE = 50;
 
 /** Shape callers pass in to log an event. `clubId` and `actorMembershipId`
  * are set by the caller (usually the service that just committed a write). */
@@ -29,7 +33,20 @@ export interface RecordActivityInput {
 export class ActivityService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(subject: PermissionSubject, clubId: string): Promise<ActivityLogWire[]> {
+  /** Filters behind `GET /activity-logs`. `since` arrives as an instant the
+   * client computed from its own clock (viewer-local "today"). */
+  async list(
+    subject: PermissionSubject,
+    clubId: string,
+    args: {
+      cursor?: string;
+      limit?: number;
+      memberId?: string;
+      category?: string;
+      since?: string;
+      q?: string;
+    } = {},
+  ): Promise<ActivityLogPageWire> {
     if (!can(subject, 'read', 'activityLog', { clubId })) {
       throw new ForbiddenException({
         code: 'PERMISSION_DENIED',
@@ -38,11 +55,54 @@ export class ActivityService {
         reason: 'You do not manage this club',
       });
     }
+
+    const limit = Math.min(Math.max(args.limit ?? ACTIVITY_LOGS_PAGE_SIZE, 1), 100);
+    const needle = args.q?.trim();
+
+    const where: Prisma.ActivityLogWhereInput = { clubId };
+    if (args.memberId) where.actorMembershipId = args.memberId;
+    if (args.category) where.category = args.category;
+    if (args.since) where.createdAt = { gte: new Date(args.since) };
+
+    if (needle) {
+      /* Actor-name search is a two-step lookup rather than a relation filter:
+       * `actorMembershipId` is a bare column (no FK), and adding the FK now
+       * would make any legacy row with a dangling id unmigrateable. Rosters
+       * are small, so the extra round-trip is cheap. Each token must appear
+       * in the first or last name, so "aisha patel" matches too. */
+      const tokens = needle.split(/\s+/).filter(Boolean);
+      const actors = await this.prisma.membership.findMany({
+        where: {
+          clubId,
+          AND: tokens.map((token) => ({
+            OR: [
+              { firstName: { contains: token, mode: 'insensitive' } },
+              { lastName: { contains: token, mode: 'insensitive' } },
+            ],
+          })),
+        },
+        select: { id: true },
+      });
+      where.OR = [
+        { summary: { contains: needle, mode: 'insensitive' } },
+        { actorMembershipId: { in: actors.map((actor) => actor.id) } },
+      ];
+    }
+
     const rows = await this.prisma.activityLog.findMany({
-      where: { clubId },
+      where,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      ...(args.cursor ? { cursor: { id: args.cursor }, skip: 1 } : {}),
+      /* One extra row tells us whether another page exists without a
+       * COUNT(*) over the whole log. */
+      take: limit + 1,
     });
-    return rows.map(toActivityLogWire);
+    const hasMore = rows.length > limit;
+    const items = hasMore ? rows.slice(0, limit) : rows;
+    return {
+      items: items.map(toActivityLogWire),
+      nextCursor: hasMore ? items[items.length - 1].id : null,
+    };
   }
 
   /** Called by domain services from inside their own `$transaction`. Pass

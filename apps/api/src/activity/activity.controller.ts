@@ -1,9 +1,10 @@
-import { BadRequestException, Controller, Get } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
 
 import { CurrentContext, type RequestContext, Requires } from '@/access';
 
 import { ActivityService } from './activity.service';
-import { type ActivityLogWire } from './serializers';
+import { ListActivityLogsQueryDto } from './dto/activity-logs.dto';
+import { type ActivityLogPageWire } from './serializers';
 
 @Controller('activity-logs')
 export class ActivityLogsController {
@@ -11,9 +12,12 @@ export class ActivityLogsController {
 
   @Requires('activityLog', 'read')
   @Get()
-  list(@CurrentContext() ctx: RequestContext): Promise<ActivityLogWire[]> {
+  list(
+    @CurrentContext() ctx: RequestContext,
+    @Query() query: ListActivityLogsQueryDto,
+  ): Promise<ActivityLogPageWire> {
     const clubId = requireClubContext(ctx);
-    return this.activity.list(ctx.subject, clubId);
+    return this.activity.list(ctx.subject, clubId, query);
   }
 }
 

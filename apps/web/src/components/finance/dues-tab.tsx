@@ -43,7 +43,7 @@ export function DuesTab() {
   const [statusFilter, setStatusFilter] = useState<DuesStatus | 'all'>('all');
   const [payingRecord, setPayingRecord] = useState<DuesRecord | null>(null);
 
-  const { data: members } = useGetMembersQuery();
+  const { data: members, isLoading: membersLoading } = useGetMembersQuery();
   const { data: records, isLoading, isError, error, refetch } = useListDuesRecordsQuery(periodId);
   const [updateRecord] = useUpdateDuesRecordMutation();
 
@@ -179,7 +179,18 @@ export function DuesTab() {
                   />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-ink">
-                      {member ? `${member.firstName} ${member.lastName}` : record.memberId}
+                      {member ? (
+                        `${member.firstName} ${member.lastName}`
+                      ) : membersLoading ? (
+                        /* Roster still in flight — a skeleton instead of
+                         * flashing the raw memberId. */
+                        <span
+                          aria-hidden
+                          className="inline-block h-3.5 w-28 animate-pulse rounded bg-fill-strong align-middle"
+                        />
+                      ) : (
+                        'Unknown member'
+                      )}
                     </p>
                     <p className="truncate text-xs text-ink-muted">
                       {member ? formatRoles(member) : 'Member'} · Due{' '}

@@ -23,6 +23,7 @@ import { getApiErrorMessage } from '@/store/api-error';
 
 import { ClubStandingCard } from './club-standing-card';
 import { FinanceCard } from './finance-card';
+import { MyHistoryCard } from './my-history-card';
 import { PathwayCard } from './pathway-card';
 import { ProfileHero } from './profile-hero';
 import { RequestSpeechSlotModal } from './request-speech-slot-modal';
@@ -120,6 +121,7 @@ function MeContent({ memberId }: { memberId: string }) {
         </div>
 
         <div className="flex flex-col gap-4">
+          <MyHistoryCard />
           <ClubStandingCard stats={stats} engagement={engagement} />
           <SpeechSlotCard memberId={memberId} onNewRequest={() => setRequestModalOpen(true)} />
           <TasksCard memberId={memberId} />
@@ -145,9 +147,14 @@ export function MeScreen() {
   const { isError, error } = useGetMemberQuery(memberId ?? skipToken);
 
   if (!memberId) {
+    /* No club context — the account may still have guest-era history under
+     * its number, so point at the one screen that works without a club. */
     return (
-      <div className="mx-auto max-w-md rounded-xl border border-dashed border-line-strong px-6 py-16 text-center">
-        <p className="text-sm text-ink">Switch to a club context to view your profile.</p>
+      <div className="mx-auto flex max-w-md flex-col gap-4">
+        <div className="rounded-xl border border-dashed border-line-strong px-6 py-16 text-center">
+          <p className="text-sm text-ink">Switch to a club context to view your profile.</p>
+        </div>
+        <MyHistoryCard />
       </div>
     );
   }

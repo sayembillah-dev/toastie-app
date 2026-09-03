@@ -30,6 +30,13 @@ export interface ActivityLogWire {
   createdAt: string;
 }
 
+/** One page of the feed — cursor-paginated, newest first. */
+export interface ActivityLogPageWire {
+  items: ActivityLogWire[];
+  /** Hand back as `cursor` for the next page; null when the log is exhausted. */
+  nextCursor: string | null;
+}
+
 export function toActivityLogWire(row: ActivityLogRow): ActivityLogWire {
   const wire: ActivityLogWire = {
     id: row.id,

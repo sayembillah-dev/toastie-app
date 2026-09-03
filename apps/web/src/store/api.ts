@@ -1,6 +1,10 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 import type { OrgRole, OrgUnitType, SessionResponse } from '@toastly/access';
-import type { ActivityLog } from '@/lib/activity/activity-log';
+import type {
+  ActivityFeedFilters,
+  ActivityLog,
+  ActivityLogPage,
+} from '@/lib/activity/activity-log';
 import type { ClubProfile, UpdateClubProfileInput } from '@/lib/club/club-profile';
 import type { CreateInviteInput, Invite } from '@/lib/club-admin/invites';
 import type { Evaluation } from '@/lib/education/evaluations';
@@ -758,28 +762,8 @@ export const toastlyApi = createApi({
       }),
     }),
 
-    /* Search for existing members who can be added as guests to the club —
-     * excludes members already in the target club. Used in the add-guest drawer
-     * for the "add existing member" mode. */
-    searchMembersForGuestAdd: build.query<
-      Array<{
-        id: string;
-        firstName: string;
-        lastName: string;
-        email: string | null;
-        clubName: string;
-      }>,
-      { q?: string }
-    >({
-      query: ({ q }) => ({
-        url: '/guests/search/available-members',
-        method: 'GET',
-        params: q ? { q } : undefined,
-      }),
-    }),
-
     /* Number-first identity lookup (IDENTITY_PLAN §7) — powers the add-guest
-     * drawer's autofill card. Keyed by the raw phone string; callers skip
+     * modal's number step. Keyed by the raw phone string; callers skip
      * until the number normalizes to a full 11 digits. */
     lookupPersonByPhone: build.query<PersonLookup, string>({
       query: (phone) => ({ url: '/guests/lookup', method: 'GET', params: { phone } }),
@@ -2046,14 +2030,47 @@ export const toastlyApi = createApi({
       invalidatesTags: (_task, _error, { taskId }) => [{ type: 'Task', id: taskId }],
     }),
 
-    /* The full feed — every officer action across the app, newest first. The
-     * Activity Logs page filters on the client, same as the ledger and the
-     * inventory roster. */
-    getActivityLogs: build.query<ActivityLog[], void>({
-      query: () => ({ url: '/activity-logs', method: 'GET' }),
-      providesTags: (logs) => [
+    /* One page of the feed — every officer action across the app, newest
+     * first. Dashboards that only show the latest few pass a small `limit`;
+     * the Activity Logs page itself uses the infinite query below. */
+    getActivityLogs: build.query<ActivityLogPage, { limit?: number } | void>({
+      query: (arg) => ({
+        url: '/activity-logs',
+        method: 'GET',
+        params: arg?.limit ? { limit: arg.limit } : undefined,
+      }),
+      providesTags: (page) => [
         { type: 'ActivityLog', id: 'LIST' },
-        ...(logs ?? []).map((log) => ({ type: 'ActivityLog' as const, id: log.id })),
+        ...(page?.items ?? []).map((log) => ({ type: 'ActivityLog' as const, id: log.id })),
+      ],
+    }),
+
+    /* The scrollable feed behind the Activity Logs page (and the Club Admin
+     * Audit Trail tab): filters go to the server as query params, and each
+     * page's `nextCursor` is the next page param. A filter change is a new
+     * query-arg, so RTK starts it back at page one on its own. */
+    listActivityLogs: build.infiniteQuery<ActivityLogPage, ActivityFeedFilters, string | null>({
+      infiniteQueryOptions: {
+        initialPageParam: null,
+        getNextPageParam: (lastPage) => lastPage.nextCursor,
+      },
+      query: ({ queryArg, pageParam }) => ({
+        url: '/activity-logs',
+        method: 'GET',
+        params: {
+          limit: 50,
+          ...(pageParam ? { cursor: pageParam } : {}),
+          ...(queryArg.memberId ? { memberId: queryArg.memberId } : {}),
+          ...(queryArg.category ? { category: queryArg.category } : {}),
+          ...(queryArg.since ? { since: queryArg.since } : {}),
+          ...(queryArg.q ? { q: queryArg.q } : {}),
+        },
+      }),
+      providesTags: (result) => [
+        { type: 'ActivityLog', id: 'LIST' },
+        ...(result?.pages ?? []).flatMap((page) =>
+          page.items.map((log) => ({ type: 'ActivityLog' as const, id: log.id })),
+        ),
       ],
     }),
 
@@ -2663,7 +2680,6 @@ export const {
   useRotateGuestInviteLinkMutation,
   useGetPublicGuestInviteQuery,
   useSubmitPublicGuestInviteMutation,
-  useSearchMembersForGuestAddQuery,
   useLookupPersonByPhoneQuery,
   useCheckGuestMatchQuery,
   useUpdateGuestMutation,
@@ -2738,6 +2754,7 @@ export const {
   useDeleteTaskMutation,
   useAddTaskNoteMutation,
   useGetActivityLogsQuery,
+  useListActivityLogsInfiniteQuery,
   useListDistrictsQuery,
   useCreateDistrictMutation,
   useUpdateDistrictMutation,

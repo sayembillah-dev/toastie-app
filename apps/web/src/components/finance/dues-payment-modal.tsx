@@ -100,8 +100,8 @@ function ModalBody({ record, member, onDone, onCancel }: ModalBodyProps) {
     >
       <ReadOnly resource="dues" display="block" className="flex flex-col gap-4">
         <div className="rounded-lg bg-fill px-3 py-2 text-xs text-ink-soft">
-          {member ? `${member.firstName} ${member.lastName}` : record.memberId} ·{' '}
-          {period?.label ?? record.periodId} · Standard amount {formatMoney(record.amountDueMinor)}
+          {member ? `${member.firstName} ${member.lastName}` : 'Member'} ·{' '}
+          {period?.label ?? 'Current period'} · Standard amount {formatMoney(record.amountDueMinor)}
         </div>
 
         <Form.Item

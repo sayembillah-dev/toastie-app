@@ -41,16 +41,30 @@ export interface ActivityLog {
   createdAt: string;
 }
 
+/** One page of `GET /activity-logs` — cursor-paginated, newest first. */
+export interface ActivityLogPage {
+  items: ActivityLog[];
+  /** Hand back as `cursor` for the next page; null when the log is exhausted. */
+  nextCursor: string | null;
+}
+
+/** Server-side filters for the activity feed — sent as query params on
+ * `GET /activity-logs`. Every field optional; omitted means "no filter". */
+export interface ActivityFeedFilters {
+  memberId?: string;
+  category?: string;
+  /** ISO instant — the viewer-local start-of-day cutoff behind the
+   * time-range filter, computed client-side so "today" is the viewer's day. */
+  since?: string;
+  q?: string;
+}
+
 /** Latest-first, tie-broken by id so ordering is deterministic for React keys. */
 export function sortActivityLogsNewestFirst(logs: ActivityLog[]): ActivityLog[] {
   return [...logs].sort((a, b) => {
     if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? 1 : -1;
     return a.id < b.id ? 1 : -1;
   });
-}
-
-export function matchesActivityLogQuery(log: ActivityLog, needle: string): boolean {
-  return log.summary.toLowerCase().includes(needle);
 }
 
 /** Realistic spread of activity across every category and a handful of

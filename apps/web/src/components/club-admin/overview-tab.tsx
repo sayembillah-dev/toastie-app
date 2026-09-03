@@ -68,7 +68,8 @@ export function OverviewTab() {
   const now = useClientNow();
   const membersQuery = useGetMembersQuery({});
   const invitesQuery = useGetInvitesQuery();
-  const activityQuery = useGetActivityLogsQuery();
+  /* Only the latest few render (top 5) — one small page, not the whole log. */
+  const activityQuery = useGetActivityLogsQuery({ limit: 20 });
   const duesQuery = useListDuesRecordsQuery(CURRENT_DUES_PERIOD_ID);
   const meetingsQuery = useGetMeetingsQuery();
 
@@ -95,7 +96,7 @@ export function OverviewTab() {
   const derived = useMemo(() => {
     const members = membersQuery.data ?? [];
     const invites = invitesQuery.data ?? [];
-    const activity = activityQuery.data ?? [];
+    const activity = activityQuery.data?.items ?? [];
     const duesRecords = duesQuery.data ?? [];
     const meetings = meetingsQuery.data ?? [];
 

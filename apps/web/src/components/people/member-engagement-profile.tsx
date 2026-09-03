@@ -272,21 +272,31 @@ export function MemberEngagementScreen() {
     if (isNotFoundError(error)) notFound();
 
     return (
-      <div className="mx-auto max-w-md rounded-xl border border-dashed border-line-strong px-6 py-16 text-center">
-        <span
-          aria-hidden
-          className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-fill text-ink-soft"
-        >
-          <WarningCircle size={18} weight="bold" />
-        </span>
-        <p className="text-sm font-medium text-ink">Could not load this member</p>
-        <p className="mt-1 text-xs text-ink-muted">{getApiErrorMessage(error)}</p>
-      </div>
+      <>
+        <PageBreadcrumb label="Member" />
+        <div className="mx-auto max-w-md rounded-xl border border-dashed border-line-strong px-6 py-16 text-center">
+          <span
+            aria-hidden
+            className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-fill text-ink-soft"
+          >
+            <WarningCircle size={18} weight="bold" />
+          </span>
+          <p className="text-sm font-medium text-ink">Could not load this member</p>
+          <p className="mt-1 text-xs text-ink-muted">{getApiErrorMessage(error)}</p>
+        </div>
+      </>
     );
   }
 
   if (!member) {
-    return <ProfileSkeleton />;
+    /* No name yet — hand the shell a static label so the header never falls
+     * back to title-casing the raw id from the URL. */
+    return (
+      <>
+        <PageBreadcrumb label="Member" />
+        <ProfileSkeleton />
+      </>
+    );
   }
 
   return (

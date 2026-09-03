@@ -13,13 +13,13 @@ import {
   Wallet,
   WarningCircle,
 } from '@phosphor-icons/react/dist/ssr';
-import { Button, Input, Segmented, Select, Skeleton } from 'antd';
-import { useMemo, useState } from 'react';
+import { Button, Input, Segmented, Select, Skeleton, Spin } from 'antd';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ActivityCategory, ActivityLog } from '@/lib/activity/activity-log';
-import { ACTIVITY_CATEGORIES, matchesActivityLogQuery } from '@/lib/activity/activity-log';
+import { ACTIVITY_CATEGORIES } from '@/lib/activity/activity-log';
 import { getPrimaryRole } from '@/lib/education/members';
-import { useGetActivityLogsQuery, useGetMembersQuery } from '@/store/api';
+import { useGetMembersQuery, useListActivityLogsInfiniteQuery } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
 type TimeRangeFilter = 'all' | 'today' | 'week' | 'month';
@@ -56,8 +56,9 @@ const CATEGORY_OPTIONS = [
   })),
 ];
 
-/** Start-of-day cutoffs for the time-range filter, computed once per render
- * rather than per row. */
+/** Start-of-day cutoffs for the time-range filter, in the viewer's own
+ * timezone — the ISO instant is what travels to the server, so "today" is
+ * the viewer's day regardless of where the API runs. */
 function rangeCutoff(range: TimeRangeFilter, now: Date): Date | null {
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   if (range === 'today') return startOfToday;
@@ -77,6 +78,17 @@ function dayLabel(iso: string, now: Date): string {
   return DATE_FMT.format(day);
 }
 
+/** Debounce a free-text value so each keystroke doesn't fire a fresh
+ * first-page fetch — the feed only searches once typing pauses. */
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [value, delayMs]);
+  return debounced;
+}
+
 interface ActivityFeedProps {
   /** Caps the width of the feed column — the standalone Activity Logs page
    * wants a wider column than a tab nested inside another dashboard. */
@@ -85,10 +97,10 @@ interface ActivityFeedProps {
 
 /** The filterable, grouped-by-day activity feed — shared by the standalone
  * Activity Logs page and the Club Admin dashboard's Audit Trail tab, so
- * "who did what, when" only has one implementation. See `recordActivity()`
- * in `local-db/handlers.ts` for where these rows come from. */
+ * "who did what, when" only has one implementation. Pages in 50 rows at a
+ * time as the reader scrolls; every filter runs server-side so a filtered
+ * view never needs the whole log loaded. */
 export function ActivityFeed({ maxWidthClassName = 'max-w-4xl' }: ActivityFeedProps) {
-  const { data: logs, isLoading, isError, error, refetch } = useGetActivityLogsQuery();
   /* `includeRemoved` — a logged action can reference a member who has since
    * been soft-removed from the roster, and the feed should still show their
    * name rather than falling back to "A member". */
@@ -98,6 +110,37 @@ export function ActivityFeed({ maxWidthClassName = 'max-w-4xl' }: ActivityFeedPr
   const [memberId, setMemberId] = useState('all');
   const [category, setCategory] = useState<string>('all');
   const [range, setRange] = useState<TimeRangeFilter>('all');
+
+  const debouncedQuery = useDebouncedValue(query.trim(), 300);
+  /* Computed once per range change — the cutoff is a query param, so it
+   * must be stable across re-renders rather than re-derived every render. */
+  const since = useMemo(() => {
+    const cutoff = rangeCutoff(range, new Date());
+    return cutoff ? cutoff.toISOString() : undefined;
+  }, [range]);
+
+  const filters = useMemo(
+    () => ({
+      memberId: memberId === 'all' ? undefined : memberId,
+      category: category === 'all' ? undefined : category,
+      since,
+      q: debouncedQuery ? debouncedQuery : undefined,
+    }),
+    [memberId, category, since, debouncedQuery],
+  );
+
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useListActivityLogsInfiniteQuery(filters);
+
+  const logs = useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data]);
 
   const membersById = useMemo(
     () => new Map((members ?? []).map((member) => [member.id, member])),
@@ -115,27 +158,10 @@ export function ActivityFeed({ maxWidthClassName = 'max-w-4xl' }: ActivityFeedPr
     [members],
   );
 
-  const filtered = useMemo(() => {
-    if (!logs) return [];
-    const needle = query.trim().toLowerCase();
-    const now = new Date();
-    const cutoff = rangeCutoff(range, now);
-
-    return logs.filter((log) => {
-      if (memberId !== 'all' && log.actorMemberId !== memberId) return false;
-      if (category !== 'all' && log.category !== category) return false;
-      if (cutoff && new Date(log.createdAt) < cutoff) return false;
-      if (!needle) return true;
-      const actor = membersById.get(log.actorMemberId);
-      const actorName = actor ? `${actor.firstName} ${actor.lastName}`.toLowerCase() : '';
-      return matchesActivityLogQuery(log, needle) || actorName.includes(needle);
-    });
-  }, [logs, query, memberId, category, range, membersById]);
-
   const groups = useMemo(() => {
     const now = new Date();
     const byDay = new Map<string, { label: string; entries: ActivityLog[] }>();
-    for (const log of filtered) {
+    for (const log of logs) {
       const key = log.createdAt.slice(0, 10);
       const existing = byDay.get(key);
       if (existing) {
@@ -145,7 +171,37 @@ export function ActivityFeed({ maxWidthClassName = 'max-w-4xl' }: ActivityFeedPr
       }
     }
     return Array.from(byDay.values());
-  }, [filtered]);
+  }, [logs]);
+
+  /* Whether the reader has paged at least once in the current filter —
+   * gates the end-of-log cap so a club whose whole history fits in one
+   * page isn't told "that's everything" out of nowhere. Reset whenever the
+   * server-side filter set changes (RTK restarts at page one on its own). */
+  const [pagedFilterKey, setPagedFilterKey] = useState<string | null>(null);
+  const filterKey = JSON.stringify(filters);
+
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !hasNextPage) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        /* `root: null` = viewport — the sentinel sits inside the shell's
+         * scrolling <main>, but clipping ancestors are accounted for, so
+         * this fires exactly when the bottom scrolls into view. */
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setPagedFilterKey(filterKey);
+          fetchNextPage();
+        }
+      },
+      { rootMargin: '240px' },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+    /* isFetchingNextPage is deliberately a dep: while a fetch is in flight
+     * the observer is torn down and re-armed after, so one intersection
+     * can't queue a dozen page fetches. */
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, filterKey]);
 
   return (
     <div className={`mx-auto ${maxWidthClassName}`}>
@@ -262,6 +318,19 @@ export function ActivityFeed({ maxWidthClassName = 'max-w-4xl' }: ActivityFeedPr
               </ul>
             </div>
           ))}
+
+          {isFetchingNextPage ? (
+            <div className="flex justify-center py-2">
+              <Spin size="small" />
+            </div>
+          ) : null}
+          {!hasNextPage && pagedFilterKey === filterKey ? (
+            <p className="py-2 text-center text-xs text-ink-muted">
+              You&apos;ve reached the end of the log.
+            </p>
+          ) : null}
+          {/* Sentinel — becoming visible is what fetches the next page. */}
+          <div ref={sentinelRef} className="h-1" aria-hidden="true" />
         </div>
       ) : null}
     </div>

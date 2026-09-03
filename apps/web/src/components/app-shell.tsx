@@ -182,18 +182,55 @@ const superAdminNav: NavEntry[] = [
   { href: '/super-admin/users', title: 'Users', Icon: Users },
 ];
 
+/** A crumb whose human name lives in data the page hasn't loaded yet. When
+ * the URL segment is a generated record id, rendering it would leak the raw
+ * cuid into the header for a beat — the header draws a skeleton bar instead. */
+interface TrailCrumb {
+  href: string;
+  title: string;
+  pending?: boolean;
+}
+
+/** Generated record ids (Prisma cuids) are long lowercase-alnum strings —
+ * nothing a human should ever read, and nothing a real route segment or
+ * person/org name looks like. A page's `PageBreadcrumb` label/trail override
+ * replaces the pending crumb the moment the record arrives. */
+function looksLikeRecordId(segment: string): boolean {
+  return /^[a-z0-9]{20,}$/.test(segment) && /\d/.test(segment);
+}
+
+/** Skeleton bar standing in for a crumb whose name is still loading. Sized
+ * like a short name so the header doesn't jump when the real text lands. */
+function CrumbSkeleton() {
+  return (
+    <span
+      aria-hidden
+      className="inline-block h-3.5 w-20 animate-pulse rounded bg-fill-strong align-middle"
+    />
+  );
+}
+
 /** Named routes win; anything deeper falls back to title-cased segments.
- * Crumbs are text-only — the icon lives on the sidebar entry instead. */
-function buildTrail(pathname: string): { href: string; title: string }[] {
+ * Segments that look like record ids become `pending` crumbs — title-casing
+ * them would flash `Cmtayv…` in the header while the page fetches its record
+ * (regression seen on the people/education detail pages). Crumbs are
+ * text-only — the icon lives on the sidebar entry instead. */
+function buildTrail(pathname: string): TrailCrumb[] {
   const allNav = [...primaryNav, ...clubAdminNav, ...superAdminNav];
   const matched = allNav.find((entry) => entry.href === pathname);
   if (matched) return [{ href: matched.href, title: matched.title }];
 
   const segments = pathname.split('/').filter(Boolean);
-  return segments.map((segment, index) => ({
-    href: `/${segments.slice(0, index + 1).join('/')}`,
-    title: segment.replace(/-/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
-  }));
+  return segments.map((segment, index) => {
+    const pending = looksLikeRecordId(segment);
+    return {
+      href: `/${segments.slice(0, index + 1).join('/')}`,
+      title: pending
+        ? ''
+        : segment.replace(/-/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
+      pending: pending || undefined,
+    };
+  });
 }
 
 interface SideRowProps {
@@ -448,13 +485,15 @@ export function AppShell({ children, actions, notificationCount = 0 }: AppShellP
     );
   }, [rawNavEntries, can, canLoading]);
 
-  const rawTrail = breadcrumbSlot.trail ?? buildTrail(pathname);
-  const trail = breadcrumbSlot.trail
+  const rawTrail: TrailCrumb[] = breadcrumbSlot.trail ?? buildTrail(pathname);
+  const trail: TrailCrumb[] = breadcrumbSlot.trail
     ? rawTrail
     : breadcrumbSlot.label
-      ? rawTrail.map((crumb, index) =>
+      ? /* The label override means the name has arrived — the fresh object
+         * deliberately drops `pending` so the skeleton never outlives it. */
+        rawTrail.map((crumb, index) =>
           index === rawTrail.length - 1
-            ? { ...crumb, title: breadcrumbSlot.label as string }
+            ? { href: crumb.href, title: breadcrumbSlot.label as string }
             : crumb,
         )
       : rawTrail;
@@ -563,7 +602,11 @@ export function AppShell({ children, actions, notificationCount = 0 }: AppShellP
               <div className="min-w-0 md:hidden">{mobileTitle}</div>
             ) : (
               <span className="min-w-0 truncate text-sm font-medium text-ink md:hidden">
-                {trail[trail.length - 1]?.title}
+                {trail[trail.length - 1]?.pending ? (
+                  <CrumbSkeleton />
+                ) : (
+                  trail[trail.length - 1]?.title
+                )}
               </span>
             )}
 
@@ -585,7 +628,9 @@ export function AppShell({ children, actions, notificationCount = 0 }: AppShellP
                         isLast ? 'font-medium text-ink' : 'text-ink-soft'
                       }`}
                     >
-                      <span className="truncate">{crumb.title}</span>
+                      <span className="truncate">
+                        {crumb.pending ? <CrumbSkeleton /> : crumb.title}
+                      </span>
                     </Link>
                   </Fragment>
                 );

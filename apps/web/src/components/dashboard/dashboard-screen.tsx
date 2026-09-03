@@ -83,7 +83,8 @@ function DashboardContent({ memberId }: { memberId: string }) {
   const { data: timerEntries } = useGetMemberTimerEntriesQuery(memberId);
   const { data: ahCounterEntries } = useGetMemberAhCounterEntriesQuery(memberId);
   const { data: guests } = useGetGuestsQuery();
-  const { data: activityLogs } = useGetActivityLogsQuery();
+  /* Only the latest handful render — no need to page the whole log. */
+  const { data: activityLogs } = useGetActivityLogsQuery({ limit: 20 });
 
   const now = new Date();
   const nextMeeting = meetings ? partitionMeetings(meetings, now.getTime()).current : null;
@@ -160,7 +161,7 @@ function DashboardContent({ memberId }: { memberId: string }) {
             meetingsHeld={past.length}
             upcomingMeetings={upcoming.length}
           />
-          <RecentActivityCard logs={activityLogs ?? []} membersById={membersById} />
+          <RecentActivityCard logs={activityLogs?.items ?? []} membersById={membersById} />
           <FinanceCard memberId={memberId} />
         </div>
       </div>
