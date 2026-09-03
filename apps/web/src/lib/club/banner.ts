@@ -2,14 +2,17 @@ import type { CSSProperties } from 'react';
 
 import type { ClubBannerPos } from './club-profile';
 
-/** The printed banner strip is the full 210mm page width (≈794px at 96dpi)
- * and 72px tall. The settings drag frame uses this same aspect so the crop
- * the admin sees is exactly the crop the PDF prints. */
-export const AGENDA_BANNER_ASPECT = 794 / 72;
+/** The printed banner strip bleeds to the full 210mm page width (≈794px at
+ * 96dpi) and stands 96px tall. The settings drag frame uses this same aspect
+ * so the crop the admin sees is exactly the crop the PDF prints. */
+export const AGENDA_BANNER_WIDTH = 794;
+export const AGENDA_BANNER_HEIGHT = 96;
+export const AGENDA_BANNER_ASPECT = AGENDA_BANNER_WIDTH / AGENDA_BANNER_HEIGHT;
 
-/** Default navy strip colour when a club has picked none — matches `NAVY`
- * in the agenda sheet. */
-export const DEFAULT_BANNER_COLOR = '#003366';
+/** Toastmasters International's official maroon — the strip colour when a
+ * club has picked none. The agenda sheet imports this same constant so the
+ * settings preview and the PDF never drift apart. */
+export const DEFAULT_BANNER_COLOR = '#772432';
 
 export const DEFAULT_BANNER_POS: ClubBannerPos = { x: 50, y: 50, zoom: 1 };
 

@@ -172,10 +172,10 @@ export class UpdateClubProfileDto {
   @Matches(PHONE_REGEX, { message: 'Phone must be exactly 11 digits' })
   contactPhone?: string | null;
 
-  /** Hex colour for the printed agenda banner strip — `#003366` style.
-   * `null` restores the default navy. */
+  /** Hex colour for the printed agenda banner strip — `#772432` style.
+   * `null` restores the default Toastmasters maroon. */
   @IsOptional()
-  @Matches(/^#[0-9a-fA-F]{6}$/, { message: 'Banner colour must be a hex code like #003366' })
+  @Matches(/^#[0-9a-fA-F]{6}$/, { message: 'Banner colour must be a hex code like #772432' })
   bannerColor?: string | null;
 
   /** Storage key (or inline data-URL on the local backend) for a custom

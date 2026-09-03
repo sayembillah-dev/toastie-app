@@ -21,9 +21,19 @@
 }
 
 @media print {
+  /* Zero page margin lets the banner bleed to the paper edges — wider than
+   * the old 5mm-inset strip, with no white border framing it. The sheet's
+   * own content keeps its distance from the paper via .agenda-sheet-inset. */
   @page {
     size: A4 portrait;
-    margin: 5mm;
+    margin: 0;
+  }
+
+  /* Everything below the banner (and the info strip) stands 8mm in from the
+   * paper edges the banner now touches. */
+  .agenda-sheet-inset {
+    padding-left: 8mm !important;
+    padding-right: 8mm !important;
   }
 
   html,
@@ -100,5 +110,8 @@
     margin: 0 !important;
     min-height: 0 !important;
     box-shadow: none !important;
+    /* The last printed page keeps some air above the paper's foot, now that
+     * the page margin no longer provides it. */
+    padding-bottom: 8mm !important;
   }
 }

@@ -3,7 +3,12 @@
 import { Slider } from 'antd';
 import { useRef, useState } from 'react';
 
-import { bannerImageCss, bannerOverflow } from '@/lib/club/banner';
+import {
+  AGENDA_BANNER_HEIGHT,
+  AGENDA_BANNER_WIDTH,
+  bannerImageCss,
+  bannerOverflow,
+} from '@/lib/club/banner';
 import type { ClubBannerPos } from '@/lib/club/club-profile';
 
 interface BannerImageFrameProps {
@@ -27,7 +32,7 @@ interface DragState {
 }
 
 /** Live preview of the printed agenda banner strip — same aspect as the PDF
- * (full A4 width × 72px) and the same background CSS, so the crop the admin
+ * (full A4 width × 96px) and the same background CSS, so the crop the admin
  * drags into place here is the crop that prints. Dragging pans the image
  * (like grabbing the picture itself); the slider zooms past the cover fit. */
 export function BannerImageFrame({ src, pos, onChange, disabled }: BannerImageFrameProps) {
@@ -92,7 +97,7 @@ export function BannerImageFrame({ src, pos, onChange, disabled }: BannerImageFr
         onPointerCancel={endDrag}
         className="relative w-full touch-none overflow-hidden rounded-lg border border-line bg-fill select-none"
         style={{
-          aspectRatio: '794 / 72',
+          aspectRatio: `${AGENDA_BANNER_WIDTH} / ${AGENDA_BANNER_HEIGHT}`,
           cursor: disabled || !pos.aspect ? 'default' : dragging ? 'grabbing' : 'grab',
           ...bannerImageCss(src, pos),
         }}

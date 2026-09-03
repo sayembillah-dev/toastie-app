@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { Fragment, useMemo } from 'react';
 
 import { PersonAvatar } from '@/components/ui/person-avatar';
-import { bannerImageCss } from '@/lib/club/banner';
+import { bannerImageCss, DEFAULT_BANNER_COLOR } from '@/lib/club/banner';
 import type { ClubBannerPos } from '@/lib/club/club-profile';
 import { getInitials } from '@/lib/education/members';
 import type { AgendaPerson, AgendaRow } from '@/lib/meetings/agenda';
@@ -29,12 +29,10 @@ import { selectMeetingDraft } from '@/store/meeting-draft-slice';
 import tmLogo from '../../../assets/tm.png';
 import { useMemberOf, useNameOf } from './use-name-of';
 
-/* The printed agenda is its own visual language — navy Toastmasters branding on
- * an A4 sheet — so it uses literal colours and pixel sizes rather than the app's
- * design tokens. Everything here has to survive being printed on paper. */
-const NAVY = '#003366';
+/* The printed agenda is its own visual language — Toastmasters maroon branding
+ * on an A4 sheet — so it uses literal colours and pixel sizes rather than the
+ * app's design tokens. Everything here has to survive being printed on paper. */
 const RULE = '#1a3f6f';
-const BAND = '#d6e4f0';
 
 const MONTHS = [
   'Jan',
@@ -64,42 +62,6 @@ function formatClock(date: Date): string {
   return `${hours % 12 || 12}:${minutes} ${suffix}`;
 }
 
-/** The rays fanning out behind the header, as on the club's letterhead: 19 lines
- * over a half-turn, every third one heavier. */
-function HeaderRays() {
-  const rays = Array.from({ length: 19 }, (_, index) => {
-    const angle = ((-90 + index * 10) * Math.PI) / 180;
-    return {
-      key: index,
-      x2: 400 + Math.cos(angle) * 900,
-      y2: 36 + Math.sin(angle) * 900,
-      width: index % 3 === 0 ? 3 : 1.5,
-    };
-  });
-
-  return (
-    <svg
-      viewBox="0 0 800 72"
-      preserveAspectRatio="xMidYMid slice"
-      aria-hidden
-      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.18 }}
-    >
-      <title>Decorative header rays</title>
-      {rays.map((ray) => (
-        <line
-          key={ray.key}
-          x1={400}
-          y1={36}
-          x2={ray.x2}
-          y2={ray.y2}
-          stroke="white"
-          strokeWidth={ray.width}
-        />
-      ))}
-    </svg>
-  );
-}
-
 function SheetHeader({ meeting, theme }: { meeting: Meeting; theme: string }) {
   // Banner identity comes from the club profile (name + org lineage +
   // banner colour/image); the hard-coded CLUB constants only cover the
@@ -111,10 +73,11 @@ function SheetHeader({ meeting, theme }: { meeting: Meeting; theme: string }) {
 
   /* Banner background precedence: a custom image (positioned exactly as the
    * admin dragged it in club settings) wins over the picked colour, which
-   * wins over the default navy. The image keeps the picked colour (or navy)
-   * behind it so the strip is never blank while the file loads. */
+   * wins over the official Toastmasters maroon. The image keeps the picked
+   * colour (or maroon) behind it so the strip is never blank while the file
+   * loads. */
   const bannerBackground: React.CSSProperties = {
-    backgroundColor: club?.bannerColor?.trim() || NAVY,
+    backgroundColor: club?.bannerColor?.trim() || DEFAULT_BANNER_COLOR,
   };
   if (club?.bannerImageUrl) {
     const pos: ClubBannerPos = club.bannerImagePos ?? { x: 50, y: 50, zoom: 1 };
@@ -123,45 +86,47 @@ function SheetHeader({ meeting, theme }: { meeting: Meeting; theme: string }) {
 
   return (
     <>
+      {/* The banner bleeds edge to edge — no border, no inset, no background
+       * artwork; in print the sheet's zero page margin lets it run to the
+       * paper. */}
       <div
         style={{
           ...bannerBackground,
           position: 'relative',
           overflow: 'hidden',
-          height: 72,
+          height: 96,
           display: 'flex',
           alignItems: 'center',
         }}
       >
-        <HeaderRays />
         <div
           style={{
             position: 'relative',
             zIndex: 1,
             flexShrink: 0,
-            width: 68,
-            height: 68,
+            width: 108,
+            height: 96,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            paddingLeft: 12,
+            paddingLeft: 20,
           }}
         >
           <Image
             src={tmLogo}
             alt="Toastmasters logo"
-            width={52}
-            height={52}
+            width={76}
+            height={76}
             priority
             unoptimized
-            style={{ width: 52, height: 52, objectFit: 'contain' }}
+            style={{ width: 76, height: 76, objectFit: 'contain' }}
           />
         </div>
         <div
           style={{
             flex: '1 1 0%',
             textAlign: 'right',
-            paddingRight: 16,
+            paddingRight: 20,
             position: 'relative',
             zIndex: 1,
           }}
@@ -169,15 +134,21 @@ function SheetHeader({ meeting, theme }: { meeting: Meeting; theme: string }) {
           <div style={{ fontSize: 20, fontWeight: 'bold', color: 'white', letterSpacing: 0.5 }}>
             {club?.name ?? CLUB.name}
           </div>
-          <div style={{ fontSize: 10, color: '#b8d4f0', letterSpacing: 1, marginTop: 2 }}>
+          <div
+            style={{
+              fontSize: 10,
+              color: 'rgba(255, 255, 255, 0.8)',
+              letterSpacing: 1,
+              marginTop: 2,
+            }}
+          >
             {lineage}
           </div>
         </div>
       </div>
 
-      <div style={{ background: BAND, height: 8 }} />
-
       <div
+        className="agenda-sheet-inset"
         style={{
           padding: '5px 16px',
           borderBottom: `2px solid ${RULE}`,
@@ -597,7 +568,7 @@ export function AgendaPreview({ meeting }: AgendaPreviewProps) {
           }}
         >
           <SheetHeader meeting={meeting} theme={draft.theme.trim() || meeting.theme} />
-          <div style={{ display: 'flex' }}>
+          <div className="agenda-sheet-inset" style={{ display: 'flex' }}>
             <SheetRail meeting={meeting} draft={draft} nameOf={nameOf} tipOf={tipOf} />
             <SheetTable rows={rows} tipOf={tipOf} />
           </div>
