@@ -63,13 +63,11 @@ function formatClock(date: Date): string {
 }
 
 function SheetHeader({ meeting, theme }: { meeting: Meeting; theme: string }) {
-  // Banner identity comes from the club profile (name + org lineage +
-  // banner colour/image); the hard-coded CLUB constants only cover the
-  // loading splash.
+  // Banner identity comes from the club profile (name + banner colour/image);
+  // the hard-coded CLUB name only covers the loading splash. The sub-line
+  // under the club name carries the meeting theme.
   const { data: club } = useGetClubProfileQuery();
-  const lineage = club
-    ? [club.districtName, club.divisionName, club.areaName].filter(Boolean).join(' · ')
-    : `District ${CLUB.district} · Division ${CLUB.division} · Area ${CLUB.area}`;
+  const themeLine = theme.trim();
 
   /* Banner background precedence: a custom image (positioned exactly as the
    * admin dragged it in club settings) wins over the picked colour, which
@@ -134,16 +132,18 @@ function SheetHeader({ meeting, theme }: { meeting: Meeting; theme: string }) {
           <div style={{ fontSize: 20, fontWeight: 'bold', color: 'white', letterSpacing: 0.5 }}>
             {club?.name ?? CLUB.name}
           </div>
-          <div
-            style={{
-              fontSize: 10,
-              color: 'rgba(255, 255, 255, 0.8)',
-              letterSpacing: 1,
-              marginTop: 2,
-            }}
-          >
-            {lineage}
-          </div>
+          {themeLine ? (
+            <div
+              style={{
+                fontSize: 11,
+                color: 'rgba(255, 255, 255, 0.8)',
+                letterSpacing: 1,
+                marginTop: 2,
+              }}
+            >
+              {themeLine}
+            </div>
+          ) : null}
         </div>
       </div>
 
