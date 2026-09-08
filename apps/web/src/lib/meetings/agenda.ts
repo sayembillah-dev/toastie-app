@@ -142,6 +142,22 @@ function buildPreparedSpeechBlock(draft: MeetingDraft, nameOf: NameResolver): Ag
   const lines: AgendaLine[] = [];
 
   draft.speakers.forEach((speaker, index) => {
+    /* A keynote is an unevaluated address: no objectives preamble, no
+     * evaluator, no pathway meta — just the talk and its hand-set time
+     * (kept off the clock until a duration is entered). */
+    if (speaker.kind === 'keynote') {
+      lines.push({
+        key: `${speaker.id}-speech`,
+        label: `${index + 1}. Keynote: ${speaker.title.trim() || 'Title to be confirmed'}`,
+        person: speakerPerson(nameOf, speaker.memberId, speaker.speakerName),
+        people: toPeople(
+          speechSlotPerson(nameOf, speaker.memberId, speaker.guestId, speaker.speakerName),
+        ),
+        minutes: speaker.duration,
+      });
+      return;
+    }
+
     lines.push({
       key: `${speaker.id}-objectives`,
       label: 'Evaluator explains Objectives',
@@ -205,6 +221,10 @@ export function buildAgenda(
    * kept alongside so the sheet can offer each name's bio popover. */
   const evaluatorPeople: AgendaPerson[] = [];
   for (const speaker of draft.speakers) {
+    /* Keynotes are never evaluated — nothing to roll into the Prepared
+     * Speech Evaluations line. (Their evaluator fields stay empty anyway;
+     * the skip states the rule instead of relying on that.) */
+    if (speaker.kind === 'keynote') continue;
     const entry = speechSlotPerson(
       nameOf,
       speaker.evaluatorId,

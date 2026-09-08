@@ -351,7 +351,11 @@ export function TimerView({ meetingId, showShare, token = '' }: TimerViewProps) 
       const nextAgendaSpeakers = sources.map((source) => {
         const type: TimerSpeakerType =
           source.role === 'speaker'
-            ? 'Prepared Speaker'
+            ? /* A keynote times off its hand-entered duration (carried in
+               * the source's bounds), not a Pathways project. */
+              source.kind === 'keynote'
+              ? 'Keynote'
+              : 'Prepared Speaker'
             : source.role === 'evaluator'
               ? 'Speech Evaluator'
               : source.role === 'general-evaluator'

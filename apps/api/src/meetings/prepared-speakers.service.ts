@@ -45,7 +45,7 @@ export class PreparedSpeakersService {
     subject: PermissionSubject,
     meetingId: string,
     actorMembershipId: string | null,
-    _dto: CreatePreparedSpeakerDto,
+    dto: CreatePreparedSpeakerDto,
   ): Promise<PreparedSpeakerWire> {
     const meeting = await this.requireMeeting(meetingId);
     this.assert(subject, meeting.clubId, 'create');
@@ -60,17 +60,18 @@ export class PreparedSpeakersService {
     let order = 1;
     while (taken.has(order)) order += 1;
 
+    const kind = dto.kind ?? 'prepared';
     const row = await this.prisma.$transaction(async (tx) => {
       const speaker = await tx.meetingSpeaker.create({
-        data: { clubId: meeting.clubId, meetingId: meeting.id, order },
+        data: { clubId: meeting.clubId, meetingId: meeting.id, order, kind },
       });
       await this.activity.record(
         {
           clubId: meeting.clubId,
           actorMembershipId,
           category: 'meeting',
-          action: 'added a prepared speaker',
-          summary: `Added a prepared speaker slot for Meeting ${meeting.meetingNumber}`,
+          action: kind === 'keynote' ? 'added a keynote speaker' : 'added a prepared speaker',
+          summary: `Added a ${kind === 'keynote' ? 'keynote' : 'prepared'} speaker slot for Meeting ${meeting.meetingNumber}`,
           entityType: 'meetingSpeaker',
           entityId: speaker.id,
         },

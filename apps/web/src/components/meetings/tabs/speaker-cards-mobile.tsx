@@ -126,13 +126,22 @@ function SpeakerCardMobile({
 }: SpeakerCardMobileProps) {
   const name = speakerDisplayName(speaker, members, guests);
   const ratio = speakerSetupRatio(speaker);
+  /* Keynotes take no evaluation — no share sheet, no feedback badge. */
+  const isKeynote = speaker.kind === 'keynote';
 
   return (
     <article className="rounded-2xl border border-line bg-canvas p-4">
       <div className="flex items-center gap-3">
         <SpeakerAvatar speaker={speaker} members={members} guests={guests} />
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold text-ink-muted">#{index}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-[11px] font-semibold text-ink-muted">#{index}</p>
+            {isKeynote && (
+              <span className="rounded-full bg-violet-100 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-violet-700">
+                Keynote
+              </span>
+            )}
+          </div>
           <p className={`truncate text-sm font-semibold ${name ? 'text-ink' : 'text-ink-muted'}`}>
             {name ?? 'Unassigned speaker'}
           </p>
@@ -166,12 +175,15 @@ function SpeakerCardMobile({
           <Button block size="large" onClick={onOpen}>
             View details
           </Button>
-          <Button
-            size="large"
-            icon={<ShareNetwork size={16} />}
-            onClick={onShare}
-            aria-label={`Share evaluation link for speaker #${index}`}
-          />
+          {/* Keynotes collect no evaluations, so there's no link to share. */}
+          {isKeynote ? null : (
+            <Button
+              size="large"
+              icon={<ShareNetwork size={16} />}
+              onClick={onShare}
+              aria-label={`Share evaluation link for speaker #${index}`}
+            />
+          )}
         </div>
       )}
     </article>
@@ -302,10 +314,14 @@ export function SpeakerListMobile({
                 ariaLabel={`Status for speaker #${openIndex + 1}`}
                 className="w-32 shrink-0"
               />
-              <FeedbackBadge count={openSpeaker.evaluationCount} />
+              {openSpeaker.kind === 'keynote' ? null : (
+                <FeedbackBadge count={openSpeaker.evaluationCount} />
+              )}
               <span className="flex-1" />
               <Popconfirm
-                title="Delete this speaker?"
+                title={
+                  openSpeaker.kind === 'keynote' ? 'Delete this keynote?' : 'Delete this speaker?'
+                }
                 okText="Delete"
                 cancelText="Cancel"
                 okButtonProps={{ danger: true }}

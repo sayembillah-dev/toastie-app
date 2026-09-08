@@ -207,9 +207,19 @@ agenda link. Constraints: `@@unique([clubId, id])`,
 **MeetingRoleAssignment**: `(clubId, meetingId, roleKey)` unique. Assigned
 to either a `Membership` or a `Prospect` (guest), never both.
 
-**MeetingSpeaker**: a prepared-speech slot, ordered 1 to 3, with `status`.
-The speaker and evaluator can each be a `Membership` or a `Prospect`.
-Fields: `title`, `duration`, `pathway`, `project`, `notes`.
+**MeetingSpeaker**: one speech slot on a meeting, ordered by `order`
+(`@@unique([clubId, meetingId, order])`, no upper bound), with `status`.
+`kind` distinguishes the two slot types: `prepared` (the default) is an
+evaluated Pathways speech — the speaker and evaluator can each be a
+`Membership` or a `Prospect`, and `pathway`/`project` drive the level and
+duration bounds; `keynote` is an optional, unevaluated address carrying
+only a title, a speaker and a hand-entered `duration` — it never holds
+evaluator fields, appears on the planner grid (the planner's Speaker 1–4
+columns mirror positionally over the prepared slots only), or accepts
+`EvaluationSubmission`s. The kind is fixed at creation. Both kinds share
+the one running order, so keynotes re-order freely among the prepared
+speakers. Fields: `kind`, `title`, `duration`, `pathway`, `project`,
+`notes`.
 
 **EvaluationSubmission**: anonymous, public feedback on a `MeetingSpeaker`.
 Fields: `evaluatorName`, `isAssignedEvaluator`, `text`, `audioKey`,

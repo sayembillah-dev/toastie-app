@@ -23,12 +23,15 @@ const ROLE_BY_FIELD: Array<[string, string]> = [
   ['harkmaster', 'harkmaster'],
 ];
 
-/** [order, speaker field, evaluator field]. */
-const SPEAKER_PAIRS: Array<[number, string, string]> = [
-  [1, 'speaker1', 'evaluator1'],
-  [2, 'speaker2', 'evaluator2'],
-  [3, 'speaker3', 'evaluator3'],
-  [4, 'speaker4', 'evaluator4'],
+/** [speaker field, evaluator field] — the planner's four columns. They map
+ * POSITIONALLY onto the meeting's prepared speakers in agenda order: keynotes
+ * never appear here, so a keynote holding order 1–4 neither leaks into the
+ * grid's Speaker N column nor gets clobbered by a planner save. */
+const SPEAKER_PAIRS: Array<[string, string]> = [
+  ['speaker1', 'evaluator1'],
+  ['speaker2', 'evaluator2'],
+  ['speaker3', 'evaluator3'],
+  ['speaker4', 'evaluator4'],
 ];
 
 interface PersonAssignee {
@@ -147,12 +150,16 @@ export async function syncPlannerSpeakersFromMeeting(
   });
   if (!row) return;
 
-  const speakers = await tx.meetingSpeaker.findMany({ where: { clubId, meetingId } });
-  const byOrder = new Map(speakers.map((s) => [s.order, s]));
+  /* Prepared only, in agenda order — pair index N reflects the N-th
+   * prepared speaker regardless of any keynotes interleaved in the order. */
+  const speakers = await tx.meetingSpeaker.findMany({
+    where: { clubId, meetingId, kind: 'prepared' },
+    orderBy: { order: 'asc' },
+  });
 
   const assignees = { ...((row.assignees as Record<string, unknown>) ?? {}) };
-  for (const [order, speakerField, evaluatorField] of SPEAKER_PAIRS) {
-    const speaker = byOrder.get(order);
+  for (const [index, [speakerField, evaluatorField]] of SPEAKER_PAIRS.entries()) {
+    const speaker = speakers[index];
     assignees[speakerField] = speaker
       ? await toAssigneeJson(tx, clubId, speaker.membershipId, speaker.guestId)
       : null;
@@ -250,18 +257,29 @@ export async function syncMeetingFromPlannerRow(
     });
   }
 
-  for (const [order, speakerField, evaluatorField] of SPEAKER_PAIRS) {
+  const speakerRows = await tx.meetingSpeaker.findMany({
+    where: { clubId, meetingId: meeting.id },
+    orderBy: { order: 'asc' },
+    select: { id: true, order: true, kind: true },
+  });
+  /* Keynotes are invisible to this sync — pair N matches the N-th PREPARED
+   * speaker, so a planner column can never overwrite a keynote's identity. */
+  const prepared = speakerRows.filter((row) => row.kind === 'prepared');
+
+  for (const [index, [speakerField, evaluatorField]] of SPEAKER_PAIRS.entries()) {
     const speakerRef = resolveRef(assignees[speakerField]);
     const evaluatorRef = resolveRef(assignees[evaluatorField]);
-    const existing = await tx.meetingSpeaker.findUnique({
-      where: { clubId_meetingId_order: { clubId, meetingId: meeting.id, order } },
-    });
+    const existing = prepared[index];
 
     if (!existing) {
       /* Only a real speaker books the slot — an evaluator alone never spawns
-       * a card, matching `buildMeetingSeed`. */
+       * a card, matching `buildMeetingSeed`. The new card takes the lowest
+       * free order, which keynotes may have pushed past this pair's index. */
       if (speakerRef && (speakerRef.membershipId || speakerRef.guestId)) {
-        await tx.meetingSpeaker.create({
+        const taken = new Set(speakerRows.map((row) => row.order));
+        let order = 1;
+        while (taken.has(order)) order += 1;
+        const created = await tx.meetingSpeaker.create({
           data: {
             clubId,
             meetingId: meeting.id,
@@ -272,6 +290,8 @@ export async function syncMeetingFromPlannerRow(
             evaluatorGuestId: evaluatorRef?.guestId ?? null,
           },
         });
+        speakerRows.push({ id: created.id, order, kind: 'prepared' });
+        prepared.push({ id: created.id, order, kind: 'prepared' });
       }
       continue;
     }

@@ -47,6 +47,7 @@ export function emptyAhCounterState(): AhCounterState {
 
 export const TIMER_SPEAKER_TYPES = [
   'Prepared Speaker',
+  'Keynote',
   'Ice Breaker',
   'Table Topic',
   'Speech Evaluator',

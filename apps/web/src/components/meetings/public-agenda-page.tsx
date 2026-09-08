@@ -87,6 +87,7 @@ function toMeetingAndDraft(agenda: PublicMeetingAgenda): { meeting: Meeting; dra
 
   const speakers: DraftSpeaker[] = agenda.speakers.map((speaker) => ({
     id: `speaker-${speaker.order}`,
+    kind: speaker.kind,
     status: 'confirmed',
     speakerName: speaker.speakerName || undefined,
     evaluatorName: speaker.evaluatorName || undefined,

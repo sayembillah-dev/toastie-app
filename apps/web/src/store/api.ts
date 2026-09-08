@@ -72,6 +72,7 @@ import type {
   MemberAttendance,
   UpdateGuestAttendanceInput,
 } from '@/lib/meetings/attendance';
+import type { SpeakerKind } from '@/lib/meetings/draft';
 import type {
   CreateMeetingInput,
   Meeting,
@@ -1443,11 +1444,16 @@ export const toastlyApi = createApi({
       providesTags: (_rows, _error, meetingId) => [{ type: 'PreparedSpeaker', id: meetingId }],
     }),
 
-    createPreparedSpeaker: build.mutation<PreparedSpeakerWire, { meetingId: string }>({
-      query: ({ meetingId }) => ({
+    /* `kind` picks the slot type ("Add speaker" vs "Add keynote") and is
+     * fixed at creation — converting a slot means deleting and re-adding. */
+    createPreparedSpeaker: build.mutation<
+      PreparedSpeakerWire,
+      { meetingId: string; kind?: SpeakerKind }
+    >({
+      query: ({ meetingId, kind }) => ({
         url: `/meetings/${meetingId}/prepared-speakers`,
         method: 'POST',
-        body: {},
+        body: kind ? { kind } : {},
       }),
       invalidatesTags: (_row, _error, { meetingId }) => [
         { type: 'PreparedSpeaker', id: meetingId },

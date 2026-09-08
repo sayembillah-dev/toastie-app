@@ -106,7 +106,8 @@ export function AgendaView({ meeting, bannerColor }: AgendaViewProps) {
           speakers.map((slot) => (
             <View key={slot.id} style={styles.speech}>
               <ThemedText type="default">
-                {slot.order}. {slot.title ?? 'Title to be confirmed'}
+                {slot.order}. {slot.kind === 'keynote' ? 'Keynote: ' : ''}
+                {slot.title ?? 'Title to be confirmed'}
               </ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
                 {actorName(slot.speaker)}
@@ -117,9 +118,12 @@ export function AgendaView({ meeting, bannerColor }: AgendaViewProps) {
                   {[slot.pathway, slot.project].filter(Boolean).join(' · ')}
                 </ThemedText>
               ) : null}
-              <ThemedText type="small" themeColor="textSecondary">
-                Evaluator: {actorName(slot.evaluator)}
-              </ThemedText>
+              {/* Keynotes are never evaluated — no evaluator line. */}
+              {slot.kind === 'keynote' ? null : (
+                <ThemedText type="small" themeColor="textSecondary">
+                  Evaluator: {actorName(slot.evaluator)}
+                </ThemedText>
+              )}
             </View>
           ))
         ) : (

@@ -89,8 +89,14 @@ export type MeetingRoleAssignment = {
 export type MeetingSpeaker = {
   id: string;
   meetingId: string;
-  /** 1 to 3 (docs/ERD.md section 4.5). */
+  /** Position in the unified speaking order — prepared speeches and
+   * keynotes interleave (docs/ERD.md section 4.5). */
   order: number;
+  /** `prepared` — an evaluated Pathways speech; `keynote` — an unevaluated
+   * address (title, speaker and a hand-entered duration only, no
+   * evaluator). Older payloads without the field read as `undefined` and
+   * render as prepared. */
+  kind: 'prepared' | 'keynote';
   title: string | null;
   duration: number | null;
   pathway: string | null;

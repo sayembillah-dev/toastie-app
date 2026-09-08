@@ -1,4 +1,4 @@
-import type { WordOfTheDay } from './draft';
+import type { SpeakerKind, WordOfTheDay } from './draft';
 
 export interface PublicAgendaRole {
   roleKey: string;
@@ -7,6 +7,8 @@ export interface PublicAgendaRole {
 
 export interface PublicAgendaSpeaker {
   order: number;
+  /** `prepared` or `keynote` — keynotes render without an evaluator. */
+  kind: SpeakerKind;
   title: string;
   duration: number | null;
   pathway: string | null;

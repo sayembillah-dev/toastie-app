@@ -695,6 +695,11 @@ model MeetingSpeaker {
   clubId                String
   meetingId             String
   order                 Int
+  /// `prepared` — an evaluated Pathways speech (the default), or `keynote` —
+  /// an unevaluated address carrying only a title, a speaker and a manual
+  /// `duration`. Fixed at creation; keynotes never hold evaluator fields,
+  /// appear on the planner grid, or accept evaluation submissions.
+  kind                  String   @default("prepared")
   status                String   @default("requested")
   membershipId          String?
   guestId               String?

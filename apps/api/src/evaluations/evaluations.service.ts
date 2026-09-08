@@ -111,9 +111,13 @@ export class EvaluationsService {
 
     const speaker = await this.prisma.meetingSpeaker.findFirst({
       where: { id: speakerId, clubId: meeting.clubId, meetingId },
-      select: { id: true },
+      select: { id: true, kind: true },
     });
-    if (!speaker) throw new NotFoundException('No meeting matches that share link');
+    /* Keynotes take no evaluations — same opaque 404 as a wrong token, so a
+     * submission can never attach to one even with a valid meeting link. */
+    if (!speaker || speaker.kind === 'keynote') {
+      throw new NotFoundException('No meeting matches that share link');
+    }
 
     return { clubId: meeting.clubId };
   }

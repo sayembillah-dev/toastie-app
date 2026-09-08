@@ -8,11 +8,12 @@ import {
   QrCode,
   TrashSimple,
 } from '@phosphor-icons/react/dist/ssr';
-import { App, Button, Popconfirm, Tooltip } from 'antd';
+import { App, Button, Dropdown, Popconfirm, Tooltip } from 'antd';
 import { useState } from 'react';
 
 import { ReadOnly } from '@/components/permissions/read-only';
 import type { Member } from '@/lib/education/members';
+import type { SpeakerKind } from '@/lib/meetings/draft';
 import type { Meeting } from '@/lib/meetings/meetings';
 import type { PreparedSpeakerWire } from '@/lib/meetings/prepared-speakers';
 import type { Guest } from '@/lib/people/guests';
@@ -76,6 +77,10 @@ function SpeakerCard({
   const { message } = App.useApp();
   const idPrefix = `speaker-${speaker.id}`;
   const bodyId = `${idPrefix}-body`;
+  /* Keynotes take no evaluation — the QR/share control and the feedback
+   * badge stay off the card, matching the API's refusal to serve or accept
+   * an evaluation for one. */
+  const isKeynote = speaker.kind === 'keynote';
 
   const speakerName = speakerDisplayName(speaker, members, guests);
 
@@ -110,6 +115,11 @@ function SpeakerCard({
             }`}
           />
           <span className="shrink-0 text-sm font-semibold text-ink-muted">#{index}</span>
+          {isKeynote && (
+            <span className="shrink-0 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">
+              Keynote
+            </span>
+          )}
           <span className="min-w-0 flex-1 truncate text-sm">
             {speakerName ? (
               <>
@@ -122,7 +132,9 @@ function SpeakerCard({
                 )}
               </>
             ) : (
-              <span className="font-semibold text-ink">{trimmedTitle || 'Untitled speech'}</span>
+              <span className="font-semibold text-ink">
+                {trimmedTitle || (isKeynote ? 'Untitled keynote' : 'Untitled speech')}
+              </span>
             )}
           </span>
         </button>
@@ -160,18 +172,22 @@ function SpeakerCard({
           onChange={(next) => onPatch({ status: next })}
           ariaLabel={`Status for speaker #${index}`}
         />
-        <FeedbackBadge count={speaker.evaluationCount} />
-        <Tooltip title="Show evaluation QR">
-          <Button
-            type="text"
-            size="small"
-            aria-label={`Show evaluation QR for speaker #${index}`}
-            icon={<QrCode size={16} className="text-ink-muted" />}
-            onClick={() => setQrOpen(true)}
-          />
-        </Tooltip>
+        {!isKeynote && (
+          <>
+            <FeedbackBadge count={speaker.evaluationCount} />
+            <Tooltip title="Show evaluation QR">
+              <Button
+                type="text"
+                size="small"
+                aria-label={`Show evaluation QR for speaker #${index}`}
+                icon={<QrCode size={16} className="text-ink-muted" />}
+                onClick={() => setQrOpen(true)}
+              />
+            </Tooltip>
+          </>
+        )}
         <Popconfirm
-          title="Delete this speaker?"
+          title={isKeynote ? 'Delete this keynote?' : 'Delete this speaker?'}
           okText="Delete"
           cancelText="Cancel"
           okButtonProps={{ danger: true }}
@@ -187,21 +203,23 @@ function SpeakerCard({
         </Popconfirm>
       </div>
 
-      <EvaluationQrModal
-        open={qrOpen}
-        onClose={() => setQrOpen(false)}
-        url={evaluationUrl}
-        speakerName={speakerName}
-        speechTitle={trimmedTitle}
-        onCopy={async () => {
-          try {
-            await navigator.clipboard.writeText(evaluationUrl);
-            message.success('Evaluation link copied');
-          } catch {
-            message.error('Could not copy link');
-          }
-        }}
-      />
+      {!isKeynote && (
+        <EvaluationQrModal
+          open={qrOpen}
+          onClose={() => setQrOpen(false)}
+          url={evaluationUrl}
+          speakerName={speakerName}
+          speechTitle={trimmedTitle}
+          onCopy={async () => {
+            try {
+              await navigator.clipboard.writeText(evaluationUrl);
+              message.success('Evaluation link copied');
+            } catch {
+              message.error('Could not copy link');
+            }
+          }}
+        />
+      )}
 
       {/* Body stays mounted-then-hidden so form state doesn't reset on
        * collapse and antd Selects keep their dropdown portal roots. */}
@@ -262,13 +280,18 @@ export function PreparedSpeakersTab({ meeting }: PreparedSpeakersTabProps) {
   const isLoading = membersLoading || speakersLoading;
   const list = speakers ?? [];
 
-  async function handleAdd() {
+  async function handleAdd(kind: SpeakerKind = 'prepared') {
     try {
-      const created = await createSpeaker({ meetingId: meeting.id }).unwrap();
+      const created = await createSpeaker({ meetingId: meeting.id, kind }).unwrap();
       setExpandedIds((prev) => new Set(prev).add(created.id));
       setAutoOpenId(created.id);
     } catch (err) {
-      message.error(getApiErrorMessage(err, 'Could not add the speaker'));
+      message.error(
+        getApiErrorMessage(
+          err,
+          kind === 'keynote' ? 'Could not add the keynote' : 'Could not add the speaker',
+        ),
+      );
     }
   }
 
@@ -329,14 +352,24 @@ export function PreparedSpeakersTab({ meeting }: PreparedSpeakersTabProps) {
           )}
           {isMobile === null ? null : isMobile ? (
             <div className="flex items-center gap-2">
-              <Button
+              {/* Split add: one tap drops a prepared slot, the caret menu
+               * adds a keynote — two full buttons plus Reorder would crowd
+               * the phone header. */}
+              <Dropdown.Button
                 size="small"
-                icon={<Plus size={14} weight="bold" />}
+                icon={<CaretDown size={12} weight="bold" />}
                 loading={isCreating}
-                onClick={handleAdd}
+                onClick={() => handleAdd()}
+                menu={{
+                  items: [{ key: 'keynote', label: 'Add keynote' }],
+                  onClick: () => handleAdd('keynote'),
+                }}
               >
-                Add speaker
-              </Button>
+                <span className="inline-flex items-center gap-1">
+                  <Plus size={14} weight="bold" />
+                  Add speaker
+                </span>
+              </Dropdown.Button>
               {list.length > 1 ? (
                 <Button
                   size="small"
@@ -362,7 +395,7 @@ export function PreparedSpeakersTab({ meeting }: PreparedSpeakersTabProps) {
             <div className="rounded-xl border border-dashed border-line-strong px-6 py-10 text-center">
               <p className="text-sm font-medium text-ink">No speakers yet</p>
               <p className="mt-1 text-xs text-ink-muted">
-                Use the button below to add the first prepared speaker.
+                Add the first prepared speaker — or a keynote — to get started.
               </p>
             </div>
           ) : /* `null` = first client frame before matchMedia settles — show
@@ -413,19 +446,30 @@ export function PreparedSpeakersTab({ meeting }: PreparedSpeakersTabProps) {
             </div>
           )}
 
-          {/* The big dashed quick-add row is desktop-only — on phones Add
-           * speaker lives in the header beside Reorder. */}
+          {/* The big dashed quick-add row is desktop-only — on phones the
+           * add actions live in the header beside Reorder. Two equal rows:
+           * a prepared slot (the common case) and an optional keynote. */}
           {isMobile === true ? null : (
-            <div className="mt-4">
+            <div className="mt-4 grid grid-cols-2 gap-3">
               <Button
                 block
                 size="large"
                 type="dashed"
                 icon={<Plus size={16} weight="bold" />}
                 loading={isCreating}
-                onClick={handleAdd}
+                onClick={() => handleAdd()}
               >
                 Add speaker
+              </Button>
+              <Button
+                block
+                size="large"
+                type="dashed"
+                icon={<Plus size={16} weight="bold" />}
+                loading={isCreating}
+                onClick={() => handleAdd('keynote')}
+              >
+                Add keynote
               </Button>
             </div>
           )}

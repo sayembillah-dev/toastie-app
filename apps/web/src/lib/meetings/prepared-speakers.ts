@@ -1,7 +1,9 @@
 import type { Pathway } from '@/lib/education/members';
 import type { Assignee } from '@/lib/education/planner';
-import type { DraftSpeaker } from '@/lib/meetings/draft';
+import type { DraftSpeaker, SpeakerKind } from '@/lib/meetings/draft';
 import { getGuestFullName } from '@/lib/people/guests';
+
+export const SPEAKER_KINDS: readonly SpeakerKind[] = ['prepared', 'keynote'];
 
 /** A prepared speech slot on a meeting — backed by `MeetingSpeaker` on the
  * API, one row per order with no upper bound (the planner's Speaker 1–4
@@ -16,6 +18,9 @@ export type SpeakerStatus = (typeof SPEAKER_STATUSES)[number];
 export interface PreparedSpeakerWire {
   id: string;
   order: number;
+  /** `prepared` (evaluated Pathways speech) or `keynote` (unevaluated —
+   * title, speaker and a hand-entered duration only). Fixed at creation. */
+  kind: SpeakerKind;
   status: SpeakerStatus;
   membershipId: string | null;
   guestId: string | null;
@@ -95,6 +100,7 @@ export function toDraftSpeakers(
     .sort((a, b) => a.order - b.order)
     .map((speaker) => ({
       id: speaker.id,
+      kind: speaker.kind,
       status: speaker.status,
       memberId: speaker.membershipId ?? undefined,
       guestId: speaker.guestId ?? undefined,

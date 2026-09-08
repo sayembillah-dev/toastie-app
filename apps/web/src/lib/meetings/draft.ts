@@ -10,6 +10,12 @@ export interface WordOfTheDay {
 
 export type SpeakerStatus = 'requested' | 'confirmed' | 'delivered';
 
+/** `prepared` — the classic evaluated Pathways speech; `keynote` — an
+ * unevaluated address carrying only a title, a speaker and a manual
+ * `duration` (no evaluator, no pathway/project, no evaluation submissions).
+ * Fixed when the slot is created. */
+export type SpeakerKind = 'prepared' | 'keynote';
+
 /** Who holds a meeting role (see `draft.roles`) — a member resolves through
  * the roster via `nameOf`; a guest carries its own pre-resolved `name`
  * instead, the same split `DraftSpeaker` uses for a guest speaker/evaluator,
@@ -33,6 +39,9 @@ export interface RoleHolder {
  * roster lookup a plain id could drive the way `nameOf(memberId)` does. */
 export interface DraftSpeaker {
   id: string;
+  /** See `SpeakerKind` — a keynote renders without an evaluator and without
+   * pathway/project context wherever the lineup is read. */
+  kind: SpeakerKind;
   status: SpeakerStatus;
   memberId?: string;
   guestId?: string;

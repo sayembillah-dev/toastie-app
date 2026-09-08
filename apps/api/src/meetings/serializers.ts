@@ -83,6 +83,9 @@ export function toMeetingRoleAssignmentWire(
 export interface PreparedSpeakerWire {
   id: string;
   order: number;
+  /** `prepared` (evaluated Pathways speech) or `keynote` (unevaluated,
+   * title + speaker + manual time only). */
+  kind: string;
   status: string;
   membershipId: string | null;
   guestId: string | null;
@@ -105,6 +108,7 @@ export function toPreparedSpeakerWire(
   return {
     id: row.id,
     order: row.order,
+    kind: row.kind,
     status: row.status,
     membershipId: row.membershipId,
     guestId: row.guestId,

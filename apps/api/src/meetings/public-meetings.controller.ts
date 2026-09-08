@@ -67,12 +67,20 @@ export interface PublicAgendaSpeakerSourceWire {
   agendaKey: string;
   name: string;
   role: 'speaker' | 'evaluator' | 'general-evaluator' | 'tt-evaluator';
+  /** The parent slot's kind — `keynote` only ever appears on
+   * `role: 'speaker'` entries, since keynotes carry no evaluator. */
+  kind: string;
+  /** The slot's manually entered time. Read for keynotes (no Pathways
+   * project to derive a timed range from); otherwise null. */
+  duration: number | null;
   project: string | null;
   pathway: string | null;
 }
 
 export interface PublicAgendaSpeakerWire {
   order: number;
+  /** `prepared` or `keynote` — keynotes render without an evaluator. */
+  kind: string;
   title: string;
   duration: number | null;
   pathway: string | null;
@@ -179,6 +187,7 @@ export class PublicMeetingsController {
       where: { id: speakerId, clubId: meeting.clubId, meetingId },
       select: {
         id: true,
+        kind: true,
         title: true,
         pathway: true,
         project: true,
@@ -189,7 +198,9 @@ export class PublicMeetingsController {
         evaluatorGuest: { select: { firstName: true, lastName: true } },
       },
     });
-    if (!speaker) {
+    /* Keynotes take no evaluations — a hand-typed or stale link to one gets
+     * the same opaque 404 as a wrong token. */
+    if (!speaker || speaker.kind === 'keynote') {
       throw new NotFoundException('No speaker matches this meeting');
     }
 
@@ -238,6 +249,8 @@ export class PublicMeetingsController {
         orderBy: { order: 'asc' },
         select: {
           id: true,
+          kind: true,
+          duration: true,
           project: true,
           pathway: true,
           membership: { select: { firstName: true, lastName: true } },
@@ -269,6 +282,8 @@ export class PublicMeetingsController {
           agendaKey: `speaker:${speaker.id}`,
           name: speakerName,
           role: 'speaker',
+          kind: speaker.kind,
+          duration: speaker.duration,
           project: speaker.project,
           pathway: speaker.pathway,
         });
@@ -279,6 +294,8 @@ export class PublicMeetingsController {
           agendaKey: `speaker-evaluator:${speaker.id}`,
           name: evaluatorName,
           role: 'evaluator',
+          kind: speaker.kind,
+          duration: null,
           project: null,
           pathway: null,
         });
@@ -293,6 +310,8 @@ export class PublicMeetingsController {
           agendaKey: 'role:general-evaluator',
           name,
           role: 'general-evaluator',
+          kind: 'prepared',
+          duration: null,
           project: null,
           pathway: null,
         });
@@ -307,6 +326,8 @@ export class PublicMeetingsController {
           agendaKey: 'role:table-topic-evaluator',
           name,
           role: 'tt-evaluator',
+          kind: 'prepared',
+          duration: null,
           project: null,
           pathway: null,
         });
@@ -383,6 +404,7 @@ export class PublicMeetingsController {
           orderBy: { order: 'asc' },
           select: {
             order: true,
+            kind: true,
             title: true,
             duration: true,
             pathway: true,
@@ -413,6 +435,7 @@ export class PublicMeetingsController {
         .filter((role) => role.name),
       speakers: meeting.speakers.map((speaker) => ({
         order: speaker.order,
+        kind: speaker.kind,
         title: speaker.title,
         duration: speaker.duration,
         pathway: speaker.pathway,

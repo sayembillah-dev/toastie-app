@@ -63,19 +63,28 @@ export function speakerDisplayName(
   return assignee.name;
 }
 
-/** Setup progress for the mobile card's completion ring — the six fields a
- * speaker slot needs before meeting day: who's speaking, how long, the
- * speech title, who evaluates, and the Pathways path + project. */
+/** Setup progress for the mobile card's completion ring — the fields a slot
+ * needs before meeting day. A prepared speech has six: who's speaking, how
+ * long, the speech title, who evaluates, and the Pathways path + project.
+ * A keynote is unevaluated, so only three: who's speaking, how long, and
+ * the title. */
 export function speakerSetupRatio(speaker: PreparedSpeakerWire): number {
-  const filled = [
-    Boolean(speaker.membershipId || speaker.guestId),
-    speaker.duration != null,
-    speaker.title.trim().length > 0,
-    Boolean(speaker.evaluatorMembershipId || speaker.evaluatorGuestId),
-    Boolean(speaker.pathway),
-    Boolean(speaker.project),
-  ].filter(Boolean).length;
-  return filled / 6;
+  const required =
+    speaker.kind === 'keynote'
+      ? [
+          Boolean(speaker.membershipId || speaker.guestId),
+          speaker.duration != null,
+          speaker.title.trim().length > 0,
+        ]
+      : [
+          Boolean(speaker.membershipId || speaker.guestId),
+          speaker.duration != null,
+          speaker.title.trim().length > 0,
+          Boolean(speaker.evaluatorMembershipId || speaker.evaluatorGuestId),
+          Boolean(speaker.pathway),
+          Boolean(speaker.project),
+        ];
+  return required.filter(Boolean).length / required.length;
 }
 
 /** The public evaluation link for one speaker — the QR modal encodes it on
@@ -384,6 +393,10 @@ export function SpeakerFormFields({
   onPatch,
   titleField,
 }: SpeakerFormFieldsProps) {
+  /* A keynote is the unevaluated slot: speaker, hand-entered time and title
+   * only — the evaluator and Pathways fields below are skipped for it. */
+  const isKeynote = speaker.kind === 'keynote';
+
   const projectOptions = useMemo(() => {
     if (!speaker.pathway) return [];
     return getProjectsForPathway(speaker.pathway as Pathway).map((project: ProjectDefinition) => ({
@@ -395,10 +408,11 @@ export function SpeakerFormFields({
   const selectedProject = speaker.project
     ? findProject(speaker.project, speaker.pathway as Pathway | undefined)
     : undefined;
-  const durationBounds = getProjectDuration(
-    selectedProject?.name,
-    speaker.pathway as Pathway | undefined,
-  );
+  /* A keynote's time is entered by hand, capped at the API's 120; a
+   * prepared speech stays bounded by its selected Pathways project. */
+  const durationBounds = isKeynote
+    ? { min: 1, max: 120 }
+    : getProjectDuration(selectedProject?.name, speaker.pathway as Pathway | undefined);
 
   const speakerAssigneeValue = speakerAssignee(speaker, guests);
   const evaluatorAssigneeValue = evaluatorAssignee(speaker, guests);
@@ -442,7 +456,7 @@ export function SpeakerFormFields({
             min={durationBounds.min}
             max={durationBounds.max}
             value={durationField.value}
-            placeholder={`${durationBounds.min}–${durationBounds.max}`}
+            placeholder={isKeynote ? 'e.g. 20' : `${durationBounds.min}–${durationBounds.max}`}
             onChange={(value) => durationField.onChange(value ?? undefined)}
             onFocus={durationField.onFocus}
             onBlur={durationField.onBlur}
@@ -462,68 +476,78 @@ export function SpeakerFormFields({
           />
         </FieldWrap>
 
-        <FieldWrap label="Evaluator" span={2} htmlFor={`${idPrefix}-evaluator`}>
-          <AssigneeSelect
-            value={evaluatorAssigneeValue}
-            onChange={(next) => {
-              const ref = assigneeToRef(next);
-              onPatch({ evaluatorMembershipId: ref.membershipId, evaluatorGuestId: ref.guestId });
-            }}
-            members={members}
-            guests={guests}
-            placeholder="Select evaluator"
-            ariaLabel="Evaluator"
-            allowFreeformGuest={false}
-            variant="outlined"
-            size="large"
-          />
-        </FieldWrap>
+        {/* Evaluator + Pathways fields — prepared speeches only. A keynote
+         * is never evaluated and follows no project, so the grid is just
+         * speaker / duration / title (+ optional notes below). */}
+        {!isKeynote && (
+          <>
+            <FieldWrap label="Evaluator" span={2} htmlFor={`${idPrefix}-evaluator`}>
+              <AssigneeSelect
+                value={evaluatorAssigneeValue}
+                onChange={(next) => {
+                  const ref = assigneeToRef(next);
+                  onPatch({
+                    evaluatorMembershipId: ref.membershipId,
+                    evaluatorGuestId: ref.guestId,
+                  });
+                }}
+                members={members}
+                guests={guests}
+                placeholder="Select evaluator"
+                ariaLabel="Evaluator"
+                allowFreeformGuest={false}
+                variant="outlined"
+                size="large"
+              />
+            </FieldWrap>
 
-        <FieldWrap label="Path" span={2} htmlFor={`${idPrefix}-path`}>
-          <Select
-            id={`${idPrefix}-path`}
-            size="large"
-            className="w-full"
-            placeholder="Select a pathway"
-            value={(speaker.pathway ?? undefined) as Pathway | undefined}
-            options={PATHWAYS.map((pathway) => ({
-              value: pathway,
-              label: `${pathway} (${PATHWAY_ABBREV[pathway]})`,
-            }))}
-            onChange={handlePathwayChange}
-            showSearch
-            optionFilterProp="label"
-            allowClear
-          />
-        </FieldWrap>
+            <FieldWrap label="Path" span={2} htmlFor={`${idPrefix}-path`}>
+              <Select
+                id={`${idPrefix}-path`}
+                size="large"
+                className="w-full"
+                placeholder="Select a pathway"
+                value={(speaker.pathway ?? undefined) as Pathway | undefined}
+                options={PATHWAYS.map((pathway) => ({
+                  value: pathway,
+                  label: `${pathway} (${PATHWAY_ABBREV[pathway]})`,
+                }))}
+                onChange={handlePathwayChange}
+                showSearch
+                optionFilterProp="label"
+                allowClear
+              />
+            </FieldWrap>
 
-        <FieldWrap label="Project" span={2} htmlFor={`${idPrefix}-project`}>
-          <Select
-            id={`${idPrefix}-project`}
-            size="large"
-            className="w-full"
-            placeholder={speaker.pathway ? 'Select project' : 'Pick a path first'}
-            value={speaker.project ?? undefined}
-            options={projectOptions}
-            disabled={!speaker.pathway}
-            onChange={(value) => onPatch({ project: value ?? null })}
-            showSearch
-            optionFilterProp="label"
-            allowClear
-          />
-        </FieldWrap>
+            <FieldWrap label="Project" span={2} htmlFor={`${idPrefix}-project`}>
+              <Select
+                id={`${idPrefix}-project`}
+                size="large"
+                className="w-full"
+                placeholder={speaker.pathway ? 'Select project' : 'Pick a path first'}
+                value={speaker.project ?? undefined}
+                options={projectOptions}
+                disabled={!speaker.pathway}
+                onChange={(value) => onPatch({ project: value ?? null })}
+                showSearch
+                optionFilterProp="label"
+                allowClear
+              />
+            </FieldWrap>
 
-        <FieldWrap label="Level" span={2} htmlFor={`${idPrefix}-level`}>
-          <Input
-            id={`${idPrefix}-level`}
-            size="large"
-            disabled
-            value={selectedProject ? `Level ${selectedProject.level}` : ''}
-            placeholder="Set by project"
-          />
-        </FieldWrap>
+            <FieldWrap label="Level" span={2} htmlFor={`${idPrefix}-level`}>
+              <Input
+                id={`${idPrefix}-level`}
+                size="large"
+                disabled
+                value={selectedProject ? `Level ${selectedProject.level}` : ''}
+                placeholder="Set by project"
+              />
+            </FieldWrap>
+          </>
+        )}
 
-        <FieldWrap label="Notes (optional)" span={4} htmlFor={`${idPrefix}-notes`}>
+        <FieldWrap label="Notes (optional)" span={isKeynote ? 6 : 4} htmlFor={`${idPrefix}-notes`}>
           <Input
             id={`${idPrefix}-notes`}
             size="large"
@@ -538,7 +562,9 @@ export function SpeakerFormFields({
       </div>
 
       <p className="mt-4 text-[11px] text-ink-muted">
-        {selectedProject ? (
+        {isKeynote ? (
+          <>A keynote is not evaluated — just set who is speaking, the title and the time.</>
+        ) : selectedProject ? (
           <>
             Level and duration bounds ({durationBounds.min}–{durationBounds.max} min) come from the
             Pathways project.

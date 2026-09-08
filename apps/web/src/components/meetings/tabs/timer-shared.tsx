@@ -18,6 +18,9 @@ import type { Bracket, TimerSpeaker, TimerSpeakerType } from '@/lib/meetings/rol
 
 export const TYPE_BRACKETS: Record<TimerSpeakerType, Bracket> = {
   'Prepared Speaker': { green: 5 * 60, yellow: 6 * 60, red: 7 * 60 },
+  /* Only the fallback until "Take from agenda" derives the bracket from the
+   * keynote's hand-entered duration — keynotes have no standard length. */
+  Keynote: { green: 15 * 60, yellow: 18 * 60, red: 20 * 60 },
   'Ice Breaker': { green: 4 * 60, yellow: 5 * 60, red: 6 * 60 },
   'Table Topic': { green: 60, yellow: 90, red: 2 * 60 },
   'Speech Evaluator': { green: 2 * 60, yellow: 150, red: 3 * 60 },

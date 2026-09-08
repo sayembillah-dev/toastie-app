@@ -80,6 +80,13 @@ interface Readiness {
 }
 
 function isSpeakerComplete(speaker: DraftSpeaker): boolean {
+  /* A keynote has no evaluator — it's complete once its three fields (who,
+   * title, time) are set. */
+  if (speaker.kind === 'keynote') {
+    return Boolean(
+      (speaker.memberId || speaker.guestId) && speaker.title.trim() && speaker.duration != null,
+    );
+  }
   return Boolean(
     (speaker.memberId || speaker.guestId) &&
       speaker.title.trim() &&
@@ -95,6 +102,9 @@ function buildReadiness(meeting: Meeting, draft: MeetingDraft): Readiness {
   const themeParts = [draft.theme.trim() || meeting.theme, draft.word.word, draft.word.meaning];
   const themeDone = themeParts.filter((part) => part.trim()).length;
   const speakersComplete = draft.speakers.filter(isSpeakerComplete).length;
+  /* The "Speakers booked" meter counts prepared slots only — a keynote is an
+   * optional extra, never part of the four the meter asks for. */
+  const preparedCount = draft.speakers.filter((speaker) => speaker.kind !== 'keynote').length;
 
   const checks: ReadinessCheck[] = [
     {
@@ -107,7 +117,7 @@ function buildReadiness(meeting: Meeting, draft: MeetingDraft): Readiness {
     {
       key: 'speakers',
       label: 'Speakers booked',
-      done: Math.min(draft.speakers.length, TARGET_SPEAKERS),
+      done: Math.min(preparedCount, TARGET_SPEAKERS),
       total: TARGET_SPEAKERS,
     },
     {
@@ -128,15 +138,20 @@ function buildReadiness(meeting: Meeting, draft: MeetingDraft): Readiness {
   const gaps: string[] = [];
   if (!draft.word.word.trim()) gaps.push('Word of the day is not set');
   else if (!draft.word.meaning.trim()) gaps.push('Word of the day has no meaning yet');
-  if (draft.speakers.length < TARGET_SPEAKERS) {
-    const missing = TARGET_SPEAKERS - draft.speakers.length;
+  if (preparedCount < TARGET_SPEAKERS) {
+    const missing = TARGET_SPEAKERS - preparedCount;
     gaps.push(`Book ${missing} more prepared speaker${missing > 1 ? 's' : ''}`);
   }
   draft.speakers.forEach((speaker, index) => {
-    if (!speaker.memberId && !speaker.guestId) gaps.push(`Speech ${index + 1} has no speaker`);
-    if (!speaker.title.trim()) gaps.push(`Speech ${index + 1} has no title`);
-    if (!speaker.evaluatorId && !speaker.evaluatorGuestId)
-      gaps.push(`Speech ${index + 1} has no evaluator`);
+    /* A keynote needs no evaluator — its gaps are just its three fields. */
+    const label = speaker.kind === 'keynote' ? `Keynote ${index + 1}` : `Speech ${index + 1}`;
+    if (!speaker.memberId && !speaker.guestId) gaps.push(`${label} has no speaker`);
+    if (!speaker.title.trim()) gaps.push(`${label} has no title`);
+    if (speaker.kind === 'keynote') {
+      if (speaker.duration == null) gaps.push(`${label} has no time set`);
+    } else if (!speaker.evaluatorId && !speaker.evaluatorGuestId) {
+      gaps.push(`${label} has no evaluator`);
+    }
   });
   for (const role of unassigned) gaps.push(`${role.label} is unassigned`);
 
@@ -509,6 +524,7 @@ function SpeakersCard({
       ) : (
         <ol className="flex flex-col gap-2.5">
           {draft.speakers.map((speaker, index) => {
+            const isKeynote = speaker.kind === 'keynote';
             const speakerName = speaker.memberId
               ? nameOf(speaker.memberId)
               : (speaker.speakerName ?? '');
@@ -528,13 +544,19 @@ function SpeakersCard({
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-ink">
-                      {speaker.title.trim() || 'Untitled speech'}
+                      {speaker.title.trim() || (isKeynote ? 'Untitled keynote' : 'Untitled speech')}
                     </p>
                     <p className="mt-0.5 truncate text-xs text-ink-soft">
                       {speakerName || 'Speaker to be confirmed'}
-                      {evaluator ? ` · evaluated by ${evaluator}` : ''}
+                      {!isKeynote && evaluator ? ` · evaluated by ${evaluator}` : ''}
                     </p>
-                    {context ? (
+                    {/* A keynote carries no pathway/project context — mark the
+                     * slot itself instead. */}
+                    {isKeynote ? (
+                      <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-violet-600">
+                        Keynote
+                      </p>
+                    ) : context ? (
                       <p className="mt-0.5 truncate text-[11px] text-ink-muted">{context}</p>
                     ) : null}
                   </div>

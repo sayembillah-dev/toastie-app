@@ -2,6 +2,7 @@ import type { Member, Pathway } from '@/lib/education/members';
 import { getProjectDuration } from '@/lib/education/pathways';
 import type { Guest } from '@/lib/people/guests';
 import { getGuestFullName } from '@/lib/people/guests';
+import type { SpeakerKind } from './draft';
 import type { PreparedSpeakerWire } from './prepared-speakers';
 import type { RoleAssignment } from './role-assignments';
 
@@ -19,9 +20,40 @@ export interface AgendaSpeakerSource {
   guestId?: string;
   name: string;
   role: AgendaSpeakerRole;
-  /** Only set for `role: 'speaker'` — the project's timed range, or the
-   * Pathways-standard 5–7 min default when no project is picked yet. */
+  /** The parent slot's kind — `keynote` only ever appears on
+   * `role: 'speaker'` entries, since a keynote carries no evaluator. The
+   * Timer reads it to label the row and time it off the hand-entered
+   * duration rather than a Pathways project. */
+  kind: SpeakerKind;
+  /** Only set for `role: 'speaker'` — a prepared speech's project range
+   * (the 5–7 min default until a project is picked), or a keynote's
+   * hand-entered duration plus a short overrun (absent until one is
+   * entered). */
   durationBounds?: { min: number; max: number };
+}
+
+/** Minutes a keynote may run past its entered time before the red light —
+ * the single hand-set duration has no Pathways range to borrow, so green
+ * lands on the duration itself and red this far past it. */
+const KEYNOTE_OVERRUN_MINUTES = 2;
+
+/** Timed range for a `role: 'speaker'` source. A prepared speech borrows
+ * its project's range; a keynote derives one from its manual duration —
+ * undefined while none is entered, leaving the timer on its type default. */
+function speakerDurationBounds(speaker: {
+  kind: SpeakerKind;
+  duration?: number | null;
+  project?: string | null;
+  pathway?: string | null;
+}): { min: number; max: number } | undefined {
+  if (speaker.kind !== 'keynote') {
+    return getProjectDuration(
+      speaker.project ?? undefined,
+      (speaker.pathway ?? undefined) as Pathway | undefined,
+    );
+  }
+  if (speaker.duration == null) return undefined;
+  return { min: speaker.duration, max: speaker.duration + KEYNOTE_OVERRUN_MINUTES };
 }
 
 function personName(
@@ -62,10 +94,8 @@ export function buildAgendaSpeakerSources(
         agendaKey: `speaker:${speaker.id}`,
         ...speakerPerson,
         role: 'speaker',
-        durationBounds: getProjectDuration(
-          speaker.project ?? undefined,
-          (speaker.pathway ?? undefined) as Pathway | undefined,
-        ),
+        kind: speaker.kind,
+        durationBounds: speakerDurationBounds(speaker),
       });
     }
 
@@ -80,6 +110,7 @@ export function buildAgendaSpeakerSources(
         agendaKey: `speaker-evaluator:${speaker.id}`,
         ...evaluatorPerson,
         role: 'evaluator',
+        kind: speaker.kind,
       });
     }
   }
@@ -95,7 +126,12 @@ export function buildAgendaSpeakerSources(
       guests,
     );
     if (person)
-      sources.push({ agendaKey: 'role:general-evaluator', ...person, role: 'general-evaluator' });
+      sources.push({
+        agendaKey: 'role:general-evaluator',
+        ...person,
+        role: 'general-evaluator',
+        kind: 'prepared',
+      });
   }
 
   const tableTopicEvaluator = roleRow('table-topic-evaluator');
@@ -107,7 +143,12 @@ export function buildAgendaSpeakerSources(
       guests,
     );
     if (person)
-      sources.push({ agendaKey: 'role:table-topic-evaluator', ...person, role: 'tt-evaluator' });
+      sources.push({
+        agendaKey: 'role:table-topic-evaluator',
+        ...person,
+        role: 'tt-evaluator',
+        kind: 'prepared',
+      });
   }
 
   return sources;
@@ -121,6 +162,11 @@ export interface PublicAgendaSpeakerSource {
   agendaKey: string;
   name: string;
   role: AgendaSpeakerRole;
+  /** The parent slot's kind — `keynote` only on `role: 'speaker'` entries. */
+  kind: SpeakerKind;
+  /** The slot's hand-entered time — read for keynotes, which have no
+   * Pathways project to derive a timed range from; otherwise null. */
+  duration: number | null;
   project: string | null;
   pathway: string | null;
 }
@@ -139,12 +185,7 @@ export function fromPublicAgendaSpeakerSources(
     agendaKey: source.agendaKey,
     name: source.name,
     role: source.role,
-    durationBounds:
-      source.role === 'speaker'
-        ? getProjectDuration(
-            source.project ?? undefined,
-            (source.pathway ?? undefined) as Pathway | undefined,
-          )
-        : undefined,
+    kind: source.kind,
+    durationBounds: source.role === 'speaker' ? speakerDurationBounds(source) : undefined,
   }));
 }

@@ -154,6 +154,7 @@ export interface SpeakerViewMobileProps {
  * the bracket cards on TimerCard. */
 const TYPE_TINTS: Record<TimerSpeakerType, string> = {
   'Prepared Speaker': 'bg-canvas',
+  Keynote: 'bg-indigo-50',
   'Ice Breaker': 'bg-sky-50',
   'Table Topic': 'bg-amber-50',
   'Speech Evaluator': 'bg-emerald-50',

@@ -15,10 +15,21 @@ export const SPEAKER_NOTES_MAX = 160;
 
 export const SPEAKER_STATUSES = ['requested', 'confirmed', 'delivered'] as const;
 
-/** Body for `POST /meetings/:meetingId/prepared-speakers`. Nothing required —
+/** `prepared` — the classic evaluated Pathways speech; `keynote` — an
+ * unevaluated address (title + speaker + manual time only). */
+export const SPEAKER_KINDS = ['prepared', 'keynote'] as const;
+export type SpeakerKind = (typeof SPEAKER_KINDS)[number];
+
+/** Body for `POST /meetings/:meetingId/prepared-speakers`. Only `kind` —
  * "Add speaker" drops a blank card at the next open slot, same as the old
- * Redux-only `speakerAdded` action did. */
-export class CreatePreparedSpeakerDto {}
+ * Redux-only `speakerAdded` action did, and "Add keynote" does the same
+ * with `kind: 'keynote'`. The kind is fixed at creation: converting a slot
+ * means deleting and re-adding it. */
+export class CreatePreparedSpeakerDto {
+  @IsOptional()
+  @IsIn(SPEAKER_KINDS)
+  kind?: SpeakerKind;
+}
 
 /** Body for `POST /meetings/:meetingId/prepared-speakers/reorder`. Must name
  * every speaker of the meeting exactly once, in the desired order — a
@@ -68,11 +79,14 @@ export class UpdatePreparedSpeakerDto {
   @MaxLength(SPEAKER_TITLE_MAX)
   title?: string;
 
+  /* Cap is 120 rather than a Pathways-shaped 60: prepared durations are
+   * bounded by the project's range in the UI anyway, while a keynote's time
+   * is entered by hand and can run well past an hour. */
   @IsOptional()
   @ValidateIf((_, value) => value !== null)
   @IsInt()
   @Min(1)
-  @Max(60)
+  @Max(120)
   duration?: number | null;
 
   @IsOptional()
