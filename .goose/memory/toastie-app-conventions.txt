@@ -1,0 +1,3 @@
+# breadcrumb ui-polish toastie convention
+Toastie web (apps/web): never let raw DB ids reach the UI. Breadcrumbs: pages must render <PageBreadcrumb label="EntityType" /> in loading AND error branches (precedent: meeting-detail.tsx); AppShell.buildTrail marks cuid-like segments (looksLikeRecordId) as pending → CrumbSkeleton. Data-driven name cells (e.g. finance dues) fall back to skeleton/'Unknown member', never record.memberId.
+

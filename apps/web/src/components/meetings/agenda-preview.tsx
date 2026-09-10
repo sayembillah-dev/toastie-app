@@ -2,8 +2,18 @@
 
 import { DownloadSimple } from '@phosphor-icons/react/dist/ssr';
 import { Button, Popover } from 'antd';
+import { Arimo } from 'next/font/google';
 import Image from 'next/image';
-import { Fragment, useMemo } from 'react';
+import {
+  Fragment,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
+import { createPortal } from 'react-dom';
 
 import { PersonAvatar } from '@/components/ui/person-avatar';
 import { bannerImageCss, DEFAULT_BANNER_COLOR } from '@/lib/club/banner';
@@ -160,7 +170,6 @@ function SheetHeader({ meeting, theme }: { meeting: Meeting; theme: string }) {
       </div>
 
       <div
-        className="agenda-sheet-inset"
         style={{
           padding: '5px 16px',
           borderBottom: `2px solid ${RULE}`,
@@ -536,14 +545,144 @@ function SheetTable({ rows, tipOf }: { rows: AgendaRow[]; tipOf: TipResolver }) 
   );
 }
 
+/* Arial's metric twin, self-hosted by next/font. Android ships no Arial, so the
+ * sheet names its own font: every device wraps the same words onto the same
+ * lines, and the PDF comes out identical from a phone or a desktop. */
+const sheetFont = Arimo({ subsets: ['latin'], style: ['normal', 'italic'] });
+
+/* CSS millimetres are pinned at 96px per inch — on every screen and in print. */
+const PX_PER_MM = 96 / 25.4;
+const A4_WIDTH_MM = 210;
+const A4_HEIGHT_MM = 297;
+
+/**
+ * One fixed A4 page. The agenda is always exactly one sheet: when its content
+ * runs taller than 297mm, the sheet is laid out wider (so fewer lines wrap) and
+ * scaled down by the same factor, so it still lands edge to edge on a single
+ * page. A transform rather than `zoom`, so every browser — Firefox and mobile
+ * Safari included — scales it identically.
+ */
+function A4Page({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
+  useLayoutEffect(() => {
+    const sheet = sheetRef.current;
+    if (!sheet) return;
+
+    function fit() {
+      if (!sheet) return;
+      /* Measure the content at true A4 width and natural height, then hand
+       * React's sizing back before the browser paints. */
+      const { width, minHeight } = sheet.style;
+      sheet.style.width = `${A4_WIDTH_MM}mm`;
+      sheet.style.minHeight = '0';
+      const natural = sheet.offsetHeight;
+      sheet.style.width = width;
+      sheet.style.minHeight = minHeight;
+
+      const room = A4_HEIGHT_MM * PX_PER_MM;
+      // Floored so rounding can never nudge the sheet past the page foot.
+      const next = natural > room ? Math.floor((room / natural) * 1000) / 1000 : 1;
+      setScale((current) => (current === next ? current : next));
+    }
+
+    fit();
+    /* Re-fit whenever the content changes size — draft edits, roster and club
+     * data arriving, the web font swapping in. */
+    const observer = new ResizeObserver(fit);
+    observer.observe(sheet);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div
+      className="agenda-a4"
+      style={{
+        position: 'relative',
+        width: `${A4_WIDTH_MM}mm`,
+        height: `${A4_HEIGHT_MM}mm`,
+        overflow: 'hidden',
+        background: 'white',
+        ...style,
+      }}
+    >
+      <div
+        ref={sheetRef}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: `${A4_WIDTH_MM / scale}mm`,
+          minHeight: `${A4_HEIGHT_MM / scale}mm`,
+          transform: scale < 1 ? `scale(${scale})` : undefined,
+          transformOrigin: '0 0',
+          display: 'flex',
+          flexDirection: 'column',
+          fontFamily: `${sheetFont.style.fontFamily}, Arial, Helvetica, sans-serif`,
+          color: '#111827',
+          WebkitTextSizeAdjust: '100%',
+          textSizeAdjust: '100%',
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+interface AgendaSheetProps {
+  meeting: Meeting;
+  draft: MeetingDraft;
+  rows: AgendaRow[];
+  nameOf: (memberId: string | undefined) => string;
+  tipOf: TipResolver;
+}
+
+function AgendaSheet({ meeting, draft, rows, nameOf, tipOf }: AgendaSheetProps) {
+  return (
+    <>
+      <SheetHeader meeting={meeting} theme={draft.theme.trim() || meeting.theme} />
+      {/* Grows to the page foot so the rail's rule runs the full sheet. */}
+      <div style={{ flex: '1 0 auto', display: 'flex' }}>
+        <SheetRail meeting={meeting} draft={draft} nameOf={nameOf} tipOf={tipOf} />
+        <SheetTable rows={rows} tipOf={tipOf} />
+      </div>
+    </>
+  );
+}
+
+/** <body> never changes, so there is nothing to subscribe to — the store only
+ * tells server render (no body) apart from the client. */
+const subscribeNever = () => () => {};
+
+/** The print copy resolves no popovers — every name is plain text. */
+const NO_TIPS: TipResolver = () => undefined;
+
+/** Set on <html> while the agenda is on screen; print.css then prints the
+ * agenda's print copy and nothing else. */
+const PRINTING_CLASS = 'agenda-printing';
+
+function isOnScreen(element: Element): boolean {
+  const rect = element.getBoundingClientRect();
+  return (
+    rect.width > 0 &&
+    rect.height > 0 &&
+    rect.bottom > 0 &&
+    rect.right > 0 &&
+    rect.top < window.innerHeight &&
+    rect.left < window.innerWidth
+  );
+}
+
 interface AgendaPreviewProps {
   meeting: Meeting;
 }
 
 /**
  * Print-ready agenda for the meeting, assembled from what the other tabs hold in
- * the meeting draft. The sheet is a true A4 page (210mm) so what is previewed on
- * screen is exactly what the browser lays out when it prints.
+ * the meeting draft. The sheet is a fixed A4 page, and what is previewed on
+ * screen is exactly what lands in the PDF.
  */
 export function AgendaPreview({ meeting }: AgendaPreviewProps) {
   const draft = useAppSelector((state) => selectMeetingDraft(state, meeting.id));
@@ -574,15 +713,51 @@ export function AgendaPreview({ meeting }: AgendaPreviewProps) {
     };
   }, [memberOf, guests]);
 
-  /* The browser's own print pipeline is the PDF writer — it already knows how to
-   * paginate the sheet, and it keeps the page vector-sharp and selectable. */
+  /* The print copy is portaled straight into <body>, which only exists once
+   * mounted. Printing then swaps the whole document for it — no app shell, no
+   * drawer, no scroll container can reach the paper, whatever the device. */
+  const printHost = useSyncExternalStore(
+    subscribeNever,
+    () => document.body,
+    () => null,
+  );
+
+  /* Printing (the Download button, Ctrl+P, or the browser's own Print menu)
+   * prints the agenda only while it is actually on screen: the Overview tabs
+   * keep it mounted after the first visit, and on mobile it lives in a drawer
+   * that may be closed — printing any other screen keeps printing that screen.
+   * The class is never lifted on `afterprint`: mobile browsers fire it before
+   * the page has been rendered for print. */
+  const previewRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const preview = previewRef.current;
+    if (!preview) return;
+    const root = document.documentElement;
+    const mark = (onScreen: boolean) => root.classList.toggle(PRINTING_CLASS, onScreen);
+
+    const observer = new IntersectionObserver(([entry]) => mark(entry.isIntersecting));
+    observer.observe(preview);
+    const recheck = () => mark(isOnScreen(preview));
+    window.addEventListener('beforeprint', recheck);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('beforeprint', recheck);
+      root.classList.remove(PRINTING_CLASS);
+    };
+  }, []);
+
+  /* The browser's own print pipeline is the PDF writer — it keeps the page
+   * vector-sharp and selectable. */
   function handleDownload() {
+    document.documentElement.classList.add(PRINTING_CLASS);
     window.print();
   }
 
+  const sheetProps = { meeting, draft, rows, nameOf };
+
   return (
-    <div className="agenda-print-root overflow-hidden rounded-xl border border-line bg-[#e8e8e8]">
-      <div className="print-hidden flex flex-wrap items-center gap-3 border-b border-line bg-canvas px-4 py-3">
+    <div ref={previewRef} className="overflow-hidden rounded-xl border border-line bg-[#e8e8e8]">
+      <div className="flex flex-wrap items-center gap-3 border-b border-line bg-canvas px-4 py-3">
         <Button
           type="primary"
           icon={<DownloadSimple size={16} weight="bold" />}
@@ -598,25 +773,22 @@ export function AgendaPreview({ meeting }: AgendaPreviewProps) {
 
       {/* The sheet is a fixed 210mm, so narrow screens scroll it sideways rather
        * than squashing the layout the printer will use. */}
-      <div className="agenda-print-wrap overflow-x-auto px-0 py-6">
-        <div
-          className="agenda-page"
-          style={{
-            width: '210mm',
-            margin: '0 auto',
-            background: 'white',
-            boxShadow: '0 4px 24px rgba(0, 0, 0, 0.18)',
-            fontFamily: 'Arial, Helvetica, sans-serif',
-            color: '#111827',
-          }}
-        >
-          <SheetHeader meeting={meeting} theme={draft.theme.trim() || meeting.theme} />
-          <div className="agenda-sheet-inset" style={{ display: 'flex' }}>
-            <SheetRail meeting={meeting} draft={draft} nameOf={nameOf} tipOf={tipOf} />
-            <SheetTable rows={rows} tipOf={tipOf} />
-          </div>
-        </div>
+      <div className="overflow-x-auto py-6">
+        <A4Page style={{ margin: '0 auto', boxShadow: '0 4px 24px rgba(0, 0, 0, 0.18)' }}>
+          <AgendaSheet {...sheetProps} tipOf={tipOf} />
+        </A4Page>
       </div>
+
+      {printHost
+        ? createPortal(
+            <div className="agenda-print-portal" aria-hidden="true">
+              <A4Page>
+                <AgendaSheet {...sheetProps} tipOf={NO_TIPS} />
+              </A4Page>
+            </div>,
+            printHost,
+          )
+        : null}
     </div>
   );
 }
