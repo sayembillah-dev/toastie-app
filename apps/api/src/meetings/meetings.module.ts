@@ -7,10 +7,13 @@ import { MeetingsService } from './meetings.service';
 import { PreparedSpeakersController } from './prepared-speakers.controller';
 import { PreparedSpeakersService } from './prepared-speakers.service';
 import { PublicMeetingsController } from './public-meetings.controller';
+import { PublicVotingController } from './public-voting.controller';
 import { MeetingRolesController } from './roles.controller';
 import { MeetingRolesService } from './roles.service';
 import { TableTopicsController } from './table-topics.controller';
 import { TableTopicsService } from './table-topics.service';
+import { MeetingVotingController } from './voting.controller';
+import { VotingService } from './voting.service';
 
 @Module({
   controllers: [
@@ -20,6 +23,8 @@ import { TableTopicsService } from './table-topics.service';
     PreparedSpeakersController,
     TableTopicsController,
     AttendanceController,
+    MeetingVotingController,
+    PublicVotingController,
   ],
   providers: [
     MeetingsService,
@@ -27,6 +32,7 @@ import { TableTopicsService } from './table-topics.service';
     PreparedSpeakersService,
     TableTopicsService,
     AttendanceService,
+    VotingService,
   ],
   exports: [MeetingsService],
 })

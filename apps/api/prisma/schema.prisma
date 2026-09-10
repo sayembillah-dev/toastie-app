@@ -493,6 +493,7 @@ model Membership {
   meetingAttendance      MeetingAttendance[]
   speakerSlots           MeetingSpeaker[]        @relation("MeetingSpeakerAsSpeaker")
   evaluatorSlots         MeetingSpeaker[]        @relation("MeetingSpeakerAsEvaluator")
+  voteCandidates         MeetingVoteCandidate[]
 
   @@unique([clubId, userId])
   /// Enables composite tenant FKs on operational tables: any child row
@@ -630,6 +631,8 @@ model Meeting {
   plannerRows           PlannerRow[]
   evaluationSubmissions EvaluationSubmission[]   @relation("MeetingEvaluationSubmissions")
   roleStates            MeetingRoleState[]
+  voteCandidates        MeetingVoteCandidate[]   @relation("MeetingVoteCandidates")
+  voteBallots           MeetingVoteBallot[]      @relation("MeetingVoteBallots")
 
   @@unique([clubId, id])
   @@unique([clubId, meetingNumber])
@@ -811,6 +814,68 @@ model MeetingGuestAttendance {
   @@unique([clubId, meetingId, guestId])
   @@index([clubId, meetingId])
   @@index([clubId, guestId])
+}
+
+/// One votable person per (meeting, award category) — the dropdown options on
+/// the public ballot (`/meetings/:id/vote`). `category` is one of the web's
+/// `VOTE_CATEGORIES` keys (`best-prepared-speaker`, `best-evaluator`,
+/// `best-table-topics-speaker`, `best-role-taker`); kept as a plain string
+/// like `MeetingRoleAssignment.roleKey` so the list is presentation-owned and
+/// can grow without a migration. Rows are seeded from the meeting's own data
+/// (speakers, evaluators, present attendees, role holders) by the Voting
+/// tab's "Sync from meeting data", and editable there afterwards.
+/// `membershipId`/`guestId` link back to the roster row when one exists —
+/// used for dedup at seed time, not display: `name` is a denormalised
+/// snapshot so a roster rename mid-meeting doesn't rewrite the meaning of
+/// votes already cast.
+model MeetingVoteCandidate {
+  id           String   @id @default(cuid())
+  clubId       String
+  meetingId    String
+  category     String
+  /// Display name shown in the ballot dropdown and on the results board.
+  name         String
+  membershipId String?
+  guestId      String?
+  /// `auto` (derived from meeting data by a sync) or `manual` (added by hand
+  /// from the Voting tab). Informational only.
+  source       String   @default("auto")
+  createdAt    DateTime @default(now())
+
+  meeting    Meeting     @relation("MeetingVoteCandidates", fields: [clubId, meetingId], references: [clubId, id], onDelete: Cascade)
+  membership Membership? @relation(fields: [clubId, membershipId], references: [clubId, id], onDelete: Cascade)
+  guest      Prospect?   @relation(fields: [clubId, guestId], references: [clubId, id], onDelete: Cascade)
+
+  /// One row per display name per category — deduping by name keeps the
+  /// ballot free of doubles when the same person holds two source slots
+  /// (e.g. evaluates two speeches).
+  @@unique([clubId, meetingId, category, name])
+  @@index([clubId, meetingId])
+}
+
+/// One anonymous ballot per (meeting, voterKey). The voter key is a random id
+/// the voter's browser generates and keeps in localStorage — a resubmission
+/// from the same device REPLACES the previous ballot instead of stacking, so
+/// "one person, one vote" holds per device without collecting anything that
+/// identifies a person (no name, no account, no IP persisted here).
+/// `picks` maps category → candidate id; JSON rather than a join table
+/// because a ballot holds at most a handful of picks and is only ever read
+/// whole, for tallying.
+model MeetingVoteBallot {
+  id        String   @id @default(cuid())
+  clubId    String
+  meetingId String
+  voterKey  String
+  /// `{ [category]: candidateId }` — at most one pick per category; each
+  /// category is individually optional so a partial ballot still counts.
+  picks     Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  meeting Meeting @relation("MeetingVoteBallots", fields: [clubId, meetingId], references: [clubId, id], onDelete: Cascade)
+
+  @@unique([clubId, meetingId, voterKey])
+  @@index([clubId, meetingId])
 }
 
 /// One row on the Education › Planner grid — a meeting being roughed out
@@ -1021,6 +1086,7 @@ model Prospect {
   timerEntries      TimerEntry[]
   ahCounterEntries  AhCounterEntry[]
   evaluations       Evaluation[]             @relation("EvaluationGuestSpeaker")
+  voteCandidates    MeetingVoteCandidate[]
 
   @@unique([clubId, id])
   @@index([clubId, stage])

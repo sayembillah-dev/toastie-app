@@ -94,6 +94,13 @@ import type {
 } from '@/lib/meetings/table-topics';
 import type { TimerEntry } from '@/lib/meetings/timer-reports';
 import type {
+  MeetingVoteResults,
+  MeetingVoteSetup,
+  PublicMeetingVote,
+  SetVoteCandidatesInput,
+  SubmitPublicVoteInput,
+} from '@/lib/meetings/voting';
+import type {
   Area,
   CreateAreaInput,
   CreateDistrictInput,
@@ -190,6 +197,8 @@ export const toastlyApi = createApi({
     'TableTopicQuestion',
     'MeetingAttendance',
     'MeetingGuestAttendance',
+    'MeetingVote',
+    'MeetingVoteResults',
     'InventoryItem',
     'Transaction',
     'DuesRecord',
@@ -627,6 +636,79 @@ export const toastlyApi = createApi({
     submitPublicEvaluation: build.mutation<{ id: string }, SubmitEvaluationInput>({
       query: ({ meetingId, speakerId, token, ...body }) => ({
         url: `/public/meetings/${meetingId}/speakers/${speakerId}/evaluations?t=${encodeURIComponent(token)}`,
+        method: 'POST',
+        body,
+      }),
+    }),
+
+    /* ------------------------------------------------ meeting voting --
+     * The Voting tab's setup read: every award category with its current
+     * candidate list. `MeetingVote` is per-meeting like the other meeting
+     * module tags. */
+    getMeetingVoteCandidates: build.query<MeetingVoteSetup, string>({
+      query: (meetingId) => ({ url: `/meetings/${meetingId}/vote/candidates`, method: 'GET' }),
+      providesTags: (_setup, _error, meetingId) => [{ type: 'MeetingVote', id: meetingId }],
+    }),
+
+    /* "Sync from meeting data" — the server derives candidates from
+     * speakers/evaluators/attendees/role holders and tops the lists up.
+     * Returns the fresh setup, which becomes the new cache entry. */
+    syncMeetingVoteCandidates: build.mutation<MeetingVoteSetup, string>({
+      query: (meetingId) => ({
+        url: `/meetings/${meetingId}/vote/candidates/sync`,
+        method: 'POST',
+      }),
+      invalidatesTags: (_setup, _error, meetingId) => [{ type: 'MeetingVote', id: meetingId }],
+    }),
+
+    /* Replaces one category's candidate list (the per-category editor's
+     * Save). Removing a candidate also changes the tally, so the results
+     * cache goes out with the setup cache. */
+    setMeetingVoteCandidates: build.mutation<
+      MeetingVoteSetup,
+      { meetingId: string; category: string } & SetVoteCandidatesInput
+    >({
+      query: ({ meetingId, category, ...body }) => ({
+        url: `/meetings/${meetingId}/vote/candidates/${category}`,
+        method: 'PUT',
+        body,
+      }),
+      invalidatesTags: (_setup, _error, { meetingId }) => [
+        { type: 'MeetingVote', id: meetingId },
+        { type: 'MeetingVoteResults', id: meetingId },
+      ],
+    }),
+
+    /* The Voting tab's live tally. Nothing on this client invalidates it —
+     * ballots arrive through the anonymous public endpoint — so the tab
+     * polls on an interval instead (see `voting-tab.tsx`). */
+    getMeetingVoteResults: build.query<MeetingVoteResults, string>({
+      query: (meetingId) => ({ url: `/meetings/${meetingId}/vote/results`, method: 'GET' }),
+      providesTags: (_results, _error, meetingId) => [
+        { type: 'MeetingVoteResults', id: meetingId },
+      ],
+    }),
+
+    /* The anonymous ballot — matched by `isPublicUrl` in routed-base-query
+     * like the other share endpoints. The voter key rides along as `v` so a
+     * revisiting device gets its earlier picks back prefilled. */
+    getPublicMeetingVote: build.query<
+      PublicMeetingVote,
+      { meetingId: string; token: string; voterKey?: string }
+    >({
+      query: ({ meetingId, token, voterKey }) => ({
+        url: `/public/meetings/${meetingId}/vote?t=${encodeURIComponent(token)}${voterKey ? `&v=${encodeURIComponent(voterKey)}` : ''}`,
+        method: 'GET',
+      }),
+    }),
+
+    /* Casts (or re-casts) the ballot — upserted server-side on
+     * (meeting, voterKey). Untagged like `submitPublicEvaluation`: the
+     * voter is anonymous and holds no cache entry to refresh; the officers'
+     * tally polls on its own schedule. */
+    submitPublicMeetingVote: build.mutation<{ id: string }, SubmitPublicVoteInput>({
+      query: ({ meetingId, token, ...body }) => ({
+        url: `/public/meetings/${meetingId}/vote?t=${encodeURIComponent(token)}`,
         method: 'POST',
         body,
       }),
@@ -2674,6 +2756,12 @@ export const {
   useGetPublicMeetingAgendaQuery,
   useSignPublicEvaluationUploadMutation,
   useSubmitPublicEvaluationMutation,
+  useGetMeetingVoteCandidatesQuery,
+  useSyncMeetingVoteCandidatesMutation,
+  useSetMeetingVoteCandidatesMutation,
+  useGetMeetingVoteResultsQuery,
+  useGetPublicMeetingVoteQuery,
+  useSubmitPublicMeetingVoteMutation,
   useGetReceivedEvaluationsQuery,
   useCreateMeetingMutation,
   useUpdateMeetingMutation,

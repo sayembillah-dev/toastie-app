@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  ChartBar,
   CheckSquare,
   ClipboardText,
   Info,
@@ -31,6 +32,7 @@ import { ShareRoleButton } from '@/components/meetings/tabs/share-role-button';
 import { TableTopicsTab } from '@/components/meetings/tabs/table-topics-tab';
 import { ThemeTab } from '@/components/meetings/tabs/theme-tab';
 import { TimerTab } from '@/components/meetings/tabs/timer-tab';
+import { VotingTab } from '@/components/meetings/tabs/voting-tab';
 import { PageBreadcrumb } from '@/components/page-breadcrumb';
 import { AccessGate } from '@/components/permissions/access-gate';
 import type { Meeting } from '@/lib/meetings/meetings';
@@ -161,6 +163,12 @@ function buildTabs(meeting: Meeting): TabDef[] {
       Icon: ClipboardText,
       content: <AttendanceTab meetingId={meeting.id} />,
     },
+    {
+      key: 'voting',
+      label: 'Voting',
+      Icon: ChartBar,
+      content: <VotingTab meeting={meeting} />,
+    },
   ];
 }
 
@@ -264,6 +272,9 @@ function DetailContent({ meeting }: { meeting: Meeting }) {
     attendanceMembers === undefined || roster === undefined || roster.length === 0
       ? null
       : attendanceMembers.filter((row) => row.present).length / roster.length;
+  /* Voting is a live meeting activity like the Ah Counter/Timer — there's no
+   * meeting-wide "done" state, so its card keeps the bare track ring. */
+  cardProgress.voting = null;
 
   return (
     <div className="mx-auto max-w-6xl">
