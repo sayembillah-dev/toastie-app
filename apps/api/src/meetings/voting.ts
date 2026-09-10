@@ -22,6 +22,11 @@ export const VOTE_CATEGORIES = [
     key: 'best-table-topics-speaker',
     label: 'Best Table Topics Speaker',
     question: 'Who is the best table topic speaker?',
+    /* Table topics is open floor — anyone present might be called up, so
+     * the options are simply everyone at the meeting. The service keeps
+     * this list in step with attendance on every read and rejects manual
+     * edits; `auto` is what tells both ends to treat it that way. */
+    auto: true,
   },
   {
     key: 'best-role-taker',
@@ -34,6 +39,13 @@ export type VoteCategoryKey = (typeof VOTE_CATEGORIES)[number]['key'];
 
 export function isVoteCategoryKey(value: string): value is VoteCategoryKey {
   return (VOTE_CATEGORIES as readonly { key: string }[]).some((entry) => entry.key === value);
+}
+
+/** Is this a self-maintaining category (attendance-fed, no manual edits)? */
+export function isAutoVoteCategory(key: string): boolean {
+  return (VOTE_CATEGORIES as readonly { key: string; auto?: boolean }[]).some(
+    (entry) => entry.key === key && entry.auto === true,
+  );
 }
 
 /** Candidate source marker — `auto` rows came from a "Sync from meeting

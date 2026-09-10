@@ -15,6 +15,7 @@ import type {
 } from './dto/voting.dto';
 import {
   fullName,
+  isAutoVoteCategory,
   isVoteCategoryKey,
   type MeetingVoteResultsWire,
   type MeetingVoteSetupWire,
@@ -57,6 +58,7 @@ export class VotingService {
   ): Promise<MeetingVoteSetupWire> {
     const meeting = await this.loadMeeting(meetingId);
     this.assertCan(subject, 'read', meeting.clubId);
+    await this.syncAutoCategories(meeting.clubId, meetingId);
     return this.readSetup(meeting.clubId, meetingId);
   }
 
@@ -136,6 +138,13 @@ export class VotingService {
         message: `Vote category must be one of: ${VOTE_CATEGORIES.map((c) => c.key).join(', ')}`,
       });
     }
+    if (isAutoVoteCategory(category)) {
+      throw new BadRequestException({
+        code: 'AUTO_VOTE_CATEGORY',
+        message:
+          'This list maintains itself from the meeting’s attendance — it can’t be edited by hand',
+      });
+    }
     const meeting = await this.loadMeeting(meetingId);
     this.assertCan(subject, 'update', meeting.clubId);
     const clubId = meeting.clubId;
@@ -190,6 +199,10 @@ export class VotingService {
   async getResults(subject: PermissionSubject, meetingId: string): Promise<MeetingVoteResultsWire> {
     const meeting = await this.loadMeeting(meetingId);
     this.assertCan(subject, 'read', meeting.clubId);
+    /* Keep the attendance-fed category current so the board shows a late
+     * check-in (with 0 votes) without waiting for someone to revisit the
+     * setup read. */
+    await this.syncAutoCategories(meeting.clubId, meetingId);
 
     const [candidates, ballots] = await Promise.all([
       this.prisma.meetingVoteCandidate.findMany({
@@ -237,6 +250,50 @@ export class VotingService {
     return { totalBallots: ballots.length, categories };
   }
 
+  /** "Clear" on one award — wipes that category's pick out of every ballot
+   * (test votes, a re-run after a mix-up). Candidates stay on the ballot;
+   * ballots left with no picks at all are removed so the "N ballots in"
+   * headline stays honest. The voter keeps no trace of the cleared pick —
+   * re-voting after a clear starts that category fresh. */
+  async clearCategoryVotes(
+    subject: PermissionSubject,
+    meetingId: string,
+    category: string,
+  ): Promise<{ cleared: number }> {
+    if (!isVoteCategoryKey(category)) {
+      throw new BadRequestException({
+        code: 'UNKNOWN_VOTE_CATEGORY',
+        message: `Vote category must be one of: ${VOTE_CATEGORIES.map((c) => c.key).join(', ')}`,
+      });
+    }
+    const meeting = await this.loadMeeting(meetingId);
+    this.assertCan(subject, 'update', meeting.clubId);
+
+    return this.prisma.$transaction(async (tx) => {
+      const ballots = await tx.meetingVoteBallot.findMany({
+        where: { clubId: meeting.clubId, meetingId },
+        select: { id: true, picks: true },
+      });
+
+      let cleared = 0;
+      for (const ballot of ballots) {
+        /* Values are candidate-id strings all the way down — see
+         * submitPublicBallot, which strips anything else on the way in. */
+        const picks = ballot.picks as Record<string, string>;
+        if (!(category in picks)) continue;
+        cleared += 1;
+        const rest = { ...picks };
+        delete rest[category];
+        if (Object.keys(rest).length === 0) {
+          await tx.meetingVoteBallot.delete({ where: { id: ballot.id } });
+        } else {
+          await tx.meetingVoteBallot.update({ where: { id: ballot.id }, data: { picks: rest } });
+        }
+      }
+      return { cleared };
+    });
+  }
+
   // ---------------------------------------------------------- public --
 
   /** The anonymous ballot — meeting header, questions with dropdown options,
@@ -247,6 +304,9 @@ export class VotingService {
     voterKey?: string,
   ): Promise<PublicMeetingVoteWire> {
     const meeting = await this.loadMeetingByToken(meetingId, token);
+    /* The ballot must offer everyone who is actually at the meeting — top
+     * up the attendance-fed category before reading it back. */
+    await this.syncAutoCategories(meeting.clubId, meetingId);
 
     const [candidates, ballot] = await Promise.all([
       this.prisma.meetingVoteCandidate.findMany({
@@ -389,14 +449,15 @@ export class VotingService {
    * - best-prepared-speaker  ← prepared/keynote speaker slots (speaker side)
    * - best-evaluator         ← the evaluators attached to those slots
    * - best-table-topics-speaker ← everyone checked in present (members and
-   *   guests) — table topics is open floor, so attendance is the universe;
-   *   officers prune the list on the Voting tab
+   *   guests) — table topics is open floor, so attendance is the universe.
+   *   This one also maintains itself (see `syncAutoCategories`); the full
+   *   sync just shares the same derivation.
    * - best-role-taker        ← assigned meeting role holders */
   private async deriveCandidates(
     clubId: string,
     meetingId: string,
   ): Promise<Map<VoteCategoryKey, DerivedCandidate[]>> {
-    const [speakers, roleRows, memberAttendance, guestAttendance] = await Promise.all([
+    const [speakers, roleRows, tableTopics] = await Promise.all([
       this.prisma.meetingSpeaker.findMany({
         where: { clubId, meetingId },
         select: {
@@ -413,6 +474,38 @@ export class VotingService {
           guest: { select: { id: true, firstName: true, lastName: true } },
         },
       }),
+      this.deriveTableTopicsAttendees(clubId, meetingId),
+    ]);
+
+    const derived = new Map<VoteCategoryKey, DerivedCandidate[]>([
+      ['best-prepared-speaker', []],
+      ['best-evaluator', []],
+      ['best-table-topics-speaker', tableTopics],
+      ['best-role-taker', []],
+    ]);
+
+    for (const speaker of speakers) {
+      pushPerson(derived.get('best-prepared-speaker'), speaker.membership, speaker.guest);
+      pushPerson(
+        derived.get('best-evaluator'),
+        speaker.evaluatorMembership,
+        speaker.evaluatorGuest,
+      );
+    }
+    for (const row of roleRows) {
+      pushPerson(derived.get('best-role-taker'), row.membership, row.guest);
+    }
+    return derived;
+  }
+
+  /** Everyone at the meeting — present members and guests — as candidate
+   * drafts. This is the whole universe for the table-topics award: open
+   * floor, so attendance decides who's pickable. */
+  private async deriveTableTopicsAttendees(
+    clubId: string,
+    meetingId: string,
+  ): Promise<DerivedCandidate[]> {
+    const [memberAttendance, guestAttendance] = await Promise.all([
       this.prisma.meetingAttendance.findMany({
         where: { clubId, meetingId, present: true },
         select: {
@@ -428,37 +521,67 @@ export class VotingService {
       }),
     ]);
 
-    const derived = new Map<VoteCategoryKey, DerivedCandidate[]>([
-      ['best-prepared-speaker', []],
-      ['best-evaluator', []],
-      ['best-table-topics-speaker', []],
-      ['best-role-taker', []],
-    ]);
-
-    for (const speaker of speakers) {
-      pushPerson(derived.get('best-prepared-speaker'), speaker.membership, speaker.guest);
-      pushPerson(
-        derived.get('best-evaluator'),
-        speaker.evaluatorMembership,
-        speaker.evaluatorGuest,
-      );
-    }
-    for (const row of roleRows) {
-      pushPerson(derived.get('best-role-taker'), row.membership, row.guest);
-    }
+    const attendees: DerivedCandidate[] = [];
     for (const row of memberAttendance) {
-      pushPerson(derived.get('best-table-topics-speaker'), row.membership, null);
+      pushPerson(attendees, row.membership, null);
     }
     for (const row of guestAttendance) {
       if (row.guest) {
-        pushPerson(derived.get('best-table-topics-speaker'), null, row.guest);
+        pushPerson(attendees, null, row.guest);
       } else if (row.name.trim()) {
         /* Legacy free-text row with no Prospect link — the snapshot name is
          * all there is, and all the ballot needs. */
-        derived.get('best-table-topics-speaker')?.push({ name: row.name.trim() });
+        attendees.push({ name: row.name.trim() });
       }
     }
-    return derived;
+    return attendees;
+  }
+
+  /** Self-maintaining categories (today: best-table-topics-speaker) top
+   * themselves up from meeting data on every read that serves them — the
+   * officer setup view, the results board, and the public ballot alike.
+   * Only ever ADDS: someone whose check-in is later undone stays on the
+   * ballot rather than taking already-cast votes down with them. */
+  private async syncAutoCategories(clubId: string, meetingId: string) {
+    const category: VoteCategoryKey = 'best-table-topics-speaker';
+    const attendees = await this.deriveTableTopicsAttendees(clubId, meetingId);
+    if (attendees.length === 0) return;
+
+    const existing = await this.prisma.meetingVoteCandidate.findMany({
+      where: { clubId, meetingId, category },
+      select: { name: true, membershipId: true, guestId: true },
+    });
+    const seen = new Set(
+      existing.map((row) => dedupeKey(category, row.membershipId, row.guestId, row.name)),
+    );
+
+    const creates: {
+      clubId: string;
+      meetingId: string;
+      category: string;
+      name: string;
+      membershipId?: string;
+      guestId?: string;
+      source: 'auto';
+    }[] = [];
+    for (const person of attendees) {
+      const key = dedupeKey(category, person.membershipId, person.guestId, person.name);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      creates.push({
+        clubId,
+        meetingId,
+        category,
+        name: person.name,
+        membershipId: person.membershipId,
+        guestId: person.guestId,
+        source: 'auto',
+      });
+    }
+
+    if (creates.length > 0) {
+      await this.prisma.meetingVoteCandidate.createMany({ data: creates, skipDuplicates: true });
+    }
   }
 
   /** Officer-supplied roster links must point at this club's rows — the

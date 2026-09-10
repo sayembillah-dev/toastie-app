@@ -689,6 +689,22 @@ export const toastlyApi = createApi({
       ],
     }),
 
+    /* "Clear" on one results card — wipes every ballot's pick in that
+     * category (test votes, a re-run after a mix-up). Candidates stay put;
+     * only the tally resets, so just the results cache is invalidated. */
+    clearMeetingVoteCategory: build.mutation<
+      { cleared: number },
+      { meetingId: string; category: string }
+    >({
+      query: ({ meetingId, category }) => ({
+        url: `/meetings/${meetingId}/vote/results/${category}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: (_result, _error, { meetingId }) => [
+        { type: 'MeetingVoteResults', id: meetingId },
+      ],
+    }),
+
     /* The anonymous ballot — matched by `isPublicUrl` in routed-base-query
      * like the other share endpoints. The voter key rides along as `v` so a
      * revisiting device gets its earlier picks back prefilled. */
@@ -2760,6 +2776,7 @@ export const {
   useSyncMeetingVoteCandidatesMutation,
   useSetMeetingVoteCandidatesMutation,
   useGetMeetingVoteResultsQuery,
+  useClearMeetingVoteCategoryMutation,
   useGetPublicMeetingVoteQuery,
   useSubmitPublicMeetingVoteMutation,
   useGetReceivedEvaluationsQuery,

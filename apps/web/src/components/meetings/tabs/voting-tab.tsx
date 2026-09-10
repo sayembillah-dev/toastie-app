@@ -5,20 +5,23 @@ import {
   ChartBar,
   Copy,
   DownloadSimple,
+  Eraser,
   Info,
   Plus,
   QrCode,
   Trophy,
 } from '@phosphor-icons/react/dist/ssr';
-import { App, Button, Input, QRCode, Select, Skeleton, Tag, Tooltip } from 'antd';
+import { App, Button, Input, Popconfirm, QRCode, Select, Skeleton, Tag, Tooltip } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { ReadOnly, useReadOnly } from '@/components/permissions/read-only';
 import type { Member } from '@/lib/education/members';
 import type { Meeting } from '@/lib/meetings/meetings';
 import type { VoteCandidate, VoteCategory } from '@/lib/meetings/voting';
+import { isAutoVoteCategory } from '@/lib/meetings/voting';
 import { type Guest, getGuestFullName } from '@/lib/people/guests';
 import {
+  useClearMeetingVoteCategoryMutation,
   useGetGuestsQuery,
   useGetMeetingVoteCandidatesQuery,
   useGetMeetingVoteResultsQuery,
@@ -202,9 +205,14 @@ interface CategorySetupCardProps {
 
 /** One award's candidate list: closable tags for who's on it, one select for
  * adding. Every change commits immediately — the list is small and the
- * officer is usually pruning it seconds before showing the QR. */
+ * officer is usually pruning it seconds before showing the QR.
+ *
+ * Self-maintaining categories (table topics — see `isAutoVoteCategory`)
+ * render read-only for everyone: the server keeps that list in step with
+ * attendance, so there is nothing to add or prune by hand. */
 function CategorySetupCard({ category, members, guests, saving, onSave }: CategorySetupCardProps) {
   const readOnly = useReadOnly('meeting', 'update');
+  const auto = isAutoVoteCategory(category.key);
 
   function handleRemove(candidate: VoteCandidate) {
     onSave(
@@ -233,16 +241,24 @@ function CategorySetupCard({ category, members, guests, saving, onSave }: Catego
   return (
     <div className="rounded-2xl border border-line bg-canvas p-4">
       <p className="text-sm font-semibold text-ink">{category.question}</p>
-      <p className="mt-0.5 text-[11px] text-ink-muted">{category.candidates.length} option(s)</p>
+      <p className="mt-0.5 text-[11px] text-ink-muted">
+        {auto
+          ? 'Filled automatically — everyone marked present (members + guests)'
+          : `${category.candidates.length} option(s)`}
+      </p>
 
       <div className="mt-3 flex flex-wrap gap-1.5">
         {category.candidates.length === 0 ? (
-          <span className="text-xs text-ink-muted">No options yet — sync or add below.</span>
+          <span className="text-xs text-ink-muted">
+            {auto
+              ? 'No one checked in yet — this fills itself as attendance is marked.'
+              : 'No options yet — sync or add below.'}
+          </span>
         ) : (
           category.candidates.map((candidate) => (
             <Tag
               key={candidate.id}
-              closable={!readOnly && !saving}
+              closable={!auto && !readOnly && !saving}
               onClose={(event) => {
                 event.preventDefault();
                 handleRemove(candidate);
@@ -255,16 +271,18 @@ function CategorySetupCard({ category, members, guests, saving, onSave }: Catego
         )}
       </div>
 
-      <ReadOnly resource="meeting" action="update" display="block" className="mt-3">
-        <div className="mt-3">
-          <AddCandidateSelect
-            existing={category.candidates}
-            members={members}
-            guests={guests}
-            onAdd={handleAdd}
-          />
-        </div>
-      </ReadOnly>
+      {!auto && (
+        <ReadOnly resource="meeting" action="update" display="block" className="mt-3">
+          <div className="mt-3">
+            <AddCandidateSelect
+              existing={category.candidates}
+              members={members}
+              guests={guests}
+              onAdd={handleAdd}
+            />
+          </div>
+        </ReadOnly>
+      )}
     </div>
   );
 }
@@ -273,14 +291,33 @@ function CategorySetupCard({ category, members, guests, saving, onSave }: Catego
 
 /** The live tally. Polls on an interval — see RESULTS_POLL_MS. The leader
  * (everyone tied at the top, provided they have at least one vote) wears the
- * trophy; everyone else's bar sizes against the leader's count. */
+ * trophy; everyone else's bar sizes against the leader's count. Each card
+ * carries a Clear button (officers only) that wipes every ballot's pick in
+ * that category — test votes, a re-run after a mix-up — while the
+ * candidates stay put. */
 function ResultsBoard({ meetingId }: { meetingId: string }) {
+  const { message } = App.useApp();
+  const readOnly = useReadOnly('meeting', 'update');
   const {
     data: results,
     isLoading,
     refetch,
     isFetching,
   } = useGetMeetingVoteResultsQuery(meetingId, { pollingInterval: RESULTS_POLL_MS });
+  const [clearCategory, { isLoading: clearing }] = useClearMeetingVoteCategoryMutation();
+
+  async function handleClear(categoryKey: string, label: string) {
+    try {
+      const { cleared } = await clearCategory({ meetingId, category: categoryKey }).unwrap();
+      message.success(
+        cleared === 0
+          ? `No votes to clear for ${label}`
+          : `Cleared ${cleared} vote${cleared === 1 ? '' : 's'} for ${label}`,
+      );
+    } catch (error) {
+      message.error(getApiErrorMessage(error, 'Could not clear votes'));
+    }
+  }
 
   if (isLoading || !results) {
     return (
@@ -323,11 +360,32 @@ function ResultsBoard({ meetingId }: { meetingId: string }) {
           const top = ranked[0]?.votes ?? 0;
           return (
             <div key={category.key} className="rounded-xl border border-line bg-sidebar p-4">
-              <div className="flex items-baseline justify-between gap-2">
+              <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-semibold text-ink">{category.label}</p>
-                <p className="shrink-0 text-[11px] tabular-nums text-ink-muted">
-                  {category.totalVotes} vote{category.totalVotes === 1 ? '' : 's'}
-                </p>
+                <div className="flex shrink-0 items-center gap-1">
+                  <p className="text-[11px] tabular-nums text-ink-muted">
+                    {category.totalVotes} vote{category.totalVotes === 1 ? '' : 's'}
+                  </p>
+                  {!readOnly && (
+                    <Popconfirm
+                      title={`Clear votes for "${category.label}"?`}
+                      description="Every pick in this category is wiped. Candidates stay on the ballot."
+                      okText="Clear"
+                      okButtonProps={{ danger: true }}
+                      onConfirm={() => handleClear(category.key, category.label)}
+                      disabled={category.totalVotes === 0}
+                    >
+                      <Button
+                        type="text"
+                        size="small"
+                        danger
+                        disabled={category.totalVotes === 0 || clearing}
+                        aria-label={`Clear votes for ${category.label}`}
+                        icon={<Eraser size={14} />}
+                      />
+                    </Popconfirm>
+                  )}
+                </div>
               </div>
 
               {ranked.length === 0 ? (
@@ -444,11 +502,12 @@ export function VotingTab({ meeting }: VotingTabProps) {
           <div>
             <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
               <Info size={16} weight="bold" className="text-ink-muted" />
-              Ballot setup
+              Contestants
             </h3>
             <p className="mt-1 text-xs leading-relaxed text-ink-soft">
               Who voters can pick for each award. Sync derives the lists from this meeting&apos;s
-              speakers, evaluators, attendees and role takers — prune or add by hand afterwards.
+              speakers, evaluators and role takers — prune or add by hand afterwards. Table topics
+              needs no setup: it always offers everyone marked present, members and guests alike.
             </p>
           </div>
           <ReadOnly resource="meeting" action="update">
