@@ -37,17 +37,47 @@ kept for rollback.
 
 ### 1. VPS
 
+Currently `144.79.124.51` — Ubuntu 24.04 LTS, 4 vCPU / 8 GB / 83 GB. The box
+runs **only** Node (PM2) and Caddy. Postgres is managed and external, which is
+what lets `prisma migrate deploy` run from the GitHub runner rather than over
+SSH. There is no Docker, no Redis and no local database; don't add them without
+also revisiting the migration step in the workflow.
+
 ```bash
-sudo mkdir -p /srv/toastly/{releases,shared,tmp}
-sudo chown -R "$USER":"$USER" /srv/toastly
+# --- packages ---
+apt-get update && apt-get upgrade -y
+apt-get install -y ca-certificates curl gnupg tar unzip ufw fail2ban
 
-# Node must match the CI build — see the ABI note below. Whatever this prints
-# is the version .nvmrc must have, not the other way around: match the box.
-node --version
-pm2 --version
+# Node from NodeSource, deliberately NOT nvm: nvm installs under ~/.nvm and is
+# only on the PATH of an interactive login shell. remote-deploy.sh is invoked
+# as `ssh host 'pm2 ...'` — non-interactive — and would not find node at all.
+# The major must track .nvmrc; see the argon2 ABI note below.
+curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
+apt-get install -y nodejs
+npm install -g pm2@latest
 
-# Let PM2 survive reboots.
-pm2 startup systemd -u "$USER" --hp "$HOME"
+# Caddy from its official apt repo (so `apt upgrade` keeps it current).
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+  | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+  > /etc/apt/sources.list.d/caddy-stable.list
+apt-get update && apt-get install -y caddy
+
+# --- deploy user ---
+# CI logs in as this user with a dedicated keypair (SSH_PRIVATE_KEY). It is
+# non-root and has no sudo: a leaked deploy key must not be a root shell.
+adduser --disabled-password --gecos "" deploy
+install -d -m 700 -o deploy -g deploy /home/deploy/.ssh
+# append the deploy keypair's PUBLIC half to /home/deploy/.ssh/authorized_keys
+
+# --- app root ---
+# Must exist and be owned by `deploy` before the first deploy: the workflow's
+# own `mkdir -p` runs as that user and cannot create a directory under /srv.
+mkdir -p /srv/toastly/{releases,shared,tmp}
+chown -R deploy:deploy /srv/toastly
+
+# --- PM2, as the deploy user ---
+pm2 startup systemd -u deploy --hp /home/deploy   # run as root: installs the unit
 
 # Log rotation — PM2 does not delete a process's logs when you `pm2 delete`
 # it, and without this a runaway or crash-looping process fills the disk
@@ -56,6 +86,14 @@ pm2 install pm2-logrotate
 pm2 set pm2-logrotate:max_size 10M
 pm2 set pm2-logrotate:retain 7
 pm2 set pm2-logrotate:compress true
+
+# --- firewall ---
+# OpenSSH BEFORE enable, or you lock yourself out. This is more than hygiene:
+# Nest's app.listen() binds every interface and the ecosystem file sets no host
+# for the API, so without ufw port 4000 is publicly reachable — and reaching it
+# directly bypasses both Caddy and CORS. (The web app is fine: the ecosystem
+# file pins HOSTNAME=127.0.0.1.)
+ufw allow OpenSSH && ufw allow 80/tcp && ufw allow 443/tcp && ufw --force enable
 ```
 
 Reverse proxy: this deployment sits behind **Caddy**, not Nginx —
@@ -79,7 +117,7 @@ Create an environment named **`production`** (Settings → Environments), then a
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `SSH_PRIVATE_KEY`       | Private half of a dedicated deploy keypair — don't reuse a personal key; generate one with `ssh-keygen`, append the `.pub` half to the deploy user's `authorized_keys`, and only the private half goes in here |
 | `SSH_HOST`              | VPS hostname or IP                                                                                                                                                                                             |
-| `SSH_USER`              | Whatever user owns `/srv/toastly` (e.g. `nifty`)                                                                                                                                                               |
+| `SSH_USER`              | Whatever user owns `/srv/toastly` — currently `deploy`                                                                                                                                                               |
 | `DATABASE_URL`          | Managed Postgres, pooled endpoint. Set `connection_limit` deliberately — see below                                                                                                                             |
 | `DIRECT_DATABASE_URL`   | Same database, unpooled endpoint — Neon: the same host with `-pooler` removed. Used only by `prisma migrate deploy` in CI; see below                                                                           |
 | `JWT_ACCESS_SECRET`     | ≥16 chars. Boot fails if it is still the `.env.example` placeholder                                                                                                                                            |
@@ -111,6 +149,12 @@ block in `.env.example` for the bucket's CORS and public-access settings.
 Push to `main`. On the very first run there is no previous release, so a failed
 smoke test leaves the new release in place for inspection rather than rolling
 back — check `pm2 logs`.
+
+A deploy can also be re-run from the Actions tab (**Run workflow** on `main`)
+without an empty commit. The two packaging steps and the `deploy` job share one
+guard that accepts both `push` and `workflow_dispatch`; if you ever narrow it,
+narrow all three together, or a manual run reports green having built no
+artifact and deployed nothing.
 
 ## Things that will bite you if changed carelessly
 

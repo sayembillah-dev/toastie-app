@@ -1,8 +1,8 @@
 name: CI/CD
 
 # One workflow, two jobs. `ci` runs on every push and PR; `deploy` only ever
-# runs for a push to main and reuses the exact artifact `ci` produced, so the
-# thing that was tested is the thing that ships.
+# runs for main (a push, or a manual dispatch) and reuses the exact artifact
+# `ci` produced, so the thing that was tested is the thing that ships.
 on:
   push:
     branches: [main]
@@ -28,7 +28,7 @@ jobs:
     env:
       # Baked into the build: Next serialises rewrites into routes-manifest.json
       # at build time, so this cannot be changed by a restart. Loopback, because
-      # Nginx and both apps live on the same host.
+      # Caddy and both apps live on the same host.
       API_URL: http://127.0.0.1:4000
 
     steps:
@@ -109,8 +109,13 @@ jobs:
           key: nextjs-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}
 
       # ------------------------------------------------------------ packaging
+      # This guard, the artifact upload below and the `deploy` job's guard are
+      # one unit — they must always agree. `workflow_dispatch` is included so a
+      # failed or half-finished deploy can be retried from the Actions tab
+      # without an empty commit; without it a manual run silently produces no
+      # artifact and skips deploy, while still reporting green.
       - name: Assemble release bundle
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         run: |
           set -euo pipefail
           rm -rf release && mkdir -p release
@@ -158,7 +163,7 @@ jobs:
           ls -lh release.tar.gz
 
       - name: Upload release artifact
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
           name: release-${{ github.sha }}
@@ -169,7 +174,7 @@ jobs:
   deploy:
     name: Deploy to VPS
     needs: ci
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
