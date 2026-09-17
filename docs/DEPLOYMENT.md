@@ -109,6 +109,12 @@ sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 sudo systemctl reload caddy
 ```
 
+The `deploy` user can run exactly these two commands without a password, via
+`/etc/sudoers.d/toastly-caddy` — so an incident needing a Caddy reload does not
+need the root password. It is deliberately exact-match: no `restart`, no
+wildcards, nothing that widens a leaked deploy key into a root shell. Editing
+`/etc/caddy/Caddyfile` itself still needs root.
+
 ### 2. GitHub
 
 Create an environment named **`production`** (Settings → Environments), then add:

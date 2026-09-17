@@ -4,8 +4,20 @@
 #   sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 #   sudo systemctl reload caddy
 #
-# DNS resolves directly to origin (grey-cloud). Caddy auto-provisions and
-# renews the Let's Encrypt certificate and redirects HTTP → HTTPS.
+# Both commands above run as the `deploy` user without a password — a
+# sudoers rule on the VPS (/etc/sudoers.d/toastly-caddy) allows exactly those
+# two invocations and nothing else.
+#
+# DNS is Cloudflare-PROXIED (orange cloud), not direct to origin. Caddy still
+# auto-provisions and renews the Let's Encrypt certificate, because Cloudflare
+# passes the HTTP-01 challenge through to the origin, and still redirects
+# HTTP → HTTPS.
+#
+# Consequence of the proxy: {http.request.remote.host} below is a Cloudflare
+# edge IP, so X-Real-IP carries Cloudflare's address, not the client's. The
+# real client IP arrives in the CF-Connecting-IP header. If the app ever needs
+# accurate client IPs, read that header — and only trust it from Cloudflare's
+# published ranges, or anyone hitting the origin directly can forge it.
 
 toastie.niftyitsolution.com {
         encode zstd gzip
