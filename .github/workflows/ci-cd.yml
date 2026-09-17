@@ -222,8 +222,33 @@ jobs:
           # — see the `directUrl` comment in schema.prisma.
           DIRECT_DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
         run: |
+          set -euo pipefail
           pnpm install --frozen-lockfile
-          pnpm --filter @toastly/api exec prisma migrate deploy
+
+          # Retried, because the first attempt after an idle period legitimately
+          # fails. Migrations use the UNPOOLED Neon endpoint, whose compute is
+          # suspended after a few minutes of inactivity, and waking it routinely
+          # outlasts Prisma's 5s default connect_timeout. The result is P1001
+          # ("Can't reach database server"), which reads like an outage but is a
+          # cold start — seen on this repo's first deploy to the current VPS:
+          # attempt 1 died at exactly 5.0s, a retry connected instantly. Nothing
+          # has shipped at this point in the job, so the cost of a false P1001 is
+          # a failed deploy for a perfectly healthy database.
+          #
+          # Safe to retry: `migrate deploy` only applies migrations not already
+          # recorded in _prisma_migrations, so a re-run after a partial success
+          # resumes rather than repeats.
+          for attempt in 1 2 3; do
+            if pnpm --filter @toastly/api exec prisma migrate deploy; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::migrate deploy failed (attempt $attempt/3) — retrying in 15s, database may be waking"
+              sleep 15
+            fi
+          done
+          echo "::error::prisma migrate deploy failed after 3 attempts — this is not a cold start"
+          exit 1
 
       - name: Configure SSH
         env:

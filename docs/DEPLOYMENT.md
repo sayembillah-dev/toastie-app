@@ -220,6 +220,16 @@ mode, which doesn't guarantee that — the lock-wait times out after 10s with
 (the same Neon host with `-pooler` removed) instead, while the running app
 keeps using the pooled `DATABASE_URL`.
 
+**A failed migration is often just a cold start.** The unpooled Neon endpoint
+suspends its compute after a few minutes idle, and waking it routinely takes
+longer than Prisma's 5s default `connect_timeout`. The deploy then dies with
+`P1001: Can't reach database server`, which reads exactly like the database
+being gone. It usually isn't — check by connecting twice: the wake triggered by
+the failed attempt makes the next one instant. The migration step retries three
+times with a 15s gap for this reason, so a genuine `P1001` after all three
+attempts means something is actually wrong. This cost the first deploy to the
+current VPS a red run against a perfectly healthy database.
+
 **Migrations run before the new code ships.** That ordering is deliberate — a
 failed migration aborts the deploy while the old release is still serving,
 untouched. The cost is that every migration must be backwards-compatible with
