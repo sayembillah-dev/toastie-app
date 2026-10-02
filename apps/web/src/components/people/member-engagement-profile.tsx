@@ -16,10 +16,15 @@ import { notFound, useParams } from 'next/navigation';
 import { PageBreadcrumb } from '@/components/page-breadcrumb';
 import { AccessGate } from '@/components/permissions/access-gate';
 import { PersonAvatar } from '@/components/ui/person-avatar';
-import { computeEngagement } from '@/lib/education/engagement';
+import { computeEngagement, countActive } from '@/lib/education/engagement';
 import type { Member } from '@/lib/education/members';
 import { formatRoles, getInitials } from '@/lib/education/members';
-import { useGetMeetingsQuery, useGetMemberQuery, useGetMemberStatsQuery } from '@/store/api';
+import {
+  useGetMeetingsQuery,
+  useGetMemberQuery,
+  useGetMemberStatsQuery,
+  useGetMembersQuery,
+} from '@/store/api';
 import { getApiErrorMessage, isNotFoundError } from '@/store/api-error';
 
 /** Shared palette with the directory card so the avatar keeps the same identity
@@ -159,15 +164,18 @@ function ProfileSkeleton() {
 }
 
 function ProfileContent({ member }: { member: Member }) {
-  /* Both stats and the meeting roster feed the numbers below. Stats can only be
-   * computed once the member exists (this branch owns that guarantee), so both
-   * queries fire in parallel here rather than gated on each other. */
+  /* Stats, the meeting roster and the club roster (whose size sets the
+   * speaking pace health is judged against) feed the numbers below. Stats can
+   * only be computed once the member exists (this branch owns that
+   * guarantee), so the queries fire in parallel here rather than gated on
+   * each other. */
   const { data: stats } = useGetMemberStatsQuery(member.id);
   const { data: meetings } = useGetMeetingsQuery();
+  const { data: members } = useGetMembersQuery();
 
-  if (!stats || !meetings) return <ProfileSkeleton />;
+  if (!stats || !meetings || !members) return <ProfileSkeleton />;
 
-  const engagement = computeEngagement(stats, meetings, new Date());
+  const engagement = computeEngagement(stats, meetings, countActive(members), new Date());
   const activeAppearances = stats.speechesGiven + stats.rolesTaken;
 
   return (

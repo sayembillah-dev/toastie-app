@@ -35,8 +35,20 @@ export class MeetingsService {
     const rows = await this.prisma.meeting.findMany({
       where: { clubId },
       orderBy: { dateTime: 'asc' },
+      include: {
+        _count: {
+          select: {
+            speakers: {
+              where: {
+                membershipId: { not: null },
+                OR: [{ status: 'delivered' }, { evaluationSubmissions: { some: {} } }],
+              },
+            },
+          },
+        },
+      },
     });
-    return rows.map(toMeetingWire);
+    return rows.map((row) => toMeetingWire(row, row._count.speakers));
   }
 
   async get(subject: PermissionSubject, meetingId: string): Promise<MeetingWire> {

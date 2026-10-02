@@ -14,6 +14,7 @@ import {
   TASK_TITLE_MAX,
   type TaskPriority,
 } from '@/lib/tasks/tasks';
+import { dhakaFormat } from '@/lib/time';
 import {
   useAddTaskNoteMutation,
   useDeleteTaskMutation,
@@ -25,7 +26,7 @@ import { getApiErrorMessage } from '@/store/api-error';
 
 const { TextArea } = Input;
 
-const NOTE_DATE_FMT = new Intl.DateTimeFormat('en-GB', {
+const NOTE_DATE_FMT = dhakaFormat('en-GB', {
   day: 'numeric',
   month: 'short',
   hour: 'numeric',

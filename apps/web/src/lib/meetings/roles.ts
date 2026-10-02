@@ -1,10 +1,13 @@
+import { dhakaParts } from '@/lib/time';
+
 import type { Meeting } from './meetings';
 
 /** Toastmasters convention: meetings at or after 5 PM are Evening events, and
  * everything earlier reads as "of the Day". A single cutoff keeps the label
- * decision testable without a config knob. */
+ * decision testable without a config knob. The hour is read in Bangladesh
+ * time, so the label is the same on every device. */
 export function isEveningMeeting(dateTime: string): boolean {
-  return new Date(dateTime).getHours() >= 17;
+  return dhakaParts(dateTime).hour >= 17;
 }
 
 export function getToastmasterLabel(dateTime: string): string {

@@ -7,6 +7,7 @@ import { useMemo, useSyncExternalStore } from 'react';
 import { MeetingChecklist } from '@/components/checklist/meeting-checklist';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { partitionMeetings } from '@/lib/meetings/meetings';
+import { dhakaFormat } from '@/lib/time';
 import { useGetMeetingsQuery } from '@/store/api';
 
 /* Same client-clock trick the meetings hub uses so hydration stays
@@ -28,7 +29,7 @@ function useClientNow(): number | null {
   return useSyncExternalStore(subscribeNever, readClientNow, readServerNow);
 }
 
-const MEETING_LABEL_FMT = new Intl.DateTimeFormat('en-GB', {
+const MEETING_LABEL_FMT = dhakaFormat('en-GB', {
   weekday: 'short',
   day: 'numeric',
   month: 'short',

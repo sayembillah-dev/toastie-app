@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { PersonAvatar } from '@/components/ui/person-avatar';
 import type { Member } from '@/lib/education/members';
 import { formatRoles, getInitials } from '@/lib/education/members';
+import { APP_TIME_ZONE, dhakaInstant } from '@/lib/time';
 
 /** Shared with the People/Education profile cards so the same member reads
  * with the same identity colour everywhere in the app. */
@@ -29,8 +30,12 @@ function hashString(input: string): number {
 }
 
 function formatJoinDate(iso: string): string {
-  const date = new Date(`${iso}T00:00:00`);
-  return date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const date = dhakaInstant(iso);
+  return date.toLocaleDateString('en-GB', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: APP_TIME_ZONE,
+  });
 }
 
 interface ProfileHeroProps {

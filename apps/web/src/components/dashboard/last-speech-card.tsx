@@ -7,12 +7,14 @@ import type { AhCounterEntry } from '@/lib/meetings/ah-counter-reports';
 import { totalFillers } from '@/lib/meetings/ah-counter-reports';
 import type { TimerEntry, TimerVerdict } from '@/lib/meetings/timer-reports';
 import { deriveTimerVerdict, formatSeconds } from '@/lib/meetings/timer-reports';
+import { dhakaFormat, dhakaInstant } from '@/lib/time';
 
 type SpeechEvent = Extract<HistoryEvent, { type: 'speech-given' }>;
 
+const DATE_FMT = dhakaFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
 function formatDate(iso: string): string {
-  const date = new Date(`${iso}T00:00:00`);
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return DATE_FMT.format(dhakaInstant(iso));
 }
 
 const VERDICT_STYLE: Record<TimerVerdict, { label: string; className: string }> = {

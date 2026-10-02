@@ -8,6 +8,8 @@ import type {
   TimerEntry as TimerEntryRow,
 } from '@prisma/client';
 
+import { dhakaDateKey } from '@/common/time';
+
 import { toWireHistoryEventKind } from './history-mapping';
 
 /** ---------------------------------------------------------- history -- */
@@ -406,8 +408,10 @@ function parseAssignees(raw: unknown): Record<string, unknown> {
 
 /** ----------------------------------------------------------- helpers -- */
 
+/** Calendar date of an instant, read in Bangladesh — not UTC, which is a day
+ * behind between midnight and 06:00 there. */
 function isoDate(value: Date): string {
-  return value.toISOString().slice(0, 10);
+  return dhakaDateKey(value);
 }
 
 function clampRating(n: number): 1 | 2 | 3 | 4 | 5 {

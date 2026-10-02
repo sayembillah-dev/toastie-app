@@ -15,6 +15,7 @@ import dayjs, { type Dayjs } from '@/lib/dayjs';
 import { toInstant } from '@/lib/meetings/datetime';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { DEFAULT_START_TIME } from '@/lib/meetings/meetings';
+import { PICKER_TIME_FORMAT } from '@/lib/time';
 import { notPastDateRule, textFieldRules } from '@/lib/validation/rules';
 import { useCreateMeetingMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
@@ -104,8 +105,8 @@ export function NewMeetingModal({ open, nextNumber, onClose, onCreated }: NewMee
 
     try {
       /* Sent as an instant, not as the typed wall clock — see
-       * `lib/meetings/datetime`. The pickers are local, so what is typed here
-       * is what every viewer in this timezone reads back. */
+       * `lib/meetings/datetime`. The pickers are read as Bangladesh time, so
+       * what is typed here is what every viewer reads back, on any device. */
       const time = (values.time as Dayjs).format('HH:mm');
       const created = await createMeeting({
         meetingNumber: values.meetingNumber,
@@ -244,7 +245,7 @@ export function NewMeetingModal({ open, nextNumber, onClose, onCreated }: NewMee
                     id="meeting-time"
                     size="large"
                     className="w-full"
-                    format="h:mm A"
+                    format={PICKER_TIME_FORMAT}
                     use12Hours
                     minuteStep={5}
                   />

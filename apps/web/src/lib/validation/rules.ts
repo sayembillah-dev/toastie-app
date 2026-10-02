@@ -8,6 +8,8 @@
 
 import type { Rule } from 'antd/es/form';
 
+import { dhakaDateKey, dhakaToday } from '@/lib/time';
+
 /* -------------------------------------------------------------------------- */
 /* Constants — kept in sync with the API DTOs.                                */
 /* -------------------------------------------------------------------------- */
@@ -201,19 +203,27 @@ export function textFieldRules({
   return rules;
 }
 
-/** Rejects a date string that is in the past (day-precision comparison). Pair
- * with a native `type="date"` or an antd DatePicker's ISO date value. */
+/** Rejects a date that is before today in Bangladesh (day-precision
+ * comparison). Pair with a native `type="date"` "YYYY-MM-DD" string or an antd
+ * DatePicker value — a picker's calendar date is read as-is, not shifted
+ * through the browser's timezone. */
 export function notPastDateRule(label = 'Date'): Rule {
   return {
     validator(_, value) {
       if (!value) return Promise.resolve();
-      const date = new Date(typeof value === 'string' ? value : String(value));
-      if (Number.isNaN(date.getTime())) {
+      let day: string;
+      if (typeof value === 'object' && typeof value.format === 'function') {
+        day = value.isValid?.() === false ? '' : value.format('YYYY-MM-DD');
+      } else if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        day = value;
+      } else {
+        const date = new Date(typeof value === 'string' ? value : String(value));
+        day = Number.isNaN(date.getTime()) ? '' : dhakaDateKey(date);
+      }
+      if (!day) {
         return Promise.reject(new Error(`Enter a valid ${label.toLowerCase()}`));
       }
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (date < today) {
+      if (day < dhakaToday()) {
         return Promise.reject(new Error(`${label} can't be in the past`));
       }
       return Promise.resolve();

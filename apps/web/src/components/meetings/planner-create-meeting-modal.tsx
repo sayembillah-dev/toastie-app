@@ -17,10 +17,11 @@ import dayjs from '@/lib/dayjs';
 import type { Member } from '@/lib/education/members';
 import type { Assignee, AssigneeField, PlannerRow } from '@/lib/education/planner';
 import { toAssigneesJson } from '@/lib/education/planner';
-import { splitLocalDateTime, toInstant } from '@/lib/meetings/datetime';
+import { splitDhakaDateTime, toInstant } from '@/lib/meetings/datetime';
 import { countUnlinkedGuestAssignees } from '@/lib/meetings/from-planner';
 import type { Meeting } from '@/lib/meetings/meetings';
 import type { Guest } from '@/lib/people/guests';
+import { PICKER_TIME_FORMAT } from '@/lib/time';
 import { useCreateMeetingMutation, useUpdatePlannerRowMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -85,7 +86,7 @@ const ROLE_GROUPS: Array<{ title: string; fields: RoleField[] }> = [
 const ALL_ROLE_FIELDS: RoleField[] = ROLE_GROUPS.flatMap((group) => group.fields);
 
 /** A planner row's `dateTime` is an instant, so the pickers' two halves come
- * off the viewer's local clock rather than out of a string slice — see
+ * off a Bangladesh wall clock rather than out of a string slice — see
  * `lib/meetings/datetime`. */
 function joinDateTime(date: string, time: string): string | null {
   return date ? toInstant(date, time) : null;
@@ -144,7 +145,7 @@ export function PlannerCreateMeetingModal({
   const { message } = App.useApp();
 
   const form = edits ?? row;
-  const { date, time } = splitLocalDateTime(form?.dateTime ?? null);
+  const { date, time } = splitDhakaDateTime(form?.dateTime ?? null);
 
   const theme = form?.theme.trim() ?? '';
   const canSubmit = form !== null && form.meetingNumber !== null && date !== '' && theme !== '';
@@ -284,7 +285,7 @@ export function PlannerCreateMeetingModal({
                   id="planner-create-time"
                   size="large"
                   className="w-full"
-                  format="h:mm A"
+                  format={PICKER_TIME_FORMAT}
                   use12Hours
                   minuteStep={5}
                   value={time ? dayjs(time, 'HH:mm') : null}

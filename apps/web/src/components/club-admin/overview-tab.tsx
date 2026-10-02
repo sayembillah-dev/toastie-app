@@ -21,6 +21,7 @@ import { getInitials, getPrimaryRole } from '@/lib/education/members';
 import { CURRENT_DUES_PERIOD_ID, getDuesPeriod, summariseDues } from '@/lib/finance/dues';
 import { formatMoney } from '@/lib/finance/money';
 import { partitionMeetings } from '@/lib/meetings/meetings';
+import { dhakaFormat } from '@/lib/time';
 import {
   useGetActivityLogsQuery,
   useGetInvitesQuery,
@@ -47,16 +48,15 @@ function useClientNow(): number | null {
   return useSyncExternalStore(subscribeNever, readClientNow, readServerNow);
 }
 
-const DATE_FMT = new Intl.DateTimeFormat('en-GB', {
+const DATE_FMT = dhakaFormat('en-GB', {
   weekday: 'short',
   day: 'numeric',
   month: 'short',
 });
 
-const TIME_FMT = new Intl.DateTimeFormat('en-US', {
+const TIME_FMT = dhakaFormat('en-US', {
   hour: 'numeric',
   minute: '2-digit',
-  hour12: true,
 });
 
 /** The Club Admin landing page — a read-only roll-up of the roster, invites,

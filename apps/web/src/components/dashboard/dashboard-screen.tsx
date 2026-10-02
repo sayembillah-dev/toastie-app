@@ -8,7 +8,7 @@ import { FinanceCard } from '@/components/me/finance-card';
 import { PathwayCard } from '@/components/me/pathway-card';
 import { TasksCard } from '@/components/me/tasks-card';
 import { InstallAppCard } from '@/components/pwa/install-app-card';
-import { computeEngagement } from '@/lib/education/engagement';
+import { computeEngagement, countActive } from '@/lib/education/engagement';
 import type { HistoryEvent } from '@/lib/education/history';
 import { useCurrentMemberId } from '@/lib/me/current-member';
 import { partitionMeetings } from '@/lib/meetings/meetings';
@@ -91,9 +91,9 @@ function DashboardContent({ memberId }: { memberId: string }) {
   const nextMeeting = meetings ? partitionMeetings(meetings, now.getTime()).current : null;
   const { data: nextMeetingRoles } = useGetMeetingRolesQuery(nextMeeting?.id ?? skipToken);
 
-  if (!member || !stats || !history || !meetings) return <DashboardSkeleton />;
+  if (!member || !stats || !history || !meetings || !members) return <DashboardSkeleton />;
 
-  const membersById = new Map((members ?? []).map((entry) => [entry.id, entry]));
+  const membersById = new Map(members.map((entry) => [entry.id, entry]));
   const guestsById = new Map((guests ?? []).map((entry) => [entry.id, entry]));
 
   const speeches = history.filter(isSpeechGiven);
@@ -109,9 +109,9 @@ function DashboardContent({ memberId }: { memberId: string }) {
     : undefined;
   const evaluator = latestEvaluation ? membersById.get(latestEvaluation.evaluatorId) : undefined;
 
-  const engagement = computeEngagement(stats, meetings, now);
+  const activeMembers = countActive(members);
+  const engagement = computeEngagement(stats, meetings, activeMembers, now);
   const { past, upcoming } = partitionMeetings(meetings, now.getTime());
-  const activeMembers = (members ?? []).filter((entry) => entry.status === 'active').length;
 
   const myRole =
     nextMeeting && nextMeetingRoles

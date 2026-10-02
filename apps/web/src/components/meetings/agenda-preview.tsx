@@ -24,6 +24,7 @@ import { buildAgenda, CLUB, speakerPerson, speechSlotPerson } from '@/lib/meetin
 import type { MeetingDraft } from '@/lib/meetings/draft';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { getGuestInitials } from '@/lib/people/guests';
+import { dhakaParts, formatDhakaTime } from '@/lib/time';
 import { useGetClubProfileQuery, useGetGuestsQuery, useGetMembersQuery } from '@/store/api';
 import { useAppSelector } from '@/store/hooks';
 import { selectMeetingDraft } from '@/store/meeting-draft-slice';
@@ -68,20 +69,14 @@ const FULL_MONTHS = [
 
 /** `3-Jul-2026`, the format the club's printed agenda uses. */
 function formatSheetDate(date: Date): string {
-  return `${date.getDate()}-${MONTHS[date.getMonth()]}-${date.getFullYear()}`;
+  const { year, month, day } = dhakaParts(date);
+  return `${day}-${MONTHS[month - 1]}-${year}`;
 }
 
 /** `September 3, 2026` — the long date that opens the officer rail. */
 function formatRailDate(date: Date): string {
-  return `${FULL_MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
-}
-
-/** `11:30 AM` — 12-hour, no leading zero on the hour. */
-function formatClock(date: Date): string {
-  const hours = date.getHours();
-  const minutes = date.getMinutes().toString().padStart(2, '0');
-  const suffix = hours < 12 ? 'AM' : 'PM';
-  return `${hours % 12 || 12}:${minutes} ${suffix}`;
+  const { year, month, day } = dhakaParts(date);
+  return `${FULL_MONTHS[month - 1]} ${day}, ${year}`;
 }
 
 function SheetHeader({ meeting, theme }: { meeting: Meeting; theme: string }) {
@@ -507,7 +502,7 @@ function SheetTable({ rows, tipOf }: { rows: AgendaRow[]; tipOf: TipResolver }) 
             <Fragment key={row.title}>
               <tr style={{ borderTop: `1px solid ${RULE}` }}>
                 <td style={{ ...BLOCK_CELL, color: RULE, whiteSpace: 'nowrap', width: 68 }}>
-                  {formatClock(row.startsAt)}
+                  {formatDhakaTime(row.startsAt)}
                 </td>
                 <td style={BLOCK_CELL}>{row.title}</td>
                 <td style={{ ...BLOCK_CELL, fontWeight: 600, width: '30%' }}>

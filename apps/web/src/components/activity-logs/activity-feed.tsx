@@ -19,18 +19,26 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ActivityCategory, ActivityLog } from '@/lib/activity/activity-log';
 import { ACTIVITY_CATEGORIES } from '@/lib/activity/activity-log';
 import { getPrimaryRole } from '@/lib/education/members';
+import {
+  addDhakaDays,
+  dhakaDateKey,
+  dhakaDayDiff,
+  dhakaFormat,
+  dhakaInstant,
+  dhakaToday,
+} from '@/lib/time';
 import { useGetMembersQuery, useListActivityLogsInfiniteQuery } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
 type TimeRangeFilter = 'all' | 'today' | 'week' | 'month';
 
-const DATE_FMT = new Intl.DateTimeFormat('en-GB', {
+const DATE_FMT = dhakaFormat('en-GB', {
   day: 'numeric',
   month: 'short',
   year: 'numeric',
 });
 
-const TIME_FMT = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' });
+const TIME_FMT = dhakaFormat('en-GB', { hour: '2-digit', minute: '2-digit' });
 
 /** Phosphor icons are plain components, so the map carries the type rather
  * than an element and the row picks the size at the call site — same
@@ -56,26 +64,24 @@ const CATEGORY_OPTIONS = [
   })),
 ];
 
-/** Start-of-day cutoffs for the time-range filter, in the viewer's own
- * timezone — the ISO instant is what travels to the server, so "today" is
- * the viewer's day regardless of where the API runs. */
+/** Start-of-day cutoffs for the time-range filter, in Bangladesh time — the
+ * ISO instant is what travels to the server, so "today" is the Bangladesh day
+ * regardless of where the viewer or the API runs. */
 function rangeCutoff(range: TimeRangeFilter, now: Date): Date | null {
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  if (range === 'today') return startOfToday;
-  if (range === 'week') return new Date(startOfToday.getTime() - 6 * 24 * 60 * 60 * 1000);
-  if (range === 'month') return new Date(startOfToday.getFullYear(), startOfToday.getMonth(), 1);
+  const today = dhakaToday(now);
+  if (range === 'today') return dhakaInstant(today);
+  if (range === 'week') return dhakaInstant(addDhakaDays(today, -6));
+  if (range === 'month') return dhakaInstant(`${today.slice(0, 7)}-01`);
   return null;
 }
 
 /** "Today" / "Yesterday" for the two most recent days, the full date beyond
  * that — same convention as a typical activity feed. */
 function dayLabel(iso: string, now: Date): string {
-  const day = new Date(`${iso.slice(0, 10)}T00:00:00`);
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const diffDays = Math.round((startOfToday.getTime() - day.getTime()) / (24 * 60 * 60 * 1000));
+  const diffDays = dhakaDayDiff(iso, now);
   if (diffDays === 0) return 'Today';
   if (diffDays === 1) return 'Yesterday';
-  return DATE_FMT.format(day);
+  return DATE_FMT.format(new Date(iso));
 }
 
 /** Debounce a free-text value so each keystroke doesn't fire a fresh
@@ -162,7 +168,7 @@ export function ActivityFeed({ maxWidthClassName = 'max-w-4xl' }: ActivityFeedPr
     const now = new Date();
     const byDay = new Map<string, { label: string; entries: ActivityLog[] }>();
     for (const log of logs) {
-      const key = log.createdAt.slice(0, 10);
+      const key = dhakaDateKey(log.createdAt);
       const existing = byDay.get(key);
       if (existing) {
         existing.entries.push(log);

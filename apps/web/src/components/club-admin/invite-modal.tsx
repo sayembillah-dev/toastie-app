@@ -8,6 +8,7 @@ import { ReadOnly } from '@/components/permissions/read-only';
 import type { Invite } from '@/lib/club-admin/invites';
 import type { OfficerRole } from '@/lib/education/members';
 import { OFFICER_ROLES } from '@/lib/education/members';
+import { APP_TIME_ZONE } from '@/lib/time';
 import { nameRules, requiredSelectRule } from '@/lib/validation/rules';
 import { useCreateInviteMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
@@ -125,6 +126,7 @@ export function InviteLinkResult({ invite, onDone }: { invite: Invite; onDone: (
     year: 'numeric',
     month: 'long',
     day: 'numeric',
+    timeZone: APP_TIME_ZONE,
   });
 
   async function handleCopyLink() {

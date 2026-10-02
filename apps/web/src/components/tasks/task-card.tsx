@@ -7,13 +7,14 @@ import { useCurrentMemberId } from '@/lib/me/current-member';
 import { useCan } from '@/lib/permissions/use-can';
 import { PRIORITY_STYLES, personInitials, personSwatch } from '@/lib/tasks/task-ui';
 import type { Task } from '@/lib/tasks/tasks';
+import { dhakaFormat, dhakaInstant } from '@/lib/time';
 import { useUpdateTaskMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
-const DUE_DATE_FMT = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
+const DUE_DATE_FMT = dhakaFormat('en-GB', { day: 'numeric', month: 'short' });
 
 function formatDueDate(iso: string): string {
-  return DUE_DATE_FMT.format(new Date(`${iso}T00:00:00`));
+  return DUE_DATE_FMT.format(dhakaInstant(iso));
 }
 
 interface TaskCardProps {

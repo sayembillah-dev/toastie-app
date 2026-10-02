@@ -23,6 +23,7 @@ import {
 } from '@/lib/people/contact-logs';
 import type { Guest } from '@/lib/people/guests';
 import { getGuestFullName } from '@/lib/people/guests';
+import { dhakaFormat } from '@/lib/time';
 import {
   useCreateContactLogMutation,
   useDeleteContactLogMutation,
@@ -68,7 +69,7 @@ const METHOD_OPTIONS = CONTACT_METHODS.map((entry) => ({
 
 /** Full date+time for older entries — the drawer leans on relative for the last
  * day and the absolute stamp beyond that so the officer keeps a sense of pace. */
-const ABS_FMT = new Intl.DateTimeFormat('en-GB', {
+const ABS_FMT = dhakaFormat('en-GB', {
   day: 'numeric',
   month: 'short',
   year: 'numeric',

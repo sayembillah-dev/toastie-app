@@ -12,9 +12,9 @@ import {
   Segmented,
   Select,
 } from 'antd';
-import dayjs, { type Dayjs } from 'dayjs';
 import { useMemo } from 'react';
 import { ReadOnly } from '@/components/permissions/read-only';
+import dayjs, { type Dayjs, dayjsToday } from '@/lib/dayjs';
 import { formatMoney, fromMinor, toMinor } from '@/lib/finance/money';
 import type { Transaction, TransactionCategory, TxDirection } from '@/lib/finance/transactions';
 import {
@@ -163,7 +163,7 @@ function ModalBody({ transaction, onDone, onCancel }: ModalBodyProps) {
         direction: transaction?.direction ?? 'out',
         category: transaction?.category ?? EXPENSE_CATEGORIES[0],
         amount: transaction ? fromMinor(transaction.amountMinor) : 0,
-        date: dayjs(transaction?.date ?? undefined),
+        date: transaction?.date ? dayjs(transaction.date.slice(0, 10), 'YYYY-MM-DD') : dayjsToday(),
         description: transaction?.description ?? '',
         method: transaction?.method ?? 'cash',
         counterparty: transaction?.counterparty ?? '',

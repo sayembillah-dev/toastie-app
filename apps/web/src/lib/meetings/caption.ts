@@ -1,16 +1,17 @@
+import { dhakaFormat } from '@/lib/time';
+
 import type { Meeting } from './meetings';
 import { getToastmasterLabel } from './roles';
 
-const CAPTION_DATE_FMT = new Intl.DateTimeFormat('en-GB', {
+const CAPTION_DATE_FMT = dhakaFormat('en-GB', {
   day: 'numeric',
   month: 'long',
   year: 'numeric',
 });
 
-const CAPTION_TIME_FMT = new Intl.DateTimeFormat('en-US', {
+const CAPTION_TIME_FMT = dhakaFormat('en-US', {
   hour: 'numeric',
   minute: '2-digit',
-  hour12: true,
 });
 
 function ordinal(n: number): string {

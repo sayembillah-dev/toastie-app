@@ -19,19 +19,19 @@ import { EMPTY_DRAFT } from '@/lib/meetings/draft';
 import type { Meeting } from '@/lib/meetings/meetings';
 import type { PublicMeetingAgenda } from '@/lib/meetings/public-agenda';
 import { buildRoles } from '@/lib/meetings/roles';
+import { dhakaFormat } from '@/lib/time';
 import { useGetPublicMeetingAgendaQuery } from '@/store/api';
 
-const MEETING_DATE_FMT = new Intl.DateTimeFormat('en-GB', {
+const MEETING_DATE_FMT = dhakaFormat('en-GB', {
   weekday: 'long',
   day: 'numeric',
   month: 'long',
   year: 'numeric',
 });
 
-const CLOCK_FMT = new Intl.DateTimeFormat('en-US', {
+const CLOCK_FMT = dhakaFormat('en-US', {
   hour: 'numeric',
   minute: '2-digit',
-  hour12: true,
 });
 
 /* The four roles the room actually looks to during the meeting — everything

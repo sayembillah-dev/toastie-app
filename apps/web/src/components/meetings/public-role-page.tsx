@@ -17,9 +17,10 @@ import {
   writeRoleIdentity,
 } from '@/lib/meetings/role-identity';
 import type { RoleKind } from '@/lib/meetings/role-state';
+import { dhakaFormat } from '@/lib/time';
 import { useGetPublicMeetingQuery, useGetPublicRoleAssignmentQuery } from '@/store/api';
 
-const MEETING_DATE_FMT = new Intl.DateTimeFormat('en-GB', {
+const MEETING_DATE_FMT = dhakaFormat('en-GB', {
   weekday: 'long',
   day: 'numeric',
   month: 'long',

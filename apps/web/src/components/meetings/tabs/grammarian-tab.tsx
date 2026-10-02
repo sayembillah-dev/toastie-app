@@ -16,6 +16,7 @@ import {
   updateRoleState,
 } from '@/lib/meetings/role-state';
 import { useRoleStateSync } from '@/lib/meetings/role-state-sync';
+import { dhakaFormat } from '@/lib/time';
 import { useIsMobile } from '@/lib/ui/use-is-mobile';
 import {
   useGetGuestsQuery,
@@ -24,11 +25,10 @@ import {
   useGetPublicMeetingQuery,
 } from '@/store/api';
 
-const TIME_FMT = new Intl.DateTimeFormat('en-GB', {
-  hour: '2-digit',
+const TIME_FMT = dhakaFormat('en-GB', {
+  hour: 'numeric',
   minute: '2-digit',
   second: '2-digit',
-  hour12: false,
 });
 
 interface GrammarianViewProps {

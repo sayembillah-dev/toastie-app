@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { buildMeetingCaption } from '@/lib/meetings/caption';
 import type { Meeting, MeetingStatus } from '@/lib/meetings/meetings';
 import { toAssigneeMap } from '@/lib/meetings/role-assignments';
+import { dhakaFormat } from '@/lib/time';
 import {
   useLazyGetClubProfileQuery,
   useLazyGetGuestsQuery,
@@ -23,17 +24,16 @@ interface MeetingCardProps {
   variant?: 'default' | 'featured';
 }
 
-const DATE_FMT = new Intl.DateTimeFormat('en-GB', {
+const DATE_FMT = dhakaFormat('en-GB', {
   weekday: 'short',
   day: 'numeric',
   month: 'short',
   year: 'numeric',
 });
 
-const TIME_FMT = new Intl.DateTimeFormat('en-US', {
+const TIME_FMT = dhakaFormat('en-US', {
   hour: 'numeric',
   minute: '2-digit',
-  hour12: true,
 });
 
 interface StatusStyle {

@@ -3,6 +3,7 @@
 import { Empty, Skeleton, Tag } from 'antd';
 
 import type { MyHistoryEvent } from '@/lib/profile/profile';
+import { APP_TIME_ZONE } from '@/lib/time';
 import { useGetMyHistoryQuery } from '@/store/api';
 
 const KIND_LABEL: Record<MyHistoryEvent['kind'], string> = {
@@ -56,7 +57,8 @@ export default function MyHistoryPage() {
                   </Tag>
                 </div>
                 <div className="mt-1 text-xs text-ink-muted">
-                  {e.meetingLabel} · {e.clubName} · {new Date(e.date).toLocaleDateString()}
+                  {e.meetingLabel} · {e.clubName} ·{' '}
+                  {new Date(e.date).toLocaleDateString(undefined, { timeZone: APP_TIME_ZONE })}
                 </div>
               </li>
             ))}

@@ -22,6 +22,7 @@ import {
   VISIT_LOG_NOTES_MAX,
   VISIT_LOG_ROLE_MAX,
 } from '@/lib/people/visit-logs';
+import { dhakaFormat } from '@/lib/time';
 import {
   useCreateVisitLogMutation,
   useDeleteVisitLogMutation,
@@ -37,7 +38,7 @@ interface VisitLogsDrawerProps {
   onClose: () => void;
 }
 
-const MEETING_DATE_FMT = new Intl.DateTimeFormat('en-GB', {
+const MEETING_DATE_FMT = dhakaFormat('en-GB', {
   day: 'numeric',
   month: 'short',
   year: 'numeric',

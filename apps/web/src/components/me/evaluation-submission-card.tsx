@@ -5,8 +5,9 @@ import { Modal } from 'antd';
 import { useState } from 'react';
 
 import type { EvaluationSubmissionWire } from '@/lib/evaluation/api-types';
+import { dhakaFormat } from '@/lib/time';
 
-const SUBMITTED_AT_FMT = new Intl.DateTimeFormat('en-GB', {
+const SUBMITTED_AT_FMT = dhakaFormat('en-GB', {
   day: 'numeric',
   month: 'short',
   year: 'numeric',

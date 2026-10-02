@@ -1,6 +1,8 @@
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 
+import { dhakaToday } from '@/lib/time';
+
 /**
  * The one dayjs anything in this app should import.
  *
@@ -15,6 +17,12 @@ import customParseFormat from 'dayjs/plugin/customParseFormat';
  * the import instead of something that has to run first.
  */
 dayjs.extend(customParseFormat);
+
+/** Today in Bangladesh as a naive picker value. Use instead of bare `dayjs()`,
+ * which is today on the *browser's* clock. */
+export function dayjsToday() {
+  return dayjs(dhakaToday(), 'YYYY-MM-DD');
+}
 
 export default dayjs;
 export type { Dayjs } from 'dayjs';

@@ -14,6 +14,7 @@ import { Fragment } from 'react';
 
 import type { HistoryEvent, HistoryEventKind } from '@/lib/education/history';
 import type { Member } from '@/lib/education/members';
+import { APP_TIME_ZONE, dhakaInstant } from '@/lib/time';
 import { useGetMemberHistoryQuery } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -85,20 +86,24 @@ const EVENT_STYLES: Record<
 };
 
 function formatFullDate(iso: string): string {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', {
+  return dhakaInstant(iso).toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
+    timeZone: APP_TIME_ZONE,
   });
 }
 
 function formatMonthLabel(iso: string): string {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', {
+  return dhakaInstant(iso).toLocaleDateString('en-GB', {
     month: 'long',
     year: 'numeric',
+    timeZone: APP_TIME_ZONE,
   });
 }
 
+/** `date` is already a Bangladesh calendar date ("YYYY-MM-DD"), so its
+ * year-month prefix is the Bangladesh month — no timezone read needed. */
 function getMonthKey(iso: string): string {
   return iso.slice(0, 7);
 }

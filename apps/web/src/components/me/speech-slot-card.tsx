@@ -7,6 +7,7 @@ import {
   SPEECH_SLOT_REQUEST_STATUS_LABELS,
   type SpeechSlotRequestStatus,
 } from '@/lib/education/speech-slot-requests';
+import { APP_TIME_ZONE } from '@/lib/time';
 import { useGetMeetingsQuery, useGetSpeechSlotRequestsQuery } from '@/store/api';
 
 const STATUS_TAG_COLOR: Record<SpeechSlotRequestStatus, string> = {
@@ -17,7 +18,11 @@ const STATUS_TAG_COLOR: Record<SpeechSlotRequestStatus, string> = {
 
 function formatMeetingDate(iso: string): string {
   const date = new Date(iso);
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return date.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: APP_TIME_ZONE,
+  });
 }
 
 interface SpeechSlotCardProps {

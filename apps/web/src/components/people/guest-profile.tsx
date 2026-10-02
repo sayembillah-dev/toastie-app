@@ -23,10 +23,11 @@ import {
   getGuestStage,
   getGuestSwatch,
 } from '@/lib/people/guests';
+import { dhakaFormat } from '@/lib/time';
 import { useGetGuestQuery } from '@/store/api';
 import { getApiErrorMessage, isNotFoundError } from '@/store/api-error';
 
-const VISIT_DATE_FMT = new Intl.DateTimeFormat('en-GB', {
+const VISIT_DATE_FMT = dhakaFormat('en-GB', {
   day: 'numeric',
   month: 'short',
   year: 'numeric',

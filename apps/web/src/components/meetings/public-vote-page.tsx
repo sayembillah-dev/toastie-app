@@ -17,10 +17,11 @@ import {
   readLocalPicks,
   writeLocalPicks,
 } from '@/lib/meetings/voting';
+import { dhakaFormat } from '@/lib/time';
 import { useGetPublicMeetingVoteQuery, useSubmitPublicMeetingVoteMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
-const MEETING_DATE_FMT = new Intl.DateTimeFormat('en-GB', {
+const MEETING_DATE_FMT = dhakaFormat('en-GB', {
   weekday: 'long',
   day: 'numeric',
   month: 'long',

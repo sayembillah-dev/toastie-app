@@ -18,6 +18,7 @@ import { StaggerItem, StaggerList } from '@/components/motion/stagger-list';
 import { ReadOnly } from '@/components/permissions/read-only';
 import type { LibraryDocument } from '@/lib/library/documents';
 import { documentTypeLabel } from '@/lib/library/documents';
+import { APP_TIME_ZONE } from '@/lib/time';
 import { useListDocumentsQuery } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -289,7 +290,12 @@ function formatBytes(size: number): string {
 function formatAddedAt(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: APP_TIME_ZONE,
+  });
 }
 
 interface DocumentCardProps {

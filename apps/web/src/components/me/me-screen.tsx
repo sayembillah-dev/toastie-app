@@ -4,7 +4,7 @@ import { WarningCircle } from '@phosphor-icons/react/dist/ssr';
 import { skipToken } from '@reduxjs/toolkit/query/react';
 import { useState } from 'react';
 
-import { computeEngagement } from '@/lib/education/engagement';
+import { computeEngagement, countActive } from '@/lib/education/engagement';
 import type { HistoryEvent } from '@/lib/education/history';
 import { getNextProject } from '@/lib/education/pathways';
 import { useCurrentMemberId } from '@/lib/me/current-member';
@@ -76,11 +76,11 @@ function MeContent({ memberId }: { memberId: string }) {
   const { data: ahCounterEntries } = useGetMemberAhCounterEntriesQuery(memberId);
   const { data: submissions } = useGetReceivedEvaluationsQuery(memberId);
 
-  if (!member || !stats || !history || !meetings) return <MeSkeleton />;
+  if (!member || !stats || !history || !meetings || !members) return <MeSkeleton />;
 
-  const engagement = computeEngagement(stats, meetings, new Date());
+  const engagement = computeEngagement(stats, meetings, countActive(members), new Date());
   const speeches = history.filter(isSpeechGiven);
-  const membersById = new Map((members ?? []).map((entry) => [entry.id, entry]));
+  const membersById = new Map(members.map((entry) => [entry.id, entry]));
 
   const completedProjectNames = history
     .filter(

@@ -16,13 +16,14 @@ import {
   getGuestSwatch,
   groupGuestsByStage,
 } from '@/lib/people/guests';
+import { dhakaFormat } from '@/lib/time';
 import { useUpdateGuestMutation } from '@/store/api';
 
 /** The id the card writes into the drag payload. A private type keeps stray
  * drags from elsewhere on the page out of the columns. */
 const DRAG_MIME = 'application/x-toastly-guest';
 
-const SHORT_DATE_FMT = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
+const SHORT_DATE_FMT = dhakaFormat('en-GB', { day: 'numeric', month: 'short' });
 
 function formatShortDate(iso: string): string {
   return iso ? SHORT_DATE_FMT.format(new Date(iso)) : 'no visits yet';

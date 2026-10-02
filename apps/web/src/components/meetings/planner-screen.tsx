@@ -16,7 +16,6 @@ import { AssigneeSelect } from '@/components/education/assignee-select';
 import { PlannerCreateMeetingModal } from '@/components/meetings/planner-create-meeting-modal';
 import { PlannerMobile } from '@/components/meetings/planner-mobile';
 import { ReadOnly } from '@/components/permissions/read-only';
-import dayjs from '@/lib/dayjs';
 import type { Member } from '@/lib/education/members';
 import type { Assignee, AssigneeField, PlannerRow } from '@/lib/education/planner';
 import {
@@ -27,9 +26,15 @@ import {
   plannerRowLabel,
   toAssigneesJson,
 } from '@/lib/education/planner';
-import { localMonthKey, localMonthLabel } from '@/lib/meetings/datetime';
+import {
+  dhakaMonthKey,
+  dhakaMonthLabel,
+  instantFromPicker,
+  pickerValueFromInstant,
+} from '@/lib/meetings/datetime';
 import type { Meeting } from '@/lib/meetings/meetings';
 import type { Guest } from '@/lib/people/guests';
+import { PICKER_TIME_FORMAT } from '@/lib/time';
 import { useIsMobile } from '@/lib/ui/use-is-mobile';
 import { useBlurCommit } from '@/lib/use-blur-commit';
 import {
@@ -110,10 +115,10 @@ function subHeaderGroupClass(tint: Tint): string {
  * row's — rows with no date don't trigger a divider and just flow inline.
  * -------------------------------------------------------------------------- */
 
-/* `dateTime` is a stored instant, so the month has to be read off the viewer's
- * local clock — slicing the ISO string would group by UTC month and file a
- * late-evening meeting on the 31st under the following month. */
-const monthKey = localMonthKey;
+/* `dateTime` is a stored instant, so the month has to be read off a
+ * Bangladesh wall clock — slicing the ISO string would group by UTC month and
+ * file a meeting early on the 1st under the previous month. */
+const monthKey = dhakaMonthKey;
 
 const MEETING_MIN_W = 96;
 const DATE_MIN_W = 190;
@@ -227,15 +232,15 @@ function PlannerTableRow({
             variant="borderless"
             className="w-full"
             size="small"
-            showTime={{ format: 'h:mm A', minuteStep: 5, use12Hours: true }}
-            format="D MMM YYYY, h:mm A"
-            value={row.dateTime ? dayjs(row.dateTime) : null}
-            /* Stored as an instant, shown local — the picker is already
-               working in local time, so `toISOString` is the whole
-               conversion. */
+            showTime={{ format: PICKER_TIME_FORMAT, minuteStep: 5, use12Hours: true }}
+            format={`D MMM YYYY, ${PICKER_TIME_FORMAT}`}
+            value={pickerValueFromInstant(row.dateTime)}
+            /* Stored as an instant, shown and edited as Bangladesh time —
+               the picker holds a naive wall-clock value, converted back
+               on save. */
             onChange={(value) =>
               patchRow(row.id, {
-                dateTime: value ? value.second(0).millisecond(0).toISOString() : null,
+                dateTime: value ? instantFromPicker(value) : null,
               })
             }
             aria-label={`Date and time for ${rowLabel}`}
@@ -622,7 +627,7 @@ export function PlannerScreen() {
                         const prevMonth = idx > 0 ? monthKey(rows[idx - 1].dateTime) : null;
                         const monthDividerLabel =
                           currMonth !== null && currMonth !== prevMonth
-                            ? localMonthLabel(row.dateTime as string)
+                            ? dhakaMonthLabel(row.dateTime as string)
                             : null;
                         return (
                           <PlannerTableRow

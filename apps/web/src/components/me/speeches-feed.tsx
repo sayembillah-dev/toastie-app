@@ -16,14 +16,20 @@ import type { AhCounterEntry } from '@/lib/meetings/ah-counter-reports';
 import { totalFillers } from '@/lib/meetings/ah-counter-reports';
 import type { TimerEntry, TimerVerdict } from '@/lib/meetings/timer-reports';
 import { deriveTimerVerdict, formatSeconds } from '@/lib/meetings/timer-reports';
+import { APP_TIME_ZONE, dhakaInstant } from '@/lib/time';
 
 import { ImagePreview, SubmissionCard } from './evaluation-submission-card';
 
 type SpeechEvent = Extract<HistoryEvent, { type: 'speech-given' }>;
 
 function formatDate(iso: string): string {
-  const date = new Date(`${iso}T00:00:00`);
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const date = dhakaInstant(iso);
+  return date.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: APP_TIME_ZONE,
+  });
 }
 
 const VERDICT_STYLE: Record<TimerVerdict, { label: string; className: string }> = {

@@ -1555,6 +1555,8 @@ export const toastlyApi = createApi({
       }),
       invalidatesTags: (_row, _error, { meetingId }) => [
         { type: 'PreparedSpeaker', id: meetingId },
+        // Delivered speeches feed each meeting's `speechCount`.
+        { type: 'Meeting', id: 'LIST' },
         { type: 'PlannerRow', id: 'LIST' },
         { type: 'ActivityLog', id: 'LIST' },
       ],
@@ -1587,6 +1589,8 @@ export const toastlyApi = createApi({
       },
       invalidatesTags: (_row, _error, { meetingId }) => [
         { type: 'PreparedSpeaker', id: meetingId },
+        // Delivered speeches feed each meeting's `speechCount`.
+        { type: 'Meeting', id: 'LIST' },
         { type: 'PlannerRow', id: 'LIST' },
         { type: 'ActivityLog', id: 'LIST' },
       ],
@@ -1650,6 +1654,8 @@ export const toastlyApi = createApi({
       },
       invalidatesTags: (_row, _error, { meetingId }) => [
         { type: 'PreparedSpeaker', id: meetingId },
+        // Delivered speeches feed each meeting's `speechCount`.
+        { type: 'Meeting', id: 'LIST' },
         { type: 'PlannerRow', id: 'LIST' },
         { type: 'ActivityLog', id: 'LIST' },
       ],

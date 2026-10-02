@@ -16,6 +16,7 @@ import { skipToken } from '@reduxjs/toolkit/query';
 import { Button } from 'antd';
 
 import type { Member } from '@/lib/education/members';
+import { APP_TIME_ZONE, dhakaInstant } from '@/lib/time';
 import { useGetMemberStatsQuery } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -30,11 +31,12 @@ interface ProgressTabProps {
 /** Consistently render an ISO date the way the whole timeline expects it —
  * "3 Jun 2025" instead of the browser's default locale variance. */
 function formatDate(iso: string): string {
-  const date = new Date(`${iso}T00:00:00`);
+  const date = dhakaInstant(iso);
   return date.toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
+    timeZone: APP_TIME_ZONE,
   });
 }
 

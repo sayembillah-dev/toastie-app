@@ -4,20 +4,20 @@ import { ArrowRight, CalendarBlank, Clock, MicrophoneStage } from '@phosphor-ico
 import Link from 'next/link';
 
 import type { Meeting } from '@/lib/meetings/meetings';
+import { dhakaFormat } from '@/lib/time';
 
 import { useCountdown } from './use-countdown';
 
-const DATE_FMT = new Intl.DateTimeFormat('en-GB', {
+const DATE_FMT = dhakaFormat('en-GB', {
   weekday: 'long',
   day: 'numeric',
   month: 'long',
   year: 'numeric',
 });
 
-const TIME_FMT = new Intl.DateTimeFormat('en-US', {
+const TIME_FMT = dhakaFormat('en-US', {
   hour: 'numeric',
   minute: '2-digit',
-  hour12: true,
 });
 
 function CountdownUnit({ value, label }: { value: number; label: string }) {

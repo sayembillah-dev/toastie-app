@@ -1,12 +1,14 @@
 import type { Meeting } from '@/lib/meetings/meetings';
+import { dhakaDateKey, dhakaInstant } from '@/lib/time';
 
 import type { MemberStats } from './history';
+import type { Member } from './members';
 
 export type MemberHealth = 'healthy' | 'at-risk';
 
-/** A member is at-risk when they haven't given a speech in this many months.
- * Attendance plays no part — it isn't recorded reliably enough to judge on. */
-export const AT_RISK_SPEECH_GAP_MONTHS = 2;
+/** Floor on the at-risk threshold, in speaking meetings — however many
+ * slots a club runs, nobody is flagged sooner than this. */
+export const MIN_AT_RISK_MEETINGS = 6;
 
 export interface Engagement {
   /** Meetings on the roster whose start falls between joinedAt and `now`. */
@@ -24,7 +26,7 @@ export interface Engagement {
 }
 
 function countMeetingsInWindow(meetings: Meeting[], joinedAt: string, now: Date): number {
-  const joinTime = new Date(`${joinedAt}T00:00:00`).getTime();
+  const joinTime = dhakaInstant(joinedAt).getTime();
   const nowTime = now.getTime();
   return meetings.reduce((total, meeting) => {
     const start = new Date(meeting.dateTime).getTime();
@@ -32,25 +34,70 @@ function countMeetingsInWindow(meetings: Meeting[], joinedAt: string, now: Date)
   }, 0);
 }
 
-function monthsBefore(now: Date, months: number): Date {
-  const cutoff = new Date(now);
-  cutoff.setMonth(cutoff.getMonth() - months);
-  cutoff.setHours(0, 0, 0, 0);
-  return cutoff;
+/** Meetings without a delivered speech (contest nights, socials, cancelled
+ * agendas) offered no slot to miss, so only these count toward the gap. */
+function speakingMeetings(meetings: Meeting[], now: Date): Meeting[] {
+  const nowTime = now.getTime();
+  return meetings.filter(
+    (m) => (m.speechCount ?? 0) > 0 && new Date(m.dateTime).getTime() <= nowTime,
+  );
 }
 
-/** At-risk only when the member has had a full window to speak and hasn't.
- * Anyone who joined inside the window is new, so they stay healthy. */
-function computeHealth(stats: MemberStats, now: Date): MemberHealth {
-  const cutoff = monthsBefore(now, AT_RISK_SPEECH_GAP_MONTHS).getTime();
-  const joinTime = new Date(`${stats.joinedAt}T00:00:00`).getTime();
-  if (joinTime > cutoff) return 'healthy';
-  if (!stats.latestSpeech) return 'at-risk';
-  const speechTime = new Date(`${stats.latestSpeech.date}T00:00:00`).getTime();
-  return speechTime >= cutoff ? 'healthy' : 'at-risk';
+/** Speaking meetings a member can go without speaking before they're
+ * at-risk: one full fair turn. A club with 16 members and ~2 speeches a
+ * meeting can only give each member a turn every ~8 meetings, so a fixed
+ * number would flag people merely waiting their turn — the threshold scales
+ * with the club's own pace.
+ * Null when the club has no delivered speeches yet to measure a pace from. */
+export function atRiskThreshold(
+  meetings: Meeting[],
+  activeMembers: number,
+  now: Date,
+): number | null {
+  const held = speakingMeetings(meetings, now);
+  if (held.length === 0) return null;
+  const speeches = held.reduce((total, m) => total + (m.speechCount ?? 0), 0);
+  const fairTurnGap = activeMembers / (speeches / held.length);
+  return Math.max(MIN_AT_RISK_MEETINGS, Math.ceil(fairTurnGap));
 }
 
-export function computeEngagement(stats: MemberStats, meetings: Meeting[], now: Date): Engagement {
+/** At-risk once the member has sat through `atRiskThreshold` speaking
+ * meetings without a speech — counted from their latest speech, or from
+ * joining if they've never spoken. Attendance plays no part — it isn't
+ * recorded reliably enough to judge on. */
+function computeHealth(
+  stats: MemberStats,
+  meetings: Meeting[],
+  activeMembers: number,
+  now: Date,
+): MemberHealth {
+  const threshold = atRiskThreshold(meetings, activeMembers, now);
+  if (threshold === null) return 'healthy';
+  // "YYYY-MM-DD" strings in Bangladesh compare correctly as plain strings.
+  // The meeting a member spoke at doesn't count against them; the one held
+  // on the day they joined does — they could have been given a slot there.
+  const missed = speakingMeetings(meetings, now).filter((m) => {
+    const day = dhakaDateKey(m.dateTime);
+    return stats.latestSpeech
+      ? day > stats.latestSpeech.date.slice(0, 10)
+      : day >= stats.joinedAt.slice(0, 10);
+  }).length;
+  return missed >= threshold ? 'at-risk' : 'healthy';
+}
+
+/** Active roster size — the `activeMembers` argument to `computeEngagement`. */
+export function countActive(members: Member[]): number {
+  return members.filter((m) => m.status === 'active').length;
+}
+
+/** `activeMembers` is the club's active roster size — it sets the speaking
+ * pace the health threshold is judged against. */
+export function computeEngagement(
+  stats: MemberStats,
+  meetings: Meeting[],
+  activeMembers: number,
+  now: Date,
+): Engagement {
   const meetingsHeld = countMeetingsInWindow(meetings, stats.joinedAt, now);
   const meetingsAttended = Math.min(stats.meetingsAttended, meetingsHeld);
   const attendancePercent =
@@ -61,7 +108,7 @@ export function computeEngagement(stats: MemberStats, meetings: Meeting[], now: 
     meetingsAttended === 0 ? 0 : Math.min(1, activeAppearances / meetingsAttended);
   const activityPercent = Math.round(activityRatio * 100);
 
-  const health = computeHealth(stats, now);
+  const health = computeHealth(stats, meetings, activeMembers, now);
 
   return { meetingsHeld, meetingsAttended, attendancePercent, activityPercent, health };
 }

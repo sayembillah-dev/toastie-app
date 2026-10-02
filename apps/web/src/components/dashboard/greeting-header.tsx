@@ -1,4 +1,6 @@
-const DATE_FMT = new Intl.DateTimeFormat('en-GB', {
+import { dhakaFormat } from '@/lib/time';
+
+const DATE_FMT = dhakaFormat('en-GB', {
   weekday: 'long',
   day: 'numeric',
   month: 'long',

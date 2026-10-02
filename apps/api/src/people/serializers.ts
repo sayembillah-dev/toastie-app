@@ -5,6 +5,7 @@ import type {
   VisitLog as VisitLogRow,
 } from '@prisma/client';
 
+import { dhakaDateKey } from '@/common/time';
 import type { InviteWire } from '@/invites';
 import type { MemberWire } from '@/memberships';
 import type { StorageService } from '@/storage';
@@ -241,8 +242,10 @@ export function toVisitLogWire(row: VisitLogRow): VisitLogWire {
   return wire;
 }
 
+/** Calendar date of an instant, read in Bangladesh — not UTC, which is a day
+ * behind between midnight and 06:00 there. */
 function isoDate(value: Date): string {
-  return value.toISOString().slice(0, 10);
+  return dhakaDateKey(value);
 }
 
 function parseSocials(raw: unknown): Array<{ platform: string; url: string }> {

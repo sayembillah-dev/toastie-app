@@ -29,9 +29,14 @@ export interface MeetingWire {
    * null on a fresh meeting, and the client treats a missing `word` as an
    * empty form rather than having to null-check each part. */
   word?: WordOfTheDayWire;
+  /** Speeches members delivered at this meeting — same rule as "speeches
+   * given" on the Me page (`delivered`, or carrying an evaluation). Only the
+   * `/meetings` list sends it; the web derives the club's speaking pace from
+   * it to judge member health. */
+  speechCount?: number;
 }
 
-export function toMeetingWire(row: Meeting): MeetingWire {
+export function toMeetingWire(row: Meeting, speechCount?: number): MeetingWire {
   const wire: MeetingWire = {
     id: row.id,
     clubId: row.clubId,
@@ -41,6 +46,7 @@ export function toMeetingWire(row: Meeting): MeetingWire {
     status: row.status,
     shareToken: row.shareToken,
   };
+  if (speechCount !== undefined) wire.speechCount = speechCount;
   /* The word itself is what makes the block worth sending — a meaning or
    * example with no word to attach it to is not renderable. */
   if (row.word) {

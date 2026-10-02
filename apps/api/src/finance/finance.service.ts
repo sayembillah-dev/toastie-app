@@ -9,6 +9,7 @@ import { Prisma } from '@prisma/client';
 import { can, type PermissionSubject } from '@toastly/access';
 
 import { ActivityService } from '@/activity';
+import { dhakaToday } from '@/common/time';
 import { PrismaService } from '@/prisma';
 
 import type {
@@ -298,7 +299,7 @@ export class FinanceService {
           await tx.transaction.create({
             data: {
               clubId: updated.clubId,
-              date: nextPaidOn ?? now.toISOString().slice(0, 10),
+              date: nextPaidOn ?? dhakaToday(now),
               direction: 'in',
               category: 'dues',
               amountMinor: nextPaid,

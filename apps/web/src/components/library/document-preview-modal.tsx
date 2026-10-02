@@ -11,6 +11,7 @@ import {
   documentTypeLabel,
   type LibraryDocument,
 } from '@/lib/library/documents';
+import { APP_TIME_ZONE } from '@/lib/time';
 import { useDeleteDocumentMutation, useUpdateDocumentMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
@@ -35,6 +36,7 @@ function formatAddedAt(iso: string): string {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
+    timeZone: APP_TIME_ZONE,
   });
 }
 

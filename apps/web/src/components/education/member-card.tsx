@@ -4,10 +4,10 @@ import { DotsThree, Heartbeat, Microphone, WarningCircle } from '@phosphor-icons
 import Link from 'next/link';
 
 import { PersonAvatar } from '@/components/ui/person-avatar';
-import { computeEngagement } from '@/lib/education/engagement';
+import { computeEngagement, countActive } from '@/lib/education/engagement';
 import type { Member } from '@/lib/education/members';
 import { formatRoles, getInitials } from '@/lib/education/members';
-import { useGetMeetingsQuery, useGetMemberStatsQuery } from '@/store/api';
+import { useGetMeetingsQuery, useGetMemberStatsQuery, useGetMembersQuery } from '@/store/api';
 
 export type MemberCardVariant = 'education' | 'engagement';
 
@@ -75,15 +75,19 @@ function EducationStats({ member }: { member: Member }) {
 }
 
 function EngagementStats({ member }: { member: Member }) {
-  /* Health depends on both attendance and activity, so meetings feed the
-   * calculation alongside the member's own stats. RTK Query dedupes the
-   * meetings request across every card in the grid. */
+  /* Health is judged against the club's speaking pace, so the meetings and
+   * the roster feed the calculation alongside the member's own stats. RTK
+   * Query dedupes both requests across every card in the grid. */
   const { data: stats, isLoading: statsLoading } = useGetMemberStatsQuery(member.id);
   const { data: meetings, isLoading: meetingsLoading } = useGetMeetingsQuery();
+  const { data: members, isLoading: membersLoading } = useGetMembersQuery();
 
-  const engagement = stats && meetings ? computeEngagement(stats, meetings, new Date()) : null;
+  const engagement =
+    stats && meetings && members
+      ? computeEngagement(stats, meetings, countActive(members), new Date())
+      : null;
   const healthy = engagement?.health === 'healthy';
-  const loading = statsLoading || meetingsLoading;
+  const loading = statsLoading || meetingsLoading || membersLoading;
 
   return (
     <div className="flex items-start justify-between gap-3">

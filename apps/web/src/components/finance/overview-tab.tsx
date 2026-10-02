@@ -26,6 +26,7 @@ import {
   isIncomeCategory,
   OPENING_BALANCE_MINOR,
 } from '@/lib/finance/transactions';
+import { APP_TIME_ZONE, dhakaDayDiff, dhakaInstant } from '@/lib/time';
 import {
   useListBudgetLinesQuery,
   useListDuesRecordsQuery,
@@ -50,8 +51,6 @@ function readServerNow(): null {
 function useClientNow(): number | null {
   return useSyncExternalStore(subscribeNever, readClientNow, readServerNow);
 }
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Top categories by actual amount, scaled to the largest bar in the list —
  * a plain CSS bar chart since no charting library is installed. */
@@ -208,9 +207,7 @@ export function OverviewTab() {
     recent,
   } = derived;
 
-  const daysUntilDue = duesPeriod
-    ? Math.round((new Date(duesPeriod.dueOn).getTime() - (now ?? 0)) / DAY_MS)
-    : null;
+  const daysUntilDue = duesPeriod ? dhakaDayDiff(now ?? 0, dhakaInstant(duesPeriod.dueOn)) : null;
   const duesPercent =
     duesSummary.total === 0 ? 0 : Math.round((duesSummary.paid / duesSummary.total) * 100);
 
@@ -279,6 +276,7 @@ export function OverviewTab() {
                 ? `Due since ${new Date(duesPeriod?.dueOn ?? '').toLocaleDateString('en-GB', {
                     day: 'numeric',
                     month: 'short',
+                    timeZone: APP_TIME_ZONE,
                   })}`
                 : null}
           </span>
@@ -334,6 +332,7 @@ export function OverviewTab() {
                       {new Date(tx.date).toLocaleDateString('en-GB', {
                         day: 'numeric',
                         month: 'short',
+                        timeZone: APP_TIME_ZONE,
                       })}{' '}
                       · {CATEGORY_LABELS[tx.category]}
                     </p>

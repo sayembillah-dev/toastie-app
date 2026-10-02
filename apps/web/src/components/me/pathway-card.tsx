@@ -10,10 +10,16 @@ import {
   getNextProject,
   getProjectDuration,
 } from '@/lib/education/pathways';
+import { APP_TIME_ZONE, dhakaInstant } from '@/lib/time';
 
 function formatDate(iso: string): string {
-  const date = new Date(`${iso}T00:00:00`);
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const date = dhakaInstant(iso);
+  return date.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: APP_TIME_ZONE,
+  });
 }
 
 /** Five-segment bar filled to `level`. Mirrors the Education tab's LevelBar —

@@ -23,6 +23,9 @@ export interface Meeting {
    * the link can view the shared page, so it is only ever included in
    * links the meeting organiser generates. */
   shareToken: string;
+  /** Speeches members delivered at this meeting. Only the `/meetings` list
+   * carries it — member health reads it to learn the club's speaking pace. */
+  speechCount?: number;
 }
 
 /** Minimal projection served by `/public/meetings/:id?t=<token>` — the

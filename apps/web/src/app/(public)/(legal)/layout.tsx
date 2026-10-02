@@ -2,6 +2,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
+import { dhakaParts } from '@/lib/time';
+
 import toastieLogo from '../../../../assets/toastie.svg';
 
 /** Shell for the public policy pages — the privacy policy and the account
@@ -33,7 +35,7 @@ export default function LegalLayout({ children }: { children: ReactNode }) {
 
       <footer className="border-t border-black/8">
         <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-x-6 gap-y-2 px-6 py-8 text-sm text-black/55">
-          <span>© {new Date().getFullYear()} Nifty IT Solution</span>
+          <span>© {dhakaParts(new Date()).year} Nifty IT Solution</span>
           <Link href="/privacy" className="hover:text-[#0b2a4c]">
             Privacy policy
           </Link>

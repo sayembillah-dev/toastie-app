@@ -1,8 +1,8 @@
 'use client';
 
 import { App, Button, DatePicker, Form, Input, InputNumber, Modal, Select } from 'antd';
-import dayjs, { type Dayjs } from 'dayjs';
 import { ReadOnly } from '@/components/permissions/read-only';
+import dayjs, { type Dayjs, dayjsToday } from '@/lib/dayjs';
 import type { Member } from '@/lib/education/members';
 import type { DuesRecord } from '@/lib/finance/dues';
 import { getDuesPeriod } from '@/lib/finance/dues';
@@ -92,7 +92,7 @@ function ModalBody({ record, member, onDone, onCancel }: ModalBodyProps) {
         amount: fromMinor(
           record.amountPaidMinor > 0 ? record.amountPaidMinor : record.amountDueMinor,
         ),
-        paidOn: dayjs(record.paidOn ?? undefined),
+        paidOn: record.paidOn ? dayjs(record.paidOn.slice(0, 10), 'YYYY-MM-DD') : dayjsToday(),
         method: (record.method as PaymentMethod) ?? 'cash',
         note: record.note ?? '',
       }}

@@ -26,12 +26,13 @@ import {
   sumTransactions,
 } from '@/lib/finance/transactions';
 import { useCan } from '@/lib/permissions/use-can';
+import { dhakaFormat } from '@/lib/time';
 import { useListTransactionsQuery } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
 type DirectionFilter = 'all' | TxDirection;
 
-const DATE_FMT = new Intl.DateTimeFormat('en-GB', {
+const DATE_FMT = dhakaFormat('en-GB', {
   day: 'numeric',
   month: 'short',
   year: 'numeric',

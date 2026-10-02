@@ -5,10 +5,11 @@ import { Drawer } from 'antd';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import { dhakaFormat } from '@/lib/time';
 import { useGetMeetingsQuery } from '@/store/api';
 
 /* Matches meeting-card.tsx so a meeting reads the same here as on the hub. */
-const DATE_FMT = new Intl.DateTimeFormat('en-GB', {
+const DATE_FMT = dhakaFormat('en-GB', {
   weekday: 'short',
   day: 'numeric',
   month: 'short',

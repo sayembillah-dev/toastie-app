@@ -13,8 +13,9 @@ import Link from 'next/link';
 
 import type { ActivityCategory, ActivityLog } from '@/lib/activity/activity-log';
 import type { Member } from '@/lib/education/members';
+import { dhakaFormat } from '@/lib/time';
 
-const TIME_FMT = new Intl.DateTimeFormat('en-GB', {
+const TIME_FMT = dhakaFormat('en-GB', {
   day: 'numeric',
   month: 'short',
   hour: '2-digit',

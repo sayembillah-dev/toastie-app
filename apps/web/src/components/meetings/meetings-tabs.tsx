@@ -17,6 +17,7 @@ import { StaggerList } from '@/components/motion/stagger-list';
 import { ReadOnly } from '@/components/permissions/read-only';
 import type { Meeting } from '@/lib/meetings/meetings';
 import { nextMeetingNumber, partitionMeetings } from '@/lib/meetings/meetings';
+import { dhakaDayDiff, dhakaFormat } from '@/lib/time';
 import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
 import { useGetMeetingsQuery } from '@/store/api';
 
@@ -44,20 +45,16 @@ const GRID_CLASSES = 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:gr
 
 /** Full date + weekday, used above the featured card so the hero line reads
  * naturally on its own. */
-const HERO_DATE_FMT = new Intl.DateTimeFormat('en-GB', {
+const HERO_DATE_FMT = dhakaFormat('en-GB', {
   weekday: 'long',
   day: 'numeric',
   month: 'long',
   year: 'numeric',
 });
 
+/** Whole Bangladesh calendar days from `now` to the meeting. */
 function daysUntil(target: string, now: number): number {
-  const startOfToday = new Date(now);
-  startOfToday.setHours(0, 0, 0, 0);
-  const startOfTarget = new Date(target);
-  startOfTarget.setHours(0, 0, 0, 0);
-  const diff = startOfTarget.getTime() - startOfToday.getTime();
-  return Math.round(diff / (1000 * 60 * 60 * 24));
+  return dhakaDayDiff(now, target);
 }
 
 function untilLabel(days: number): string {

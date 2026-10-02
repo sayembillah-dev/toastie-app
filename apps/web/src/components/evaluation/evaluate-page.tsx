@@ -30,6 +30,7 @@ import {
   writeIdentity,
 } from '@/lib/evaluation/storage';
 import { uploadEvaluationFile } from '@/lib/evaluation/upload';
+import { dhakaFormat } from '@/lib/time';
 import { usePersistentTab } from '@/lib/ui/use-persistent-tab';
 import {
   useGetPublicMeetingQuery,
@@ -38,7 +39,7 @@ import {
   useSubmitPublicEvaluationMutation,
 } from '@/store/api';
 
-const MEETING_DATE_FMT = new Intl.DateTimeFormat('en-GB', {
+const MEETING_DATE_FMT = dhakaFormat('en-GB', {
   weekday: 'long',
   day: 'numeric',
   month: 'long',

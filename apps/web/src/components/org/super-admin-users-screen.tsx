@@ -11,6 +11,7 @@ import { App, Button, Checkbox, Dropdown, Input, Pagination, Skeleton, Tag } fro
 import { useMemo, useState } from 'react';
 import { PageBreadcrumb } from '@/components/page-breadcrumb';
 import { PersonAvatar } from '@/components/ui/person-avatar';
+import { dhakaFormat } from '@/lib/time';
 import {
   PLATFORM_USERS_PAGE_SIZE_OPTIONS,
   type PlatformUser,
@@ -26,7 +27,7 @@ import { selectSessionUser } from '@/store/session-slice';
 import { CreateUserModal } from './create-user-modal';
 import { UserDetailDrawer } from './user-detail-drawer';
 
-const DATE_FMT = new Intl.DateTimeFormat('en-GB', {
+const DATE_FMT = dhakaFormat('en-GB', {
   day: 'numeric',
   month: 'short',
   year: 'numeric',

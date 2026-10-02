@@ -26,7 +26,7 @@ import { Fragment, useState } from 'react';
 
 import { AssigneeSelect } from '@/components/education/assignee-select';
 import { ReadOnly } from '@/components/permissions/read-only';
-import dayjs, { type Dayjs } from '@/lib/dayjs';
+import type { Dayjs } from '@/lib/dayjs';
 import type { Member } from '@/lib/education/members';
 import type { Assignee, AssigneeField, PlannerRow } from '@/lib/education/planner';
 import {
@@ -35,10 +35,16 @@ import {
   assigneeLabel,
   plannerRowLabel,
 } from '@/lib/education/planner';
-import { localMonthKey, localMonthLabel } from '@/lib/meetings/datetime';
+import {
+  dhakaMonthKey,
+  dhakaMonthLabel,
+  instantFromPicker,
+  pickerValueFromInstant,
+} from '@/lib/meetings/datetime';
 import type { Meeting } from '@/lib/meetings/meetings';
 import type { Guest } from '@/lib/people/guests';
 import { useCan } from '@/lib/permissions/use-can';
+import { dhakaFormat, PICKER_TIME_FORMAT } from '@/lib/time';
 
 /* -----------------------------------------------------------------------------
  * PlannerMobile — the planner as per-meeting cards instead of the 16-column
@@ -53,17 +59,17 @@ import { useCan } from '@/lib/permissions/use-can';
  *     "column" view the horizontal scroll never could on a phone.
  * -------------------------------------------------------------------------- */
 
-/* `dateTime` is a stored instant, so the month has to be read off the viewer's
- * local clock — same reasoning as the desktop grid. */
-const monthKey = localMonthKey;
+/* `dateTime` is a stored instant, so the month has to be read off a
+ * Bangladesh wall clock — same reasoning as the desktop grid. */
+const monthKey = dhakaMonthKey;
 
-const CARD_DATE_FMT = new Intl.DateTimeFormat('en-GB', {
+const CARD_DATE_FMT = dhakaFormat('en-GB', {
   weekday: 'short',
   day: 'numeric',
   month: 'short',
   year: 'numeric',
 });
-const CARD_TIME_FMT = new Intl.DateTimeFormat('en-GB', {
+const CARD_TIME_FMT = dhakaFormat('en-GB', {
   hour: 'numeric',
   minute: '2-digit',
 });
@@ -279,7 +285,7 @@ export function PlannerMobile({
                    * by the next month — the term's running context. */
                   <h2 className="sticky top-12 z-10 -mx-4 flex items-center gap-2 bg-canvas px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-soft">
                     <CalendarBlank size={12} weight="bold" aria-hidden />
-                    {localMonthLabel(row.dateTime as string)}
+                    {dhakaMonthLabel(row.dateTime as string)}
                   </h2>
                 ) : null}
                 <MeetingCard
@@ -740,7 +746,7 @@ interface DetailsSheetBodyProps {
 
 function DetailsSheetBody({ row, onCancel, onSave }: DetailsSheetBodyProps) {
   const [meetingNumber, setMeetingNumber] = useState<number | null>(row.meetingNumber);
-  const [dateTime, setDateTime] = useState<Dayjs | null>(row.dateTime ? dayjs(row.dateTime) : null);
+  const [dateTime, setDateTime] = useState<Dayjs | null>(pickerValueFromInstant(row.dateTime));
   const [theme, setTheme] = useState(row.theme);
   const [notes, setNotes] = useState(row.notes);
 
@@ -769,12 +775,12 @@ function DetailsSheetBody({ row, onCancel, onSave }: DetailsSheetBodyProps) {
           id="planner-m-datetime"
           className="w-full"
           size="large"
-          showTime={{ format: 'h:mm A', minuteStep: 5, use12Hours: true }}
-          format="D MMM YYYY, h:mm A"
+          showTime={{ format: PICKER_TIME_FORMAT, minuteStep: 5, use12Hours: true }}
+          format={`D MMM YYYY, ${PICKER_TIME_FORMAT}`}
           value={dateTime}
-          /* Stored as an instant, shown local — the picker already works in
-           * local time, so `toISOString` is the whole conversion (same as
-           * the desktop grid). */
+          /* Stored as an instant, shown and edited as Bangladesh time — the
+           * picker holds a naive wall-clock value, converted back on save
+           * (same as the desktop grid). */
           onChange={(value) => setDateTime(value)}
         />
       </div>
@@ -813,7 +819,7 @@ function DetailsSheetBody({ row, onCancel, onSave }: DetailsSheetBodyProps) {
           onClick={() =>
             onSave({
               meetingNumber,
-              dateTime: dateTime ? dateTime.second(0).millisecond(0).toISOString() : null,
+              dateTime: dateTime ? instantFromPicker(dateTime) : null,
               theme,
               notes,
             })

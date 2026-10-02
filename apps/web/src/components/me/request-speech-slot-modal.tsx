@@ -4,6 +4,7 @@ import { App, Form, Input, Modal, Select } from 'antd';
 import { useEffect, useSyncExternalStore } from 'react';
 import { SPEECH_SLOT_REQUEST_NOTE_MAX } from '@/lib/education/speech-slot-requests';
 import type { Meeting } from '@/lib/meetings/meetings';
+import { APP_TIME_ZONE } from '@/lib/time';
 import { requiredSelectRule } from '@/lib/validation/rules';
 import { useCreateSpeechSlotRequestMutation, useGetMeetingsQuery } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
@@ -31,6 +32,7 @@ function formatMeetingOption(dateTime: string, theme: string): string {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
+    timeZone: APP_TIME_ZONE,
   });
   return `${date} · ${theme}`;
 }

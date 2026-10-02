@@ -19,11 +19,12 @@ import { PersonAvatar } from '@/components/ui/person-avatar';
 import dayjs, { type Dayjs } from '@/lib/dayjs';
 import type { Member } from '@/lib/education/members';
 import { buildAgenda, holderName } from '@/lib/meetings/agenda';
-import { splitLocalDateTime, toInstant } from '@/lib/meetings/datetime';
+import { splitDhakaDateTime, toInstant } from '@/lib/meetings/datetime';
 import type { DraftSpeaker, MeetingDraft } from '@/lib/meetings/draft';
 import type { Meeting, MeetingStatus } from '@/lib/meetings/meetings';
 import { DEFAULT_START_TIME } from '@/lib/meetings/meetings';
 import { buildRoles } from '@/lib/meetings/roles';
+import { dhakaFormat, PICKER_TIME_FORMAT } from '@/lib/time';
 import { useUpdateMeetingMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 import { useAppSelector } from '@/store/hooks';
@@ -38,7 +39,7 @@ import { useMemberOf, useNameOf } from './use-name-of';
  * lineup size as the readiness panel. */
 export const TARGET_SPEAKERS = 4;
 
-const DATE_FMT = new Intl.DateTimeFormat('en-GB', {
+const DATE_FMT = dhakaFormat('en-GB', {
   weekday: 'long',
   day: 'numeric',
   month: 'long',
@@ -46,10 +47,9 @@ const DATE_FMT = new Intl.DateTimeFormat('en-GB', {
 });
 
 /** Matches the agenda sheet's clock format so both views read the same. */
-const CLOCK_FMT = new Intl.DateTimeFormat('en-US', {
+const CLOCK_FMT = dhakaFormat('en-US', {
   hour: 'numeric',
   minute: '2-digit',
-  hour12: true,
 });
 
 /* Kept in sync with meeting-card so the same status reads the same everywhere. */
@@ -203,7 +203,7 @@ interface EditMeetingDetailsModalProps {
 function EditMeetingDetailsModal({ open, meeting, onClose }: EditMeetingDetailsModalProps) {
   const { message } = App.useApp();
   const [updateMeeting, { isLoading }] = useUpdateMeetingMutation();
-  const initial = splitLocalDateTime(meeting.dateTime);
+  const initial = splitDhakaDateTime(meeting.dateTime);
   const [meetingNumber, setMeetingNumber] = useState<number | null>(meeting.meetingNumber);
   const [date, setDate] = useState<Dayjs | null>(
     initial.date ? dayjs(initial.date, 'YYYY-MM-DD') : null,
@@ -213,7 +213,7 @@ function EditMeetingDetailsModal({ open, meeting, onClose }: EditMeetingDetailsM
 
   function handleOpenChange(next: boolean) {
     if (next) {
-      const parts = splitLocalDateTime(meeting.dateTime);
+      const parts = splitDhakaDateTime(meeting.dateTime);
       setMeetingNumber(meeting.meetingNumber);
       setDate(parts.date ? dayjs(parts.date, 'YYYY-MM-DD') : null);
       setTime(dayjs(parts.time, 'HH:mm'));
@@ -290,7 +290,7 @@ function EditMeetingDetailsModal({ open, meeting, onClose }: EditMeetingDetailsM
             <TimePicker
               id="hero-edit-time"
               className="w-full"
-              format="h:mm A"
+              format={PICKER_TIME_FORMAT}
               use12Hours
               minuteStep={5}
               value={time}

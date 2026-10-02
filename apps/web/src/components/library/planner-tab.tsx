@@ -3,11 +3,10 @@
 import { CaretLeft, CaretRight, WarningCircle } from '@phosphor-icons/react/dist/ssr';
 import type { CalendarProps } from 'antd';
 import { App, Button, Calendar, Drawer } from 'antd';
-import type { Dayjs } from 'dayjs';
-import dayjs from 'dayjs';
 import { useEffect, useMemo, useState } from 'react';
 
 import { PlannerDayPanel } from '@/components/library/planner-day-panel';
+import { type Dayjs, dayjsToday } from '@/lib/dayjs';
 import type { CreatePlannerIdeaInput, IdeaStatus } from '@/lib/library/planner';
 import { groupIdeasByDay } from '@/lib/library/planner';
 import {
@@ -51,7 +50,7 @@ export function PlannerTab() {
 
   /* The calendar is controlled so the visible month is available as query
    * state — the fetch window is derived from it. */
-  const [panelDate, setPanelDate] = useState(() => dayjs());
+  const [panelDate, setPanelDate] = useState(() => dayjsToday());
   const [selected, setSelected] = useState<Dayjs | null>(null);
   const [open, setOpen] = useState(false);
 
@@ -171,7 +170,7 @@ export function PlannerTab() {
                 icon={<CaretLeft size={14} />}
                 onClick={() => onChange(value.subtract(1, 'month'))}
               />
-              <Button size="small" onClick={() => onChange(dayjs())}>
+              <Button size="small" onClick={() => onChange(dayjsToday())}>
                 Today
               </Button>
               <Button
