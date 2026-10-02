@@ -8,7 +8,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Card } from '@/components/ui/card';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import { sortByDateDescending, useMeetings } from '@/features/meetings/queries';
+import { isMeetingPast, sortByDateDescending, useMeetings } from '@/features/meetings/queries';
 import { formatMeetingDate } from '@/lib/format';
 import { useCan } from '@/session';
 
@@ -75,9 +75,9 @@ function MeetingRow({ meeting }: { meeting: MeetingSummary }) {
 function buildSections(meetings: MeetingSummary[]) {
   const now = Date.now();
   const upcoming = meetings
-    .filter((m) => new Date(m.dateTime).getTime() >= now)
+    .filter((m) => !isMeetingPast(m, now))
     .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
-  const past = sortByDateDescending(meetings.filter((m) => new Date(m.dateTime).getTime() < now));
+  const past = sortByDateDescending(meetings.filter((m) => isMeetingPast(m, now)));
 
   return [
     { title: 'Upcoming', data: upcoming },

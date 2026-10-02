@@ -35,6 +35,15 @@ export function usePublicMeeting(meetingId: string | undefined) {
   });
 }
 
+/** A meeting stays current for this long after it starts — it only counts as
+ * past once its start time plus this window has gone by. */
+export const MEETING_PAST_AFTER_MS = 2 * 60 * 60 * 1000;
+
+/** Whether a meeting has moved to the past at `now` (start + 2 hours). */
+export function isMeetingPast(meeting: Pick<MeetingSummary, 'dateTime'>, now: number): boolean {
+  return new Date(meeting.dateTime).getTime() + MEETING_PAST_AFTER_MS <= now;
+}
+
 /**
  * The next meeting the club will actually hold.
  *
@@ -47,7 +56,7 @@ export function nextMeeting(meetings: MeetingSummary[] | undefined): MeetingSumm
   const now = Date.now();
   return (
     meetings
-      .filter((m) => m.status === 'published' && new Date(m.dateTime).getTime() >= now)
+      .filter((m) => m.status === 'published' && !isMeetingPast(m, now))
       .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime())[0] ?? null
   );
 }

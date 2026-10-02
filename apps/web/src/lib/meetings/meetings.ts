@@ -101,6 +101,15 @@ export function nextMeetingNumber(meetings: Meeting[]): number {
   return meetings.reduce((highest, meeting) => Math.max(highest, meeting.meetingNumber), 0) + 1;
 }
 
+/** A meeting stays current for this long after it starts — it only counts as
+ * past once its start time plus this window has gone by. */
+export const MEETING_PAST_AFTER_MS = 2 * 60 * 60 * 1000;
+
+/** Whether a meeting has moved to the past at `now` (start + 2 hours). */
+export function isMeetingPast(meeting: Pick<Meeting, 'dateTime'>, now: number): boolean {
+  return new Date(meeting.dateTime).getTime() + MEETING_PAST_AFTER_MS <= now;
+}
+
 /** Split a roster into past / current-next / upcoming buckets. `now` is passed
  * in so the caller controls the clock — components read `Date.now()` once and
  * feed the same instant through, keeping the split stable across a render. */
@@ -115,7 +124,7 @@ export function partitionMeetings(
   const past: Meeting[] = [];
   const upcoming: Meeting[] = [];
   for (const meeting of sorted) {
-    if (new Date(meeting.dateTime).getTime() < now) {
+    if (isMeetingPast(meeting, now)) {
       past.push(meeting);
     } else {
       upcoming.push(meeting);
