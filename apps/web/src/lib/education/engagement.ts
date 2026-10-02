@@ -4,10 +4,9 @@ import type { MemberStats } from './history';
 
 export type MemberHealth = 'healthy' | 'at-risk';
 
-/** A member is healthy when they both turn up and pitch in — strictly more than
- * 70% on each. Falls to at-risk otherwise; a new member with no meetings yet
- * lands there too, because we have no signal to say they're engaged. */
-export const HEALTH_THRESHOLD_PERCENT = 70;
+/** A member is at-risk when they haven't given a speech in this many months.
+ * Attendance plays no part — it isn't recorded reliably enough to judge on. */
+export const AT_RISK_SPEECH_GAP_MONTHS = 2;
 
 export interface Engagement {
   /** Meetings on the roster whose start falls between joinedAt and `now`. */
@@ -33,6 +32,24 @@ function countMeetingsInWindow(meetings: Meeting[], joinedAt: string, now: Date)
   }, 0);
 }
 
+function monthsBefore(now: Date, months: number): Date {
+  const cutoff = new Date(now);
+  cutoff.setMonth(cutoff.getMonth() - months);
+  cutoff.setHours(0, 0, 0, 0);
+  return cutoff;
+}
+
+/** At-risk only when the member has had a full window to speak and hasn't.
+ * Anyone who joined inside the window is new, so they stay healthy. */
+function computeHealth(stats: MemberStats, now: Date): MemberHealth {
+  const cutoff = monthsBefore(now, AT_RISK_SPEECH_GAP_MONTHS).getTime();
+  const joinTime = new Date(`${stats.joinedAt}T00:00:00`).getTime();
+  if (joinTime > cutoff) return 'healthy';
+  if (!stats.latestSpeech) return 'at-risk';
+  const speechTime = new Date(`${stats.latestSpeech.date}T00:00:00`).getTime();
+  return speechTime >= cutoff ? 'healthy' : 'at-risk';
+}
+
 export function computeEngagement(stats: MemberStats, meetings: Meeting[], now: Date): Engagement {
   const meetingsHeld = countMeetingsInWindow(meetings, stats.joinedAt, now);
   const meetingsAttended = Math.min(stats.meetingsAttended, meetingsHeld);
@@ -44,10 +61,7 @@ export function computeEngagement(stats: MemberStats, meetings: Meeting[], now: 
     meetingsAttended === 0 ? 0 : Math.min(1, activeAppearances / meetingsAttended);
   const activityPercent = Math.round(activityRatio * 100);
 
-  const health: MemberHealth =
-    attendancePercent > HEALTH_THRESHOLD_PERCENT && activityPercent > HEALTH_THRESHOLD_PERCENT
-      ? 'healthy'
-      : 'at-risk';
+  const health = computeHealth(stats, now);
 
   return { meetingsHeld, meetingsAttended, attendancePercent, activityPercent, health };
 }

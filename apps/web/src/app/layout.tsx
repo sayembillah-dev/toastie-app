@@ -4,6 +4,7 @@ import { AntdProvider } from '@/components/antd-provider';
 import { OfflineScreen } from '@/components/offline-screen';
 import { PwaServiceWorker } from '@/components/pwa-service-worker';
 import { StoreProvider } from '@/components/store-provider';
+import { INSTALL_CAPTURE_SCRIPT } from '@/lib/pwa/install';
 
 import './globals.css';
 import './print.css';
@@ -42,6 +43,14 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
+      <head>
+        {/* A plain inline script, not `next/script`: App Router queues inline
+         * `beforeInteractive` code until Next's runtime boots, which can be
+         * after Chrome has already fired `beforeinstallprompt`. This runs
+         * during HTML parse. The content is a static constant — no input. */}
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: static, first-party constant */}
+        <script dangerouslySetInnerHTML={{ __html: INSTALL_CAPTURE_SCRIPT }} />
+      </head>
       {/* suppressHydrationWarning: browser extensions (e.g. ColorZilla's
        * cz-shortcut-listen) mutate <body> before hydration; the mismatch is
        * attribute-only and one level deep, which is exactly what this

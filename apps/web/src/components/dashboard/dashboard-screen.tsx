@@ -7,6 +7,7 @@ import { ClubStandingCard } from '@/components/me/club-standing-card';
 import { FinanceCard } from '@/components/me/finance-card';
 import { PathwayCard } from '@/components/me/pathway-card';
 import { TasksCard } from '@/components/me/tasks-card';
+import { InstallAppCard } from '@/components/pwa/install-app-card';
 import { computeEngagement } from '@/lib/education/engagement';
 import type { HistoryEvent } from '@/lib/education/history';
 import { useCurrentMemberId } from '@/lib/me/current-member';
@@ -130,6 +131,8 @@ function DashboardContent({ memberId }: { memberId: string }) {
       />
 
       <NextMeetingCard meeting={nextMeeting} myRole={myRole} />
+
+      <InstallAppCard myRole={myRole} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-6 lg:col-span-2">
