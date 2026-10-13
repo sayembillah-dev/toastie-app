@@ -113,9 +113,14 @@ export class MeetingNotificationsService {
         select: memberSelect,
       });
       const seen = new Set<string>();
+      const noNumber: string[] = [];
       for (const member of members) {
         const recipient = toMemberRecipient(member);
-        if (!recipient || seen.has(recipient.number)) continue;
+        if (!recipient) {
+          noNumber.push(member.firstName);
+          continue;
+        }
+        if (seen.has(recipient.number)) continue;
         seen.add(recipient.number);
         this.enqueue(
           recipient.number,
@@ -129,6 +134,10 @@ export class MeetingNotificationsService {
           ].join('\n'),
         );
       }
+      this.logger.log(
+        `Meeting #${meeting.meetingNumber} announcement: ${seen.size} queued` +
+          (noNumber.length ? `, skipped (no WhatsApp number): ${noNumber.join(', ')}` : ''),
+      );
     });
   }
 
@@ -279,7 +288,10 @@ export class MeetingNotificationsService {
         where: { clubId_id: { clubId, id: holder.membershipId } },
         select: memberSelect,
       });
-      return member ? toMemberRecipient(member) : null;
+      if (!member) return null;
+      const recipient = toMemberRecipient(member);
+      if (!recipient) this.logger.warn(`No WhatsApp number for member ${member.firstName}`);
+      return recipient;
     }
     if (holder.guestId) {
       const guest = await this.prisma.prospect.findUnique({
@@ -288,26 +300,39 @@ export class MeetingNotificationsService {
       });
       if (!guest) return null;
       const number = firstWhatsappNumber(guest.whatsapp, guest.phone);
+      if (!number) this.logger.warn(`No WhatsApp number for guest ${guest.firstName}`);
       return number ? { firstName: guest.firstName, number, inApp: false } : null;
     }
     return null;
   }
 }
 
+/* A member's number can live in three places: the roster row (`phone`, often
+ * empty for members who joined through an account), the account they claimed
+ * it with (`user.phone` — the sign-in credential, so always set), and the
+ * shared `Person` profile on either side (`whatsapp`, when they gave one). */
 const memberSelect = {
   firstName: true,
   phone: true,
   userId: true,
-  person: { select: { whatsapp: true } },
+  person: { select: { whatsapp: true, phone: true } },
+  user: { select: { phone: true, person: { select: { whatsapp: true } } } },
 } as const;
 
 function toMemberRecipient(member: {
   firstName: string;
   phone: string | null;
   userId: string | null;
-  person: { whatsapp: string | null } | null;
+  person: { whatsapp: string | null; phone: string } | null;
+  user: { phone: string; person: { whatsapp: string | null } | null } | null;
 }): Recipient | null {
-  const number = firstWhatsappNumber(member.person?.whatsapp, member.phone);
+  const number = firstWhatsappNumber(
+    member.person?.whatsapp,
+    member.user?.person?.whatsapp,
+    member.phone,
+    member.user?.phone,
+    member.person?.phone,
+  );
   return number ? { firstName: member.firstName, number, inApp: member.userId !== null } : null;
 }
 
