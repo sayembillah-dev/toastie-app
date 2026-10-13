@@ -71,6 +71,15 @@ class EnvironmentVariables {
   @IsNotEmpty({ message: 'CORS_ORIGINS is required when APP_ENV=production' })
   CORS_ORIGINS?: string;
 
+  // The web app's public origin — the same variable apps/web uses for its
+  // metadata base. The API builds the links in WhatsApp messages from it, and
+  // falls back to the first CORS_ORIGINS entry when it's unset (local dev).
+  // Not pattern-checked: CI writes `SITE_URL=` even when the secret is unset,
+  // and an empty value must not fail boot.
+  @IsOptional()
+  @IsString()
+  SITE_URL?: string;
+
   // NOT required by APP_ENV=production alone — QueueModule always binds the
   // no-op InlineQueueService today (see queue.module.ts), regardless of
   // environment, because no job type exists yet. Demanding infrastructure

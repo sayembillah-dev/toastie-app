@@ -617,6 +617,10 @@ model Meeting {
   /// itself. Unique globally so `/public/meetings/:id?t=<token>` can look
   /// up (id, token) without a tenant filter.
   shareToken       String        @unique
+  /// When the club-wide "new meeting" WhatsApp went out — set by the first
+  /// publish and never cleared, so unpublishing and re-publishing doesn't
+  /// message the whole club twice.
+  announcedAt      DateTime?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 

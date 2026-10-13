@@ -1,7 +1,10 @@
 import { Module } from '@nestjs/common';
 
+import { WhatsappModule } from '@/whatsapp';
+
 import { AttendanceController } from './attendance.controller';
 import { AttendanceService } from './attendance.service';
+import { MeetingNotificationsService } from './meeting-notifications.service';
 import { MeetingsController } from './meetings.controller';
 import { MeetingsService } from './meetings.service';
 import { PreparedSpeakersController } from './prepared-speakers.controller';
@@ -16,6 +19,7 @@ import { MeetingVotingController } from './voting.controller';
 import { VotingService } from './voting.service';
 
 @Module({
+  imports: [WhatsappModule],
   controllers: [
     MeetingsController,
     PublicMeetingsController,
@@ -28,12 +32,13 @@ import { VotingService } from './voting.service';
   ],
   providers: [
     MeetingsService,
+    MeetingNotificationsService,
     MeetingRolesService,
     PreparedSpeakersService,
     TableTopicsService,
     AttendanceService,
     VotingService,
   ],
-  exports: [MeetingsService],
+  exports: [MeetingsService, MeetingNotificationsService],
 })
 export class MeetingsModule {}

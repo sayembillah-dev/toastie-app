@@ -9,7 +9,7 @@ import {
   Post,
 } from '@nestjs/common';
 
-import { CurrentContext, type RequestContext, Requires } from '@/access';
+import { actorMembershipIdFor, CurrentContext, type RequestContext, Requires } from '@/access';
 
 import { UpdatePlannerRowDto } from './dto/planner-rows.dto';
 import { PlannerRowsService } from './planner-rows.service';
@@ -38,7 +38,13 @@ export class PlannerRowsController {
     @Param('rowId') rowId: string,
     @Body() dto: UpdatePlannerRowDto,
   ): Promise<PlannerRowWire> {
-    return this.plannerRows.update(ctx.subject, rowId, dto);
+    const clubId = ctx.clubId;
+    return this.plannerRows.update(
+      ctx.subject,
+      rowId,
+      clubId ? actorMembershipIdFor(ctx, clubId) : null,
+      dto,
+    );
   }
 
   @Requires('education', 'delete')

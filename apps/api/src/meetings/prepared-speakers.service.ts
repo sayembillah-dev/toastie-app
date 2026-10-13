@@ -15,6 +15,7 @@ import type {
   ReorderPreparedSpeakersDto,
   UpdatePreparedSpeakerDto,
 } from './dto/prepared-speakers.dto';
+import { MeetingNotificationsService } from './meeting-notifications.service';
 import { syncPlannerSpeakersFromMeeting } from './planner-mirror';
 import { type PreparedSpeakerWire, toPreparedSpeakerWire } from './serializers';
 
@@ -28,6 +29,7 @@ export class PreparedSpeakersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activity: ActivityService,
+    private readonly notifications: MeetingNotificationsService,
   ) {}
 
   async list(subject: PermissionSubject, meetingId: string): Promise<PreparedSpeakerWire[]> {
@@ -142,6 +144,18 @@ export class PreparedSpeakersService {
         entityType: 'meetingSpeaker',
         entityId: row.id,
       });
+    }
+
+    /* A slot counts as confirmed once it is `confirmed` with a speaker on it —
+     * reached in either order (pick then confirm, or confirm then pick). Edits
+     * to an already-confirmed slot don't re-send; a new speaker on it does. */
+    const hasSpeaker = Boolean(row.membershipId ?? row.guestId);
+    const wasConfirmedForSameSpeaker =
+      existing.status === 'confirmed' &&
+      existing.membershipId === row.membershipId &&
+      existing.guestId === row.guestId;
+    if (row.status === 'confirmed' && hasSpeaker && !wasConfirmedForSameSpeaker) {
+      this.notifications.speakerConfirmed(row.id, actorMembershipId);
     }
     return toPreparedSpeakerWire(row);
   }

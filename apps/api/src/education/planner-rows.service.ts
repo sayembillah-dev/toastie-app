@@ -2,7 +2,8 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import type { Prisma } from '@prisma/client';
 import { can, type PermissionSubject } from '@toastly/access';
 
-import { syncMeetingFromPlannerRow } from '@/meetings/planner-mirror';
+import { MeetingNotificationsService } from '@/meetings';
+import { type PlannerMirrorChanges, syncMeetingFromPlannerRow } from '@/meetings/planner-mirror';
 import { PrismaService } from '@/prisma';
 
 import type { UpdatePlannerRowDto } from './dto/planner-rows.dto';
@@ -13,7 +14,10 @@ import { type PlannerRowWire, toPlannerRowWire } from './serializers';
  * dedicated resource key. */
 @Injectable()
 export class PlannerRowsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: MeetingNotificationsService,
+  ) {}
 
   async list(subject: PermissionSubject, clubId: string): Promise<PlannerRowWire[]> {
     this.assert(subject, clubId, 'read');
@@ -33,6 +37,7 @@ export class PlannerRowsService {
   async update(
     subject: PermissionSubject,
     rowId: string,
+    actorMembershipId: string | null,
     dto: UpdatePlannerRowDto,
   ): Promise<PlannerRowWire> {
     const existing = await this.prisma.plannerRow.findUnique({ where: { id: rowId } });
@@ -59,6 +64,7 @@ export class PlannerRowsService {
     if (dto.assignees !== undefined) data.assignees = dto.assignees as Prisma.InputJsonValue;
     if (dto.meetingId !== undefined) data.meetingId = dto.meetingId;
 
+    let changes: PlannerMirrorChanges | null = null;
     const row = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.plannerRow.update({ where: { id: rowId }, data });
       /* Only carry across what this call actually changed — number/date/theme
@@ -68,7 +74,7 @@ export class PlannerRowsService {
        * every write, so it's always the authoritative current state, not a
        * partial patch. */
       if (updated.meetingId) {
-        await syncMeetingFromPlannerRow(tx, existing.clubId, {
+        changes = await syncMeetingFromPlannerRow(tx, existing.clubId, {
           meetingId: updated.meetingId,
           meetingNumber: dto.meetingNumber !== undefined ? updated.meetingNumber : null,
           dateTime: dto.dateTime !== undefined ? updated.dateTime : null,
@@ -78,6 +84,25 @@ export class PlannerRowsService {
       }
       return updated;
     });
+
+    /* Same WhatsApp messages as editing the meeting's own Roles / Prepared
+     * Speakers tabs — the planner is just another way to fill those slots. */
+    const meetingId = row.meetingId;
+    if (changes && meetingId) {
+      const { roles, confirmedSpeakerIds } = changes as PlannerMirrorChanges;
+      for (const change of roles) {
+        this.notifications.roleChanged(
+          meetingId,
+          change.roleKey,
+          change.previous,
+          change.next,
+          actorMembershipId,
+        );
+      }
+      for (const speakerId of confirmedSpeakerIds) {
+        this.notifications.speakerConfirmed(speakerId, actorMembershipId);
+      }
+    }
     return toPlannerRowWire(row);
   }
 

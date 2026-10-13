@@ -10,7 +10,7 @@ import {
   Put,
 } from '@nestjs/common';
 
-import { CurrentContext, type RequestContext, Requires } from '@/access';
+import { actorMembershipIdFor, CurrentContext, type RequestContext, Requires } from '@/access';
 
 import { CreateMeetingDto, SaveMeetingRoleStateDto, UpdateMeetingDto } from './dto/meetings.dto';
 import { MeetingsService } from './meetings.service';
@@ -76,7 +76,13 @@ export class MeetingsController {
     @Param('meetingId') meetingId: string,
     @Body() dto: UpdateMeetingDto,
   ): Promise<MeetingWire> {
-    return this.meetings.update(ctx.subject, meetingId, dto);
+    const clubId = ctx.clubId;
+    return this.meetings.update(
+      ctx.subject,
+      meetingId,
+      clubId ? actorMembershipIdFor(ctx, clubId) : null,
+      dto,
+    );
   }
 
   @Requires('meeting', 'delete')

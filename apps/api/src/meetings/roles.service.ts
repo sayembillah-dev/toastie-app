@@ -5,6 +5,7 @@ import { ActivityService } from '@/activity';
 import { PrismaService } from '@/prisma';
 
 import type { SetMeetingRoleDto } from './dto/roles.dto';
+import { MeetingNotificationsService } from './meeting-notifications.service';
 import { syncPlannerRolesFromMeeting } from './planner-mirror';
 import { type MeetingRoleAssignmentWire, toMeetingRoleAssignmentWire } from './serializers';
 
@@ -17,6 +18,7 @@ export class MeetingRolesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activity: ActivityService,
+    private readonly notifications: MeetingNotificationsService,
   ) {}
 
   async list(subject: PermissionSubject, meetingId: string): Promise<MeetingRoleAssignmentWire[]> {
@@ -58,7 +60,13 @@ export class MeetingRolesService {
       if (!guest) throw new NotFoundException(`No guest with id "${guestId}" in this club`);
     }
 
-    const row = await this.prisma.$transaction(async (tx) => {
+    const { saved: row, previous } = await this.prisma.$transaction(async (tx) => {
+      const previous = await tx.meetingRoleAssignment.findUnique({
+        where: {
+          clubId_meetingId_roleKey: { clubId: meeting.clubId, meetingId: meeting.id, roleKey },
+        },
+        select: { membershipId: true, guestId: true },
+      });
       const saved = await tx.meetingRoleAssignment.upsert({
         where: {
           clubId_meetingId_roleKey: { clubId: meeting.clubId, meetingId: meeting.id, roleKey },
@@ -82,8 +90,15 @@ export class MeetingRolesService {
         tx,
       );
       await syncPlannerRolesFromMeeting(tx, meeting.clubId, meeting.id);
-      return saved;
+      return { saved, previous };
     });
+    this.notifications.roleChanged(
+      meeting.id,
+      roleKey,
+      previous ?? { membershipId: null, guestId: null },
+      { membershipId: row.membershipId, guestId: row.guestId },
+      actorMembershipId,
+    );
     return toMeetingRoleAssignmentWire(row);
   }
 

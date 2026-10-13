@@ -12,6 +12,7 @@ import { can, type PermissionSubject } from '@toastly/access';
 import { PrismaService } from '@/prisma';
 
 import type { CreateMeetingDto, UpdateMeetingDto } from './dto/meetings.dto';
+import { MeetingNotificationsService } from './meeting-notifications.service';
 import { syncPlannerFieldsFromMeeting } from './planner-mirror';
 import { assertRoleStateKind, assertRoleStateSize } from './role-state';
 import { type MeetingRoleStateWire, type MeetingWire, toMeetingWire } from './serializers';
@@ -21,7 +22,10 @@ import { type MeetingRoleStateWire, type MeetingWire, toMeetingWire } from './se
  * meeting page. */
 @Injectable()
 export class MeetingsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: MeetingNotificationsService,
+  ) {}
 
   async list(subject: PermissionSubject, clubId: string): Promise<MeetingWire[]> {
     if (!can(subject, 'read', 'meeting', { clubId })) {
@@ -103,6 +107,7 @@ export class MeetingsService {
   async update(
     subject: PermissionSubject,
     meetingId: string,
+    actorMembershipId: string | null,
     dto: UpdateMeetingDto,
   ): Promise<MeetingWire> {
     const existing = await this.load(meetingId);
@@ -158,6 +163,9 @@ export class MeetingsService {
         }
         return updated;
       });
+      if (row.status === 'published' && existing.status !== 'published') {
+        await this.announce(meetingId, actorMembershipId);
+      }
       return toMeetingWire(row);
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
@@ -243,6 +251,17 @@ export class MeetingsService {
       update: { state: state as Prisma.InputJsonValue },
     });
     return { kind, state: row.state, updatedAt: row.updatedAt.toISOString() };
+  }
+
+  /** The club-wide "new meeting" message goes out on the first publish only.
+   * Claiming `announcedAt` with a conditional update makes that exactly once
+   * even when two publishes race across the API's cluster workers. */
+  private async announce(meetingId: string, actorMembershipId: string | null): Promise<void> {
+    const claimed = await this.prisma.meeting.updateMany({
+      where: { id: meetingId, announcedAt: null },
+      data: { announcedAt: new Date() },
+    });
+    if (claimed.count === 1) this.notifications.meetingPublished(meetingId, actorMembershipId);
   }
 
   private async load(meetingId: string) {

@@ -16,11 +16,14 @@ import type {
   WhatsappWorkerStatus,
 } from './whatsapp.types';
 
-/** Local 11-digit BD mobile (`01712345678`, the form `normalizePhone()`
- * stores) → WhatsApp's international digits (`8801712345678`). Throws rather
- * than guessing: `normalizePhone('+8801712345678')` deliberately yields 10
- * digits, and prefixing that with `88` would message a different number. */
+/** A BD mobile → WhatsApp's international digits (`8801712345678`). Takes the
+ * local 11-digit form `normalizePhone()` stores (`01712345678`) or the full
+ * international one (`+880 1712-345678`) — `Person.whatsapp` is free text and
+ * holds both. Throws on anything else rather than guessing: a bare 10-digit
+ * `1712345678` could be a typo as easily as a dropped `0`. */
 export function toWhatsappNumber(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (/^8801\d{9}$/.test(digits)) return digits;
   const local = normalizePhone(phone);
   if (!/^01\d{9}$/.test(local)) {
     throw new Error(`Not a Bangladeshi mobile number: "${phone}"`);

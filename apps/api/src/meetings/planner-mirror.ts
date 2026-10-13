@@ -62,6 +62,15 @@ interface ResolvedRef {
   guestId: string | null;
 }
 
+/** What a planner save actually changed on the meeting, for the WhatsApp
+ * notifications the caller sends once its transaction commits. The planner
+ * re-sends every slot on each save, so only real holder changes land here. */
+export interface PlannerMirrorChanges {
+  roles: Array<{ roleKey: string; previous: ResolvedRef; next: ResolvedRef }>;
+  /** Already-confirmed speech slots that now hold a different speaker. */
+  confirmedSpeakerIds: string[];
+}
+
 /** `undefined` means "can't resolve, leave whatever's on the meeting alone"
  * — a typed guest with no roster entry has no id to link a foreign key to.
  * Anything else (including an explicit `{null, null}` clear) is a real,
@@ -212,13 +221,14 @@ export async function syncMeetingFromPlannerRow(
     theme?: string;
     assignees: unknown;
   },
-): Promise<void> {
-  if (!row.meetingId) return;
+): Promise<PlannerMirrorChanges> {
+  const changes: PlannerMirrorChanges = { roles: [], confirmedSpeakerIds: [] };
+  if (!row.meetingId) return changes;
   const meeting = await tx.meeting.findUnique({
     where: { id: row.meetingId },
     select: { id: true, clubId: true },
   });
-  if (!meeting || meeting.clubId !== clubId) return;
+  if (!meeting || meeting.clubId !== clubId) return changes;
 
   const meetingData: Prisma.MeetingUpdateInput = {};
   if (row.theme !== undefined) meetingData.theme = row.theme;
@@ -241,9 +251,21 @@ export async function syncMeetingFromPlannerRow(
 
   const assignees = (row.assignees ?? {}) as Record<string, unknown>;
 
+  const currentRoles = await tx.meetingRoleAssignment.findMany({
+    where: { clubId, meetingId: meeting.id },
+    select: { roleKey: true, membershipId: true, guestId: true },
+  });
   for (const [field, roleKey] of ROLE_BY_FIELD) {
     const ref = resolveRef(assignees[field]);
     if (ref === undefined) continue;
+    const current = currentRoles.find((role) => role.roleKey === roleKey);
+    const previous = {
+      membershipId: current?.membershipId ?? null,
+      guestId: current?.guestId ?? null,
+    };
+    if (previous.membershipId !== ref.membershipId || previous.guestId !== ref.guestId) {
+      changes.roles.push({ roleKey, previous, next: ref });
+    }
     await tx.meetingRoleAssignment.upsert({
       where: { clubId_meetingId_roleKey: { clubId, meetingId: meeting.id, roleKey } },
       create: {
@@ -260,7 +282,7 @@ export async function syncMeetingFromPlannerRow(
   const speakerRows = await tx.meetingSpeaker.findMany({
     where: { clubId, meetingId: meeting.id },
     orderBy: { order: 'asc' },
-    select: { id: true, order: true, kind: true },
+    select: { id: true, order: true, kind: true, status: true, membershipId: true, guestId: true },
   });
   /* Keynotes are invisible to this sync — pair N matches the N-th PREPARED
    * speaker, so a planner column can never overwrite a keynote's identity. */
@@ -290,8 +312,16 @@ export async function syncMeetingFromPlannerRow(
             evaluatorGuestId: evaluatorRef?.guestId ?? null,
           },
         });
-        speakerRows.push({ id: created.id, order, kind: 'prepared' });
-        prepared.push({ id: created.id, order, kind: 'prepared' });
+        const added = {
+          id: created.id,
+          order,
+          kind: 'prepared',
+          status: created.status,
+          membershipId: created.membershipId,
+          guestId: created.guestId,
+        };
+        speakerRows.push(added);
+        prepared.push(added);
       }
       continue;
     }
@@ -300,6 +330,16 @@ export async function syncMeetingFromPlannerRow(
     if (speakerRef !== undefined) {
       data.membershipId = speakerRef.membershipId;
       data.guestId = speakerRef.guestId;
+      const swapped =
+        existing.membershipId !== speakerRef.membershipId ||
+        existing.guestId !== speakerRef.guestId;
+      if (
+        existing.status === 'confirmed' &&
+        swapped &&
+        (speakerRef.membershipId || speakerRef.guestId)
+      ) {
+        changes.confirmedSpeakerIds.push(existing.id);
+      }
     }
     if (evaluatorRef !== undefined) {
       data.evaluatorMembershipId = evaluatorRef.membershipId;
@@ -309,4 +349,5 @@ export async function syncMeetingFromPlannerRow(
       await tx.meetingSpeaker.update({ where: { id: existing.id }, data });
     }
   }
+  return changes;
 }
