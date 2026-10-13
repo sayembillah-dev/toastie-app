@@ -19,6 +19,10 @@ release.tar.gz
 .env.*.local
 !.env.example
 
+# WhatsApp worker's linked-device login (apps/api/src/whatsapp-worker) —
+# whoever holds these keys can send as the WhatsApp number
+.whatsapp-auth/
+
 # logs
 *.log
 npm-debug.log*

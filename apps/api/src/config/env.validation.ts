@@ -102,6 +102,19 @@ class EnvironmentVariables {
   @IsString()
   VAPID_SUBJECT?: string;
 
+  // WhatsApp (see src/whatsapp and src/whatsapp-worker). Optional: no key
+  // means the feature is off, and the worker isn't started at all (see
+  // deploy/ecosystem.config.cjs). The worker reads the same key from the same
+  // .env, so the two always agree.
+  @IsOptional()
+  @IsString()
+  @MinLength(16, { message: 'WHATSAPP_API_KEY must be at least 16 characters' })
+  WHATSAPP_API_KEY?: string;
+
+  @IsOptional()
+  @Matches(/^\d+$/, { message: 'WHATSAPP_WORKER_PORT must be a port number' })
+  WHATSAPP_WORKER_PORT?: string;
+
   // Object storage (see src/storage). Defaults to `local-db` so a fresh clone
   // boots with no AWS account in sight; the four AWS_* vars below are demanded
   // only once someone opts into `s3`. Half-configured S3 is the dangerous

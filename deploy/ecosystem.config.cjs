@@ -127,5 +127,33 @@ module.exports = {
         HOSTNAME: '127.0.0.1',
       },
     },
+    // WhatsApp worker (apps/api/src/whatsapp-worker) — only when the feature
+    // is configured, so an unconfigured box never runs or crash-loops it.
+    ...(sharedEnv.WHATSAPP_API_KEY
+      ? [
+          {
+            name: 'toastly-whatsapp',
+            cwd: path.join(APP_ROOT, 'current', 'api'),
+            script: 'dist/whatsapp-worker/main.js',
+            // Fork, exactly one: two processes logged into the same number
+            // knock each other off ("connection replaced"). A reload in fork
+            // mode is a stop/start, so the old socket is gone before the new
+            // one opens — sends during that gap fail and the API reports the
+            // worker offline.
+            exec_mode: 'fork',
+            instances: 1,
+            max_memory_restart: '300M',
+            kill_timeout: 5000,
+            env: {
+              ...sharedEnv,
+              NODE_ENV: 'production',
+              // Outside `releases/`, so the linked login survives deploys and
+              // release pruning — otherwise every deploy means a new QR scan.
+              WHATSAPP_AUTH_DIR:
+                sharedEnv.WHATSAPP_AUTH_DIR || path.join(APP_ROOT, 'shared', 'whatsapp-auth'),
+            },
+          },
+        ]
+      : []),
   ],
 };

@@ -23,6 +23,7 @@ import {
   UserCircle,
   Users,
   Wallet,
+  WhatsappLogo,
   X,
 } from '@phosphor-icons/react/dist/ssr';
 import type { Action, ResourceKey } from '@toastly/access';
@@ -174,12 +175,14 @@ const clubAdminNav: NavEntry[] = [
   },
 ];
 
-/** Super Admin's two entries — the org-tree dashboard and the platform-wide
- * user directory. Drilling into a district/division/area still navigates by
- * breadcrumb and card drill-down, so only these two routes get a nav item. */
+/** Super Admin's entries — the org-tree dashboard, the platform-wide user
+ * directory and the club WhatsApp number's link. Drilling into a
+ * district/division/area still navigates by breadcrumb and card drill-down,
+ * so only these routes get a nav item. */
 const superAdminNav: NavEntry[] = [
   { href: '/super-admin', title: 'Dashboard', Icon: SquaresFour },
   { href: '/super-admin/users', title: 'Users', Icon: Users },
+  { href: '/super-admin/whatsapp', title: 'WhatsApp', Icon: WhatsappLogo },
 ];
 
 /** A crumb whose human name lives in data the page hasn't loaded yet. When
@@ -424,7 +427,11 @@ function isClubAdminRoute(pathname: string): boolean {
 }
 
 function isSuperAdminNavRoute(pathname: string): boolean {
-  return pathname === '/super-admin' || pathname === '/super-admin/users';
+  return (
+    pathname === '/super-admin' ||
+    pathname === '/super-admin/users' ||
+    pathname === '/super-admin/whatsapp'
+  );
 }
 
 export function AppShell({ children, actions, notificationCount = 0 }: AppShellProps) {

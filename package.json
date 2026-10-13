@@ -11,6 +11,7 @@
     "dev:web": "pnpm --filter @toastly/web dev",
     "dev:api": "pnpm --filter @toastly/api dev",
     "dev:mobile": "pnpm --filter @toastly/mobile dev",
+    "dev:whatsapp": "pnpm --filter @toastly/api whatsapp:dev",
     "build:packages": "pnpm --filter @toastly/access build",
     "build": "pnpm build:packages && pnpm --filter @toastly/api build && pnpm --filter @toastly/web build",
     "start": "concurrently -n api,web -c magenta,cyan -k \"pnpm --filter @toastly/api start\" \"pnpm --filter @toastly/web start\"",

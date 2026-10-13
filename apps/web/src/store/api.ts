@@ -220,6 +220,7 @@ export const toastlyApi = createApi({
     'Profile',
     'ClubProfile',
     'ReceivedEvaluation',
+    'WhatsappStatus',
   ],
   endpoints: (build) => ({
     /* `includeRemoved` opts into seeing soft-removed members — the Club Admin
@@ -2577,6 +2578,28 @@ export const toastlyApi = createApi({
     unsubscribeFromPush: build.mutation<void, { endpoint: string }>({
       query: (body) => ({ url: '/push/unsubscribe', method: 'POST', body }),
     }),
+
+    /* WhatsApp — the club number's link, Super Admin only (backend gates on
+     * `user:*`). The connection lives in a separate worker process, so the
+     * status is polled while it's mid-link rather than pushed. */
+    getWhatsappStatus: build.query<WhatsappStatus, void>({
+      query: () => ({ url: '/whatsapp/status', method: 'GET' }),
+      providesTags: ['WhatsappStatus'],
+    }),
+
+    connectWhatsapp: build.mutation<WhatsappStatus, void>({
+      query: () => ({ url: '/whatsapp/connect', method: 'POST' }),
+      invalidatesTags: ['WhatsappStatus'],
+    }),
+
+    disconnectWhatsapp: build.mutation<WhatsappStatus, void>({
+      query: () => ({ url: '/whatsapp/disconnect', method: 'POST' }),
+      invalidatesTags: ['WhatsappStatus'],
+    }),
+
+    sendWhatsappTestMessage: build.mutation<WhatsappSendResult, { phone: string; text: string }>({
+      query: (body) => ({ url: '/whatsapp/test-message', method: 'POST', body }),
+    }),
   }),
 });
 
@@ -2585,6 +2608,31 @@ export const toastlyApi = createApi({
  * to the backend's Prisma `MemberType` enum. */
 export const MEMBER_TYPES = ['new', 'existing'] as const;
 export type MemberType = (typeof MEMBER_TYPES)[number];
+
+/** Mirrors `WhatsappStatus` in apps/api/src/whatsapp/whatsapp.types.ts.
+ * `not-configured` — WHATSAPP_API_KEY unset; `worker-offline` — the worker
+ * process isn't running; the rest are the linked number's own state. */
+export type WhatsappState =
+  | 'not-configured'
+  | 'worker-offline'
+  | 'disconnected'
+  | 'connecting'
+  | 'waiting-for-scan'
+  | 'connected';
+
+export interface WhatsappStatus {
+  state: WhatsappState;
+  /** QR payload to render, only while `waiting-for-scan`. */
+  qr: string | null;
+  /** The linked number, international digits (`8801712345678`). */
+  account: { number: string; name: string | null } | null;
+  error: string | null;
+}
+
+export type WhatsappSendResult =
+  | { status: 'sent'; messageId: string | null }
+  | { status: 'not-on-whatsapp' }
+  | { status: 'skipped' };
 
 export interface PlatformUser {
   id: string;
@@ -2924,4 +2972,8 @@ export const {
   useRemovePlatformUserOrgAssignmentMutation,
   useSubscribeToPushMutation,
   useUnsubscribeFromPushMutation,
+  useGetWhatsappStatusQuery,
+  useConnectWhatsappMutation,
+  useDisconnectWhatsappMutation,
+  useSendWhatsappTestMessageMutation,
 } = toastlyApi;

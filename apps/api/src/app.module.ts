@@ -33,6 +33,7 @@ import { QueueModule } from './queue';
 import { StorageModule } from './storage';
 import { TasksModule } from './tasks';
 import { UsersModule } from './users';
+import { WhatsappModule } from './whatsapp';
 
 @Module({
   imports: [
@@ -83,6 +84,7 @@ import { UsersModule } from './users';
     UsersModule,
     OrgAssignmentsModule,
     PushModule,
+    WhatsappModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

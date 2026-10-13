@@ -63,6 +63,12 @@ export APP_VERSION="$SHA"
 # `startOrReload` re-reads the config, so both apps re-resolve the `current`
 # symlink to the new physical path. --update-env propagates APP_VERSION.
 pm2 startOrReload "$ECOSYSTEM" --update-env
+# The WhatsApp worker is declared only while WHATSAPP_API_KEY is set (see
+# ecosystem.config.cjs), and startOrReload never stops an app that has dropped
+# out of the file — so remove it explicitly once the feature is switched off.
+if ! grep -q '^WHATSAPP_API_KEY=.' "$APP_ROOT/shared/.env"; then
+  pm2 delete toastly-whatsapp >/dev/null 2>&1 || true
+fi
 pm2 save --force >/dev/null 2>&1 || true
 
 # ------------------------------------------------------------- smoke test ----
