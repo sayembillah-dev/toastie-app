@@ -9,6 +9,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../app/session.dart';
 import '../../core/theme/tokens.dart';
 import '../../ui/widgets.dart';
+import 'light_alert.dart';
 import 'live_common.dart';
 import 'role_state.dart';
 
@@ -347,6 +348,37 @@ class _RunningView extends StatefulWidget {
 
 class _RunningViewState extends State<_RunningView> {
   Light? _lastLight;
+  final _alert = LightAlert();
+
+  @override
+  void initState() {
+    super.initState();
+    _alert.addListener(_onAlert);
+  }
+
+  void _onAlert() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(_RunningView old) {
+    super.didUpdateWidget(old);
+    // A different speaker, or this one stopped/reset: the signal is over.
+    if (old.speaker.id != widget.speaker.id) {
+      _lastLight = null;
+      _alert.stop();
+    } else if (!widget.speaker.running) {
+      _alert.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _alert
+      ..removeListener(_onAlert)
+      ..dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -354,8 +386,11 @@ class _RunningViewState extends State<_RunningView> {
     final s = widget.speaker;
     final secs = s.elapsedAt(widget.now);
     final light = s.lightAt(secs);
-    if (_lastLight != null && light != _lastLight && s.running) {
-      HapticFeedback.heavyImpact();
+    if (_lastLight != null && light != _lastLight && light != Light.none && s.running) {
+      // Long SOS vibration + screen flash so the change can't be missed.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _alert.play();
+      });
     }
     _lastLight = light;
     final bg = lightColor(light) ?? c.canvas;
@@ -368,10 +403,15 @@ class _RunningViewState extends State<_RunningView> {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) widget.onClose();
       },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 350),
-        color: bg,
-        child: Scaffold(
+      // Any touch ends the signal early, without swallowing the tap itself.
+      child: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (_) => _alert.stop(),
+        child: Stack(fit: StackFit.expand, children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 350),
+            color: bg,
+            child: Scaffold(
           backgroundColor: Colors.transparent,
           appBar: AppBar(
             backgroundColor: Colors.transparent,
@@ -481,6 +521,10 @@ class _RunningViewState extends State<_RunningView> {
             }),
           ),
         ),
+          ),
+          // SOS flash: dark between pulses, the light colour on each pulse.
+          if (_alert.active && !_alert.flashOn) const IgnorePointer(child: ColoredBox(color: Color(0xE6000000))),
+        ]),
       ),
     );
   }

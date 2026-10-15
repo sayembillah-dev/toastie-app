@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Flutter's template only grants this in the debug/profile manifests;
+         without it a release build can't reach the API at all. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="Open Floor"
         android:name="${applicationName}"

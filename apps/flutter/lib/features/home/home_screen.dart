@@ -14,7 +14,6 @@ import '../../domain/pathways.dart';
 import '../../ui/widgets.dart';
 import '../me/context_switcher.dart';
 import '../org/org_home_screen.dart';
-import '../me/speech_cards.dart';
 
 /// Ticks every second — drives countdowns.
 final nowProvider = StreamProvider<DateTime>((ref) async* {
@@ -26,19 +25,9 @@ class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   Future<void> _refresh(WidgetRef ref) async {
-    final me = ref.read(myMembershipIdProvider);
     ref.invalidate(meetingsProvider);
     ref.invalidate(membersProvider);
     ref.invalidate(guestsProvider);
-    ref.invalidate(clubProvider);
-    if (me != null) {
-      ref.invalidate(memberStatsProvider(me));
-      ref.invalidate(memberHistoryProvider(me));
-      ref.invalidate(receivedEvaluationsProvider(me));
-      ref.invalidate(timerEntriesProvider(me));
-      ref.invalidate(ahEntriesProvider(me));
-      ref.invalidate(memberProvider(me));
-    }
     await ref.read(meetingsProvider.future).catchError((_) => <Meeting>[]);
   }
 
@@ -89,10 +78,6 @@ class HomeScreen extends ConsumerWidget {
               error: (e, _) => ErrorState(error: e, onRetry: () => ref.invalidate(meetingsProvider)),
             ),
           ),
-          if (me != null) SliverToBoxAdapter(child: _PathwayCard(membershipId: me)),
-          if (me != null) SliverToBoxAdapter(child: LastSpeechSection(membershipId: me)),
-          if (me != null) SliverToBoxAdapter(child: _StandingCard(membershipId: me)),
-          const SliverToBoxAdapter(child: _PulseCard()),
           const SliverToBoxAdapter(child: SizedBox(height: 32)),
         ]),
       ),
@@ -362,29 +347,7 @@ class _LineupCard extends ConsumerWidget {
   }
 }
 
-// ───────────────────────── Pathway ─────────────────────────
-
-class _PathwayCard extends ConsumerWidget {
-  const _PathwayCard({required this.membershipId});
-  final String membershipId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final member = ref.watch(memberProvider(membershipId)).value;
-    final catalog = ref.watch(pathwayCatalogProvider).value;
-    final history = ref.watch(memberHistoryProvider(membershipId)).value ?? const <HistoryEvent>[];
-    if (member == null) return const SizedBox.shrink();
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      const SectionLabel('Current pathway'),
-      PathwayProgressCard(
-        member: member,
-        catalog: catalog,
-        history: history,
-        onTap: () => context.push('/me/pathway/$membershipId'),
-      ),
-    ]);
-  }
-}
+// ───────────────────────── Pathway card (shared with Me) ─────────────────────────
 
 /// Pathway name, level, current project, and what's up next.
 class PathwayProgressCard extends StatelessWidget {
@@ -474,23 +437,7 @@ class PathwayProgressCard extends StatelessWidget {
   }
 }
 
-// ───────────────────────── Standing / pulse ─────────────────────────
-
-class _StandingCard extends ConsumerWidget {
-  const _StandingCard({required this.membershipId});
-  final String membershipId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final stats = ref.watch(memberStatsProvider(membershipId)).value;
-    final meetings = ref.watch(meetingsProvider).value;
-    if (stats == null || meetings == null) return const SizedBox.shrink();
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      const SectionLabel('Club standing'),
-      ClubStandingCard(stats: stats, meetings: meetings),
-    ]);
-  }
-}
+// ───────────────────────── Standing card (shared with Me) ─────────────────────────
 
 /// Speeches, roles, attendance %, activity % (shared with Me).
 class ClubStandingCard extends StatelessWidget {
@@ -541,34 +488,5 @@ class ClubStandingCard extends StatelessWidget {
         bar('Activity', activity, 'Share of attended meetings you spoke or took a role in'),
       ]),
     );
-  }
-}
-
-class _PulseCard extends ConsumerWidget {
-  const _PulseCard();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final t = Theme.of(context).textTheme;
-    final members = ref.watch(membersProvider).value;
-    final meetings = ref.watch(meetingsProvider).value;
-    if (members == null || meetings == null) return const SizedBox.shrink();
-    final p = MeetingPartition.of(meetings, DateTime.now().toUtc());
-    Widget stat(int v, String l) => Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('$v', style: t.headlineMedium),
-            Text(l, style: t.bodySmall),
-          ]),
-        );
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      const SectionLabel('Club pulse'),
-      AppCard(
-        child: Row(children: [
-          stat(members.where((m) => m.isActive).length, 'Active members'),
-          stat(p.past.length, 'Meetings held'),
-          stat(p.upcoming.length, 'Upcoming'),
-        ]),
-      ),
-    ]);
   }
 }

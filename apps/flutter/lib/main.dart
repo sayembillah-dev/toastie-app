@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'app/router.dart';
+import 'app/splash.dart';
 import 'app/session.dart';
 import 'core/api/api_client.dart';
 import 'core/theme/app_theme.dart';
@@ -58,7 +59,7 @@ class ToastieApp extends ConsumerWidget {
         final mq = MediaQuery.of(context);
         return MediaQuery(
           data: mq.copyWith(textScaler: mq.textScaler.clamp(maxScaleFactor: 1.6)),
-          child: child!,
+          child: IntroSplash(child: child!),
         );
       },
     );

@@ -38,9 +38,9 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Toastie uses the camera to take profile, guest and club banner photos.</string>
+	<string>Open Floor uses the camera to take profile, guest and club banner photos.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Toastie lets you choose profile, guest and club banner photos from your library.</string>
+	<string>Open Floor lets you choose profile, guest and club banner photos from your library.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -68,6 +68,8 @@
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
+	<key>UIStatusBarHidden</key>
+	<false/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

@@ -9,13 +9,13 @@ needed for this release.
 ```sh
 cd apps/flutter
 flutter pub get
-flutter run --dart-define=API_URL=https://toastie.niftyitsolution.com
+flutter run --dart-define=API_URL=https://openfloor.club
 ```
 
-| Define    | Default                               | Purpose                                                                                        |
-| --------- | ------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `API_URL` | `https://toastie.niftyitsolution.com` | API origin; `/api` is appended (a trailing `/api` is tolerated)                                |
-| `WEB_URL` | same as `API_URL`                     | Origin used for shareable public links (agenda, voting, evaluation, role pages, guest sign-up) |
+| Define    | Default                  | Purpose                                                                                        |
+| --------- | ------------------------ | ---------------------------------------------------------------------------------------------- |
+| `API_URL` | `https://openfloor.club` | API origin; `/api` is appended (a trailing `/api` is tolerated)                                |
+| `WEB_URL` | same as `API_URL`        | Origin used for shareable public links (agenda, voting, evaluation, role pages, guest sign-up) |
 
 > The default points at **production**. Publishing a meeting, assigning a
 > role or confirming a speech sends real WhatsApp messages to real members.

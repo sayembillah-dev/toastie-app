@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../ui/icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -39,42 +38,6 @@ final mySpeechesProvider = FutureProvider.family<List<SpeechWithReports>, String
       ),
   ];
 });
-
-/// Home's "Your last speech" section.
-class LastSpeechSection extends ConsumerWidget {
-  const LastSpeechSection({super.key, required this.membershipId});
-  final String membershipId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final speeches = ref.watch(mySpeechesProvider(membershipId));
-    return speeches.maybeWhen(
-      data: (list) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        SectionLabel(
-          'Your last speech',
-          trailing: list.length > 1
-              ? GestureDetector(
-                  onTap: () => context.push('/me/speeches'),
-                  child: Text('All speeches',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.of(context).ink)),
-                )
-              : null,
-        ),
-        if (list.isEmpty)
-          const AppCard(
-            child: EmptyState(
-              icon: PhosphorIconsRegular.microphone,
-              title: 'No speeches yet',
-              message: 'Once you deliver your first prepared speech, its reports will show up here.',
-            ),
-          )
-        else
-          SpeechCard(speech: list.first),
-      ]),
-      orElse: () => const SizedBox.shrink(),
-    );
-  }
-}
 
 class SpeechCard extends StatelessWidget {
   const SpeechCard({super.key, required this.speech});

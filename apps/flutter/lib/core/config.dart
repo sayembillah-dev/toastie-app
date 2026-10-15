@@ -1,6 +1,6 @@
 /// Build-time configuration, passed with `--dart-define`.
 ///
-///   flutter run --dart-define=API_URL=https://toastie.niftyitsolution.com
+///   flutter run --dart-define=API_URL=https://openfloor.club
 ///
 /// `API_URL` is the server origin; the `/api` prefix is normalised here so a
 /// value that already ends in `/api` (or `/api/`) cannot produce `/api/api`.
@@ -9,7 +9,7 @@ class AppConfig {
 
   static const String _rawApiUrl = String.fromEnvironment(
     'API_URL',
-    defaultValue: 'https://toastie.niftyitsolution.com',
+    defaultValue: 'https://openfloor.club',
   );
 
   /// Origin of the web app, used to build shareable public links (agenda,
