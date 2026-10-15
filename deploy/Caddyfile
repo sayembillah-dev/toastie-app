@@ -19,7 +19,7 @@
 # accurate client IPs, read that header — and only trust it from Cloudflare's
 # published ranges, or anyone hitting the origin directly can forge it.
 
-toastie.niftyitsolution.com {
+openfloor.club {
         encode zstd gzip
 
         request_body {
@@ -40,5 +40,29 @@ toastie.niftyitsolution.com {
                 reverse_proxy 127.0.0.1:3000 {
                         header_up X-Real-IP {http.request.remote.host}
                 }
+        }
+}
+
+# Toastie moved here from toastie.niftyitsolution.com on 2026-10-15. Keep the
+# old host for at least a year.
+#
+# /api/* is proxied, NOT redirected: installed mobile builds call this host,
+# and Android/iOS HTTP clients drop the Authorization header on a cross-host
+# redirect, which would sign every mobile user out. Pages redirect with 308.
+toastie.niftyitsolution.com {
+        encode zstd gzip
+
+        @api path /api/*
+        handle @api {
+                request_body {
+                        max_size 25MB
+                }
+                reverse_proxy 127.0.0.1:4000 {
+                        header_up X-Real-IP {http.request.remote.host}
+                }
+        }
+
+        handle {
+                redir https://openfloor.club{uri} 308
         }
 }
