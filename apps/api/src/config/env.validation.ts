@@ -111,6 +111,14 @@ class EnvironmentVariables {
   @IsString()
   VAPID_SUBJECT?: string;
 
+  // Native app push via Firebase Cloud Messaging (see src/push/native-push.service.ts).
+  // A service-account JSON from the Firebase console, as raw JSON or base64.
+  // Optional: unset means native push is off and device registration still
+  // works, so tokens are already on file the moment it's switched on.
+  @IsOptional()
+  @IsString()
+  FIREBASE_SERVICE_ACCOUNT?: string;
+
   // WhatsApp (see src/whatsapp and src/whatsapp-worker). Optional: no key
   // means the feature is off, and the worker isn't started at all (see
   // deploy/ecosystem.config.cjs). The worker reads the same key from the same

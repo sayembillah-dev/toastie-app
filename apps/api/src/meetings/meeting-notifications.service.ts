@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 
 import { APP_TIME_ZONE } from '@/common/time';
 import { PrismaService } from '@/prisma';
+import { type NativePushMessage, NativePushService } from '@/push';
 import { toWhatsappNumber, WhatsappService } from '@/whatsapp';
 
 /** Who a slot points at — a club member or a guest, never both (the same
@@ -14,8 +15,11 @@ export interface SlotHolder {
 
 interface Recipient {
   firstName: string;
-  /** International WhatsApp digits, already validated. */
-  number: string;
+  /** International WhatsApp digits, already validated — null when there's no
+   * usable number (they may still get a native push). */
+  number: string | null;
+  /** The account behind the slot, for native app push. */
+  userId: string | null;
   /** Has an account to open in-app links with. Guests and unclaimed roster
    * rows don't, so they get the public agenda instead. */
   inApp: boolean;
@@ -66,8 +70,10 @@ const dateFormat = new Intl.DateTimeFormat('en-GB', {
   hour12: true,
 });
 
-/** WhatsApp messages about meetings: the club-wide "new meeting" announcement,
- * role added/removed, and a confirmed prepared speech.
+/** Notifications about meetings: the club-wide "new meeting" announcement,
+ * role added/removed, and a confirmed prepared speech. Each goes out over
+ * WhatsApp (when the number is linked) and as a native app push to every
+ * install the person is signed in on (when Firebase is configured).
  *
  * Every public method is fire-and-forget — it returns immediately, and a
  * notification that fails (worker offline, bad number) is logged, never
@@ -87,6 +93,7 @@ export class MeetingNotificationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly whatsapp: WhatsappService,
+    private readonly push: NativePushService,
     config: ConfigService,
   ) {
     const origin =
@@ -114,14 +121,17 @@ export class MeetingNotificationsService {
       });
       const seen = new Set<string>();
       const noNumber: string[] = [];
+      const pushUsers: string[] = [];
       for (const member of members) {
         const recipient = toMemberRecipient(member);
-        if (!recipient) {
+        if (recipient?.userId) pushUsers.push(recipient.userId);
+        if (!recipient?.number) {
           noNumber.push(member.firstName);
           continue;
         }
         if (seen.has(recipient.number)) continue;
         seen.add(recipient.number);
+        if (!this.whatsapp.isConfigured) continue;
         this.enqueue(
           recipient.number,
           [
@@ -134,9 +144,14 @@ export class MeetingNotificationsService {
           ].join('\n'),
         );
       }
+      await this.push.send(pushUsers, {
+        title: 'New meeting scheduled 📅',
+        body: `${meeting.clubName} — Meeting #${meeting.meetingNumber}: ${meeting.theme} · ${formatDate(meeting.dateTime)}`,
+        data: { route: `/meetings/${meeting.id}` },
+      });
       this.logger.log(
-        `Meeting #${meeting.meetingNumber} announcement: ${seen.size} queued` +
-          (noNumber.length ? `, skipped (no WhatsApp number): ${noNumber.join(', ')}` : ''),
+        `Meeting #${meeting.meetingNumber} announcement: ${seen.size} WhatsApp queued, ${pushUsers.length} app users` +
+          (noNumber.length ? `, no WhatsApp number: ${noNumber.join(', ')}` : ''),
       );
     });
   }
@@ -159,24 +174,34 @@ export class MeetingNotificationsService {
 
       const removed = await this.resolveHolder(meeting.clubId, previous, actorMembershipId);
       if (removed) {
-        this.enqueue(
-          removed.number,
+        await this.notify(
+          removed,
           [
             `Hi ${removed.firstName}, you're no longer *${role}* for ${when}.`,
             '',
             `See the roles: ${this.meetingLink(meeting, removed, 'roles')}`,
           ].join('\n'),
+          {
+            title: `You're no longer ${role}`,
+            body: `Meeting #${meeting.meetingNumber} · ${meeting.theme} · ${formatDate(meeting.dateTime)}`,
+            data: { route: `/meetings/${meeting.id}/roles` },
+          },
         );
       }
       const added = await this.resolveHolder(meeting.clubId, next, actorMembershipId);
       if (added) {
-        this.enqueue(
-          added.number,
+        await this.notify(
+          added,
           [
             `Hi ${added.firstName}, you've been assigned as *${role}* for ${when}.`,
             '',
             `See the roles: ${this.meetingLink(meeting, added, 'roles')}`,
           ].join('\n'),
+          {
+            title: `You're ${role} 🎤`,
+            body: `Meeting #${meeting.meetingNumber} · ${meeting.theme} · ${formatDate(meeting.dateTime)}`,
+            data: { route: `/meetings/${meeting.id}/roles` },
+          },
         );
       }
     });
@@ -222,17 +247,36 @@ export class MeetingNotificationsService {
         lines.push(`Evaluator: ${`${evaluator.firstName} ${evaluator.lastName}`.trim()}`);
       }
       lines.push('', `Details: ${this.meetingLink(meeting, recipient, 'prepared-speakers')}`);
-      this.enqueue(recipient.number, lines.join('\n'));
+      await this.notify(recipient, lines.join('\n'), {
+        title: `Your ${isKeynote ? 'keynote' : 'speech'} is confirmed ✅`,
+        body: [`Meeting #${meeting.meetingNumber}`, speaker.title, formatDate(meeting.dateTime)]
+          .filter(Boolean)
+          .join(' · '),
+        data: { route: `/meetings/${meeting.id}/speakers/${speakerId}` },
+      });
     });
   }
 
   /** Runs the lookup in the background — the triggering request never waits
-   * on it or sees its errors. Skipped outright while WhatsApp isn't set up. */
+   * on it or sees its errors. Skipped outright while neither WhatsApp nor
+   * native push is set up. */
   private run(label: string, work: () => Promise<void>): void {
-    if (!this.whatsapp.isConfigured) return;
+    if (!this.whatsapp.isConfigured && !this.push.isConfigured) return;
     void work().catch((error: unknown) => {
-      this.logger.error(`WhatsApp ${label} failed: ${errorMessage(error)}`);
+      this.logger.error(`Meeting ${label} notification failed: ${errorMessage(error)}`);
     });
+  }
+
+  /** WhatsApp when there's a number and the sender is linked; app push to
+   * every install of their account. */
+  private async notify(
+    recipient: Recipient,
+    whatsappText: string,
+    push: NativePushMessage,
+  ): Promise<void> {
+    if (recipient.number && this.whatsapp.isConfigured)
+      this.enqueue(recipient.number, whatsappText);
+    if (recipient.userId) await this.push.send([recipient.userId], push);
   }
 
   private enqueue(number: string, text: string): void {
@@ -290,7 +334,7 @@ export class MeetingNotificationsService {
       });
       if (!member) return null;
       const recipient = toMemberRecipient(member);
-      if (!recipient) this.logger.warn(`No WhatsApp number for member ${member.firstName}`);
+      if (!recipient?.number) this.logger.warn(`No WhatsApp number for member ${member.firstName}`);
       return recipient;
     }
     if (holder.guestId) {
@@ -301,7 +345,7 @@ export class MeetingNotificationsService {
       if (!guest) return null;
       const number = firstWhatsappNumber(guest.whatsapp, guest.phone);
       if (!number) this.logger.warn(`No WhatsApp number for guest ${guest.firstName}`);
-      return number ? { firstName: guest.firstName, number, inApp: false } : null;
+      return number ? { firstName: guest.firstName, number, userId: null, inApp: false } : null;
     }
     return null;
   }
@@ -333,7 +377,13 @@ function toMemberRecipient(member: {
     member.user?.phone,
     member.person?.phone,
   );
-  return number ? { firstName: member.firstName, number, inApp: member.userId !== null } : null;
+  if (!number && !member.userId) return null;
+  return {
+    firstName: member.firstName,
+    number,
+    userId: member.userId,
+    inApp: member.userId !== null,
+  };
 }
 
 /** The first candidate that's a valid BD WhatsApp number — a dedicated

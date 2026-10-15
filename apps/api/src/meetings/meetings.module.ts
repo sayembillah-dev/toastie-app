@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { PushModule } from '@/push';
 import { WhatsappModule } from '@/whatsapp';
 
 import { AttendanceController } from './attendance.controller';
@@ -19,7 +20,7 @@ import { MeetingVotingController } from './voting.controller';
 import { VotingService } from './voting.service';
 
 @Module({
-  imports: [WhatsappModule],
+  imports: [WhatsappModule, PushModule],
   controllers: [
     MeetingsController,
     PublicMeetingsController,

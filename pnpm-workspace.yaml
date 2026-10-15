@@ -2,6 +2,7 @@ packages:
   - "apps/*"
   - "packages/*"
 allowBuilds:
+  "@firebase/util": false
   "@prisma/client": true
   "@prisma/engines": true
   argon2: true

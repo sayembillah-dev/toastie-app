@@ -200,6 +200,7 @@ model User {
   joinRequests      JoinRequest[]
   credentialShare   CredentialShare?
   pushSubscriptions PushSubscription[]
+  deviceTokens      DeviceToken[]
   person            Person?
 }
 
@@ -294,6 +295,22 @@ model PushSubscription {
   auth      String
   userAgent String?
   createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// A native app install that can receive push (FCM token — Android, and iOS
+/// via APNs through FCM). One token per install; re-registering an existing
+/// token moves it to whoever is signed in now.
+model DeviceToken {
+  id         String   @id @default(cuid())
+  userId     String
+  token      String   @unique
+  platform   String // ios | android
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

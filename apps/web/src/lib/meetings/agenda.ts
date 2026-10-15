@@ -294,6 +294,18 @@ export function buildAgenda(
           person: grammarian,
           people: toPeople(holderPerson(nameOf, roles.grammarian)),
         },
+        /* Harkmaster is optional: introduced and reporting alongside the
+         * other functionaries, but only when one is actually assigned. */
+        ...(harkmaster
+          ? [
+              {
+                key: 'harkmaster',
+                label: 'Harkmaster',
+                person: harkmaster,
+                people: toPeople(holderPerson(nameOf, roles.harkmaster)),
+              },
+            ]
+          : []),
       ],
     },
     buildPreparedSpeechBlock(draft, nameOf),
@@ -345,6 +357,17 @@ export function buildAgenda(
           people: toPeople(holderPerson(nameOf, roles.grammarian)),
           minutes: 2,
         },
+        ...(harkmaster
+          ? [
+              {
+                key: 'harkmaster-report',
+                label: "Harkmaster's Report",
+                person: harkmaster,
+                people: toPeople(holderPerson(nameOf, roles.harkmaster)),
+                minutes: 3,
+              },
+            ]
+          : []),
       ],
     },
     {
@@ -354,26 +377,6 @@ export function buildAgenda(
       minutes: 2,
       lines: [{ key: 'feedback', label: 'Feedback & Q&A', minutes: 4 }],
     },
-    /* Optional closing segment — only on the agenda when a Harkmaster is
-     * actually assigned, so meetings without one keep their usual run of
-     * show and timings. */
-    ...(harkmaster
-      ? [
-          {
-            title: `${tm} invites the Harkmaster`,
-            person: harkmaster,
-            people: toPeople(holderPerson(nameOf, roles.harkmaster)),
-            minutes: 0,
-            lines: [
-              {
-                key: 'harkmaster-quiz',
-                label: 'Harkmaster quizzes the audience on the meeting',
-                minutes: 5,
-              },
-            ],
-          },
-        ]
-      : []),
     { title: 'Meeting Conclusion', minutes: 0, lines: [] },
   ];
 
