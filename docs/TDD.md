@@ -5,7 +5,7 @@ Companion to [PRD.md](./PRD.md) and [ERD.md](./ERD.md).
 
 ## 1. Overview
 
-Toastie is a pnpm monorepo with three workspace packages: a Next.js frontend,
+Openfloor is a pnpm monorepo with three workspace packages: a Next.js frontend,
 a NestJS backend, and a shared authorization library used by both.
 
 | Package           | Path              | Role                                                |

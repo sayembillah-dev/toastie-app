@@ -17,6 +17,8 @@ import { getSecureItem, setSecureItem } from '@/lib/secure-storage';
 import type { ActiveContext } from './context-value';
 import { contextKey } from './context-value';
 
+// These keys keep the pre-rebrand `toastie.` prefix on purpose: renaming them
+// would orphan every stored session and sign all existing installs out.
 const ACCESS_TOKEN_KEY = 'toastie.accessToken';
 const REFRESH_TOKEN_KEY = 'toastie.refreshToken';
 export const CONTEXT_STORAGE_KEY = 'toastie.activeContext';

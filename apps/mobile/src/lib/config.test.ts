@@ -10,19 +10,23 @@ import { normalizeOrigin } from './config';
  */
 describe('normalizeOrigin', () => {
   it('accepts a bare origin', () => {
-    expect(normalizeOrigin('https://toastie.example.com')).toBe('https://toastie.example.com');
+    expect(normalizeOrigin('https://openfloor.example.com')).toBe('https://openfloor.example.com');
   });
 
   it('strips a trailing /api so the prefix is not doubled', () => {
-    expect(normalizeOrigin('https://toastie.example.com/api')).toBe('https://toastie.example.com');
+    expect(normalizeOrigin('https://openfloor.example.com/api')).toBe(
+      'https://openfloor.example.com',
+    );
   });
 
   it('strips a trailing slash', () => {
-    expect(normalizeOrigin('https://toastie.example.com/')).toBe('https://toastie.example.com');
+    expect(normalizeOrigin('https://openfloor.example.com/')).toBe('https://openfloor.example.com');
   });
 
   it('strips a trailing slash and prefix together', () => {
-    expect(normalizeOrigin('https://toastie.example.com/api/')).toBe('https://toastie.example.com');
+    expect(normalizeOrigin('https://openfloor.example.com/api/')).toBe(
+      'https://openfloor.example.com',
+    );
   });
 
   it('tolerates surrounding whitespace', () => {
@@ -30,8 +34,8 @@ describe('normalizeOrigin', () => {
   });
 
   it('keeps a sub-path deployment, removing only the prefix', () => {
-    expect(normalizeOrigin('https://host.example.com/toastie/api')).toBe(
-      'https://host.example.com/toastie',
+    expect(normalizeOrigin('https://host.example.com/openfloor/api')).toBe(
+      'https://host.example.com/openfloor',
     );
   });
 

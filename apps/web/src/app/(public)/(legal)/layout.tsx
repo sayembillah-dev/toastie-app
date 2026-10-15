@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 
 import { dhakaParts } from '@/lib/time';
 
-import toastieLogo from '../../../../assets/toastie.svg';
+import openfloorLogo from '../../../../assets/openfloor.svg';
 
 /** Shell for the public policy pages — the privacy policy and the account
  * deletion request page.
@@ -25,8 +25,8 @@ export default function LegalLayout({ children }: { children: ReactNode }) {
       <header className="border-b border-black/8">
         <div className="mx-auto flex max-w-3xl items-center gap-2 px-6 py-5">
           <Link href="/" className="flex items-center gap-2 text-[#0b2a4c]">
-            <Image src={toastieLogo} alt="" aria-hidden className="h-7 w-auto" priority />
-            <span className="text-sm font-semibold tracking-wide">Toastie</span>
+            <Image src={openfloorLogo} alt="" aria-hidden className="h-7 w-auto" priority />
+            <span className="text-sm font-semibold tracking-wide">Openfloor</span>
           </Link>
         </div>
       </header>

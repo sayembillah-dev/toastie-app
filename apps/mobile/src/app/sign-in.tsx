@@ -57,7 +57,7 @@ export default function SignInScreen() {
           <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
             <View style={styles.form}>
               <View style={styles.heading}>
-                <ThemedText type="subtitle">Toastie</ThemedText>
+                <ThemedText type="subtitle">Openfloor</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">
                   Sign in to your club.
                 </ThemedText>

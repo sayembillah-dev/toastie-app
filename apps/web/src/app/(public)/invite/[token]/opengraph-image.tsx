@@ -2,7 +2,7 @@ import { ImageResponse } from 'next/og';
 
 import { apiFetch } from '@/lib/api';
 
-export const alt = 'Toastie club invite';
+export const alt = 'Openfloor club invite';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -31,7 +31,7 @@ export default async function Image({ params }: { params: Promise<{ token: strin
       }}
     >
       <div style={{ fontSize: 32, letterSpacing: 6, textTransform: 'uppercase', opacity: 0.55 }}>
-        Toastie
+        Openfloor
       </div>
       <div
         style={{
@@ -44,7 +44,7 @@ export default async function Image({ params }: { params: Promise<{ token: strin
           lineHeight: 1.2,
         }}
       >
-        {clubName ? `You're invited to ${clubName}` : "You're invited to Toastie"}
+        {clubName ? `You're invited to ${clubName}` : "You're invited to Openfloor"}
       </div>
     </div>,
     size,

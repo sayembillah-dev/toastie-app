@@ -16,7 +16,7 @@ const LAST_UPDATED = '31 August 2026';
 
 export const metadata: Metadata = {
   title: 'Privacy policy',
-  description: 'What Toastie collects, why, who can see it, and how to delete it.',
+  description: 'What Openfloor collects, why, who can see it, and how to delete it.',
 };
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -34,7 +34,7 @@ export default function PrivacyPolicyPage() {
       <header className="space-y-3">
         <h1 className="text-3xl font-semibold tracking-tight text-[#0b2a4c]">Privacy policy</h1>
         <p className="text-black/70">
-          Nifty IT Solution (“we”, “us”) operates Toastie, an app clubs use to run their meetings,
+          Nifty IT Solution (“we”, “us”) operates Openfloor, an app clubs use to run their meetings,
           track member education and manage their roster. This policy explains what the app stores,
           why, who can see it, and how to have it deleted.
         </p>
@@ -72,7 +72,7 @@ export default function PrivacyPolicyPage() {
 
       <Section title="What we do not collect">
         <p>
-          Toastie contains no analytics, advertising or tracking software of any kind. We do not
+          Openfloor contains no analytics, advertising or tracking software of any kind. We do not
           build advertising profiles, we do not sell or rent your data, and we do not share it with
           data brokers. The app does not request your location, your contacts, your camera roll or
           your microphone in the background.
@@ -89,7 +89,7 @@ export default function PrivacyPolicyPage() {
 
       <Section title="Who can see it">
         <p>
-          <strong>Your club.</strong> Toastie is a shared record. Other members of your club see
+          <strong>Your club.</strong> Openfloor is a shared record. Other members of your club see
           your name, your roles, your speeches and your evaluations, in the same way they would in
           the club’s own minutes. Officers see more, according to their role — a treasurer sees
           dues, a VP Membership sees guest records.
@@ -165,7 +165,7 @@ export default function PrivacyPolicyPage() {
 
       <Section title="Children">
         <p>
-          Toastie is built for club administration and is not directed at children under 13. We do
+          Openfloor is built for club administration and is not directed at children under 13. We do
           not knowingly collect information from them. If you believe a child has an account, write
           to us and we will remove it.
         </p>

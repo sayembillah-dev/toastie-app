@@ -308,7 +308,7 @@ function ProfileForm({ profile }: { profile: Profile }) {
       <header className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-ink">Your profile</h1>
-          <p className="mt-0.5 text-sm text-ink-soft">Update how you appear across Toastie.</p>
+          <p className="mt-0.5 text-sm text-ink-soft">Update how you appear across Openfloor.</p>
         </div>
         <Link href="/change-password">
           <Button icon={<LockKey size={14} weight="bold" />}>Change password</Button>

@@ -10,7 +10,7 @@ declare global {
   interface Window {
     /** Stashed by the inline `INSTALL_CAPTURE_SCRIPT` in the root layout —
      * see that constant for why it can't wait for React. */
-    __toastieInstallPrompt?: BeforeInstallPromptEvent | null;
+    __openfloorInstallPrompt?: BeforeInstallPromptEvent | null;
   }
   interface Navigator {
     /** iOS Safari's pre-`display-mode` flag for home-screen launches. */
@@ -25,15 +25,15 @@ declare global {
  * store below pick it up. `preventDefault()` suppresses Chrome's own
  * mini-infobar so the dashboard card is the one place the offer appears. */
 export const INSTALL_CAPTURE_SCRIPT = `
-window.__toastieInstallPrompt = null;
+window.__openfloorInstallPrompt = null;
 window.addEventListener('beforeinstallprompt', function (e) {
   e.preventDefault();
-  window.__toastieInstallPrompt = e;
-  window.dispatchEvent(new Event('toastie:installable'));
+  window.__openfloorInstallPrompt = e;
+  window.dispatchEvent(new Event('openfloor:installable'));
 });
 window.addEventListener('appinstalled', function () {
-  window.__toastieInstallPrompt = null;
-  window.dispatchEvent(new Event('toastie:installable'));
+  window.__openfloorInstallPrompt = null;
+  window.dispatchEvent(new Event('openfloor:installable'));
 });
 `;
 
@@ -61,7 +61,7 @@ function isInAppBrowser(): boolean {
 
 export function getInstallState(): InstallState {
   if (isStandalone()) return 'none';
-  if (window.__toastieInstallPrompt) return 'prompt';
+  if (window.__openfloorInstallPrompt) return 'prompt';
   if (isIos()) return isInAppBrowser() ? 'ios-in-app' : 'ios';
   return 'none';
 }
@@ -73,8 +73,8 @@ export function getServerInstallState(): InstallState {
 }
 
 export function subscribeInstallState(onChange: () => void): () => void {
-  window.addEventListener('toastie:installable', onChange);
-  return () => window.removeEventListener('toastie:installable', onChange);
+  window.addEventListener('openfloor:installable', onChange);
+  return () => window.removeEventListener('openfloor:installable', onChange);
 }
 
 /** Opens Chrome's real install dialog. The deferred event is single-use —
@@ -82,15 +82,16 @@ export function subscribeInstallState(onChange: () => void): () => void {
  * and Chrome will fire a fresh `beforeinstallprompt` later if the user
  * dismissed it and the page is still installable. */
 export async function promptInstall(): Promise<'accepted' | 'dismissed' | 'unavailable'> {
-  const event = window.__toastieInstallPrompt;
+  const event = window.__openfloorInstallPrompt;
   if (!event) return 'unavailable';
-  window.__toastieInstallPrompt = null;
+  window.__openfloorInstallPrompt = null;
   await event.prompt();
   const { outcome } = await event.userChoice;
-  window.dispatchEvent(new Event('toastie:installable'));
+  window.dispatchEvent(new Event('openfloor:installable'));
   return outcome;
 }
 
+// Keeps the pre-rebrand prefix so a member's earlier "Not now" still holds.
 const DISMISSED_KEY = 'toastie:install-card-dismissed-at';
 /** "Not now" hides the card for two weeks rather than forever — a member
  * who wasn't ready on day one may be by the time they hold a role. */

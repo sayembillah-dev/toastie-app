@@ -7,7 +7,7 @@ import Link from 'next/link';
 
 import { useGetCredentialShareQuery } from '@/store/api';
 
-import toastieLogo from '../../../assets/toastie.svg';
+import openfloorLogo from '../../../assets/openfloor.svg';
 
 interface PublicCredentialsPageProps {
   userId: string;
@@ -69,13 +69,13 @@ export function PublicCredentialsPage({ userId, token }: PublicCredentialsPagePr
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-md flex-col items-center justify-center gap-6 px-4 py-10">
-      <Image src={toastieLogo} alt="" aria-hidden className="h-8 w-auto" priority />
+      <Image src={openfloorLogo} alt="" aria-hidden className="h-8 w-auto" priority />
 
       <section className="w-full rounded-2xl border border-line bg-sidebar p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
         <h1 className="text-lg font-semibold text-ink">Welcome, {data.firstName}</h1>
         <p className="mt-1 text-sm text-ink-soft">
-          A Toastie account was created for you. Here are your login details — you&rsquo;ll be asked
-          to set your own password the first time you sign in.
+          An Openfloor account was created for you. Here are your login details — you&rsquo;ll be
+          asked to set your own password the first time you sign in.
         </p>
 
         <dl className="mt-4 flex flex-col gap-3">

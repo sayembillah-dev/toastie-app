@@ -4,7 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
-import toastieLogo from '../../../assets/toastie.svg';
+import openfloorLogo from '../../../assets/openfloor.svg';
 
 /** Full-bleed backdrop shared by every unauthenticated, credential-adjacent
  * screen (sign in, sign up, invite landing/accept) — a dawn-sky gradient
@@ -44,13 +44,13 @@ export function AuthShell({ children }: { children: ReactNode }) {
         className="absolute left-6 top-6 z-10 flex items-center gap-2 text-white sm:left-8 sm:top-8"
       >
         <Image
-          src={toastieLogo}
+          src={openfloorLogo}
           alt=""
           aria-hidden
           className="h-7 w-auto drop-shadow-sm"
           priority
         />
-        <span className="text-sm font-semibold tracking-wide">Toastie</span>
+        <span className="text-sm font-semibold tracking-wide">Openfloor</span>
       </Link>
 
       <div className="relative z-10 w-full max-w-sm">{children}</div>

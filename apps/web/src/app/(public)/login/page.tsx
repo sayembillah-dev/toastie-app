@@ -93,7 +93,7 @@ function LoginPageContent() {
         subtitle="Welcome back — enter your details to continue."
         footer={
           <>
-            New to Toastie? <Link href="/register">Create an account</Link>
+            New to Openfloor? <Link href="/register">Create an account</Link>
           </>
         }
       >

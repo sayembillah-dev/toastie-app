@@ -167,7 +167,7 @@ export function StartPathwayModal({ open, member, onClose }: StartPathwayModalPr
             <p className="mt-0.5 text-xs text-ink-soft">
               {isUpdate
                 ? `Change ${member.firstName}'s pathway, level, or current project. Past history stays put — progress continues from the project you select.`
-                : `Set ${member.firstName}'s learning path. Their history and progress on Toastie begin from the level of the project you select.`}
+                : `Set ${member.firstName}'s learning path. Their history and progress on Openfloor begin from the level of the project you select.`}
             </p>
           </div>
         </header>

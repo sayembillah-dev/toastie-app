@@ -14,7 +14,7 @@ export const Colors = {
     backgroundElement: '#F0F0F3',
     backgroundSelected: '#E0E1E6',
     textSecondary: '#60646C',
-    /** Toastie blue, taken from the splash screen background in app.json. */
+    /** Openfloor blue, taken from the splash screen background in app.json. */
     accent: '#208AEF',
     onAccent: '#ffffff',
     border: '#D9DBE0',

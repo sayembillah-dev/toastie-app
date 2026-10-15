@@ -1,4 +1,4 @@
-// Rasterizes assets/toastie.svg into the PNGs the web manifest and the
+// Rasterizes assets/openfloor.svg into the PNGs the web manifest and the
 // apple-icon file convention need. Re-run this whenever the logo changes —
 // `node scripts/generate-pwa-icons.mjs` from apps/web.
 import { mkdir } from 'node:fs/promises';
@@ -9,7 +9,7 @@ import sharp from 'sharp';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
-const logo = path.join(root, 'assets', 'toastie.svg');
+const logo = path.join(root, 'assets', 'openfloor.svg');
 
 // Matches the antd `ConfigProvider` background token (`colorBgLayout`) in
 // antd-provider.tsx / `--color-sidebar` in globals.css, so the padded icon

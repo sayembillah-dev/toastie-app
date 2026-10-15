@@ -56,7 +56,7 @@ export function SuperAdminWhatsappScreen() {
         <header className="flex flex-col gap-1">
           <h1 className="text-lg font-semibold text-ink">WhatsApp</h1>
           <p className="text-sm text-ink-soft">
-            The number Toastie sends WhatsApp messages from. Link a dedicated number — never a
+            The number Openfloor sends WhatsApp messages from. Link a dedicated number — never a
             personal one — by scanning the QR code from that phone.
           </p>
         </header>
@@ -110,7 +110,7 @@ function StatusPanel({ status, onRetry }: { status: WhatsappStatus; onRetry: () 
     modal.confirm({
       title: 'Disconnect WhatsApp?',
       content:
-        'Toastie stops sending WhatsApp messages until a number is linked again, which means scanning a new QR code.',
+        'Openfloor stops sending WhatsApp messages until a number is linked again, which means scanning a new QR code.',
       okText: 'Disconnect',
       okButtonProps: { danger: true },
       onOk: () => runDisconnect('WhatsApp disconnected'),
@@ -226,7 +226,7 @@ function StatusPanel({ status, onRetry }: { status: WhatsappStatus; onRetry: () 
 function TestMessageCard() {
   const { message } = App.useApp();
   const [phone, setPhone] = useState('');
-  const [text, setText] = useState('Test message from Toastie ✅');
+  const [text, setText] = useState('Test message from Openfloor ✅');
   const [send, sendMut] = useSendWhatsappTestMessageMutation();
 
   async function handleSend() {

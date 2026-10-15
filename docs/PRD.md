@@ -5,13 +5,13 @@ Owner: project maintainer.
 
 ## 1. Summary
 
-Toastie is a club management platform for Toastmasters International clubs. It
+Openfloor is a club management platform for Toastmasters International clubs. It
 replaces the mix of spreadsheets, printed agendas, and messaging threads that
 clubs typically use to run meetings, track member progress through the
 Pathways education program, manage a guest pipeline, and handle club
 administration and finances.
 
-The product ships to end users under the name **Toastie**. Internally, the
+The product ships to end users under the name **Openfloor**. Internally, the
 codebase, npm packages, and server processes use the `toastly` name; this is a
 historical artifact of a rebrand and has no product meaning.
 
@@ -26,7 +26,7 @@ scheduling apps, Toastmasters' own Base Camp) address only part of this, and
 none of them model the club-to-district hierarchy or the officer role
 structure that governs who should be allowed to see or change what.
 
-Toastie exists to give a club officer team, and the district structure above
+Openfloor exists to give a club officer team, and the district structure above
 it, one system that models the actual organization: a club has members with
 roles, a term of meetings, a guest funnel, and a budget, and it sits under an
 Area, a Division, and a District.
@@ -69,7 +69,7 @@ Area, a Division, and a District.
 
 ## 5. Non-goals
 
-- Toastie does not aim to replace Toastmasters International's own
+- Openfloor does not aim to replace Toastmasters International's own
   membership and dues system (Base Camp / WHQ). It is a club-operations
   layer, not a membership-of-record system.
 - No payment processing. Dues and transactions are recorded for tracking,
@@ -191,6 +191,6 @@ hand a new officer their first login credentials through a shareable link.
   current stub seam, and for what workloads.
 - How far offline support should go, given the current design intentionally
   stops short of full offline operation.
-- Whether Toastie should ever integrate directly with Toastmasters
+- Whether Openfloor should ever integrate directly with Toastmasters
   International's own systems (Base Camp) rather than duplicating Pathway
   and history data by hand entry.

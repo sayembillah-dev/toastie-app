@@ -22,7 +22,7 @@ import {
 } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
-import toastieLogo from '../../../assets/toastie.svg';
+import openfloorLogo from '../../../assets/openfloor.svg';
 
 /** Landing screen for a signed-in user with no memberships and no org
  * assignments — the state a freshly-registered account is in before their
@@ -39,11 +39,11 @@ export function OnboardingScreen() {
       <SignOutButton />
       <div className="w-full max-w-xl rounded-3xl border border-line bg-canvas p-10 shadow-[0_20px_50px_-24px_rgba(28,28,28,0.16)] sm:p-12">
         <div className="mb-8 flex items-center gap-2.5">
-          <Image src={toastieLogo} alt="" aria-hidden className="h-9 w-auto" priority />
-          <span className="text-base font-semibold text-ink">Toastie</span>
+          <Image src={openfloorLogo} alt="" aria-hidden className="h-9 w-auto" priority />
+          <span className="text-base font-semibold text-ink">Openfloor</span>
         </div>
 
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">Welcome to Toastie.</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-ink">Welcome to Openfloor.</h1>
         <p className="mt-2.5 max-w-md text-[15px] leading-relaxed text-ink-soft">
           You&rsquo;re signed in but not yet part of a club. Choose how you&rsquo;d like to get
           started.
@@ -106,7 +106,7 @@ function BrowseClubsAction() {
         <span className="flex min-w-0 flex-1 flex-col gap-0.5 pt-0.5">
           <span className="text-[15px] font-medium text-ink">Browse clubs</span>
           <span className="text-sm text-ink-muted">
-            See every club on Toastie and what they&rsquo;re about.
+            See every club on Openfloor and what they&rsquo;re about.
           </span>
         </span>
         <CaretRight

@@ -48,7 +48,7 @@ import {
   unitKeyForContext,
 } from '@/store/ui-slice';
 
-import toastieLogo from '../../assets/toastie.svg';
+import openfloorLogo from '../../assets/openfloor.svg';
 import { UnitSwitcher } from './unit-switcher';
 
 /* Only Sider comes from antd — the header and content live inside the content
@@ -318,8 +318,14 @@ function SidebarBody({
           <>
             {/* The mark carries its own colour, so it sits bare rather than in
              * a tinted chip. 32px keeps its optical weight on the row. */}
-            <Image src={toastieLogo} alt="" aria-hidden className="h-8 w-auto shrink-0" priority />
-            <span className="truncate text-base font-semibold text-ink">Toastie</span>
+            <Image
+              src={openfloorLogo}
+              alt=""
+              aria-hidden
+              className="h-8 w-auto shrink-0"
+              priority
+            />
+            <span className="truncate text-base font-semibold text-ink">Openfloor</span>
           </>
         )}
         <span className={collapsed ? '' : 'ml-auto'}>{brandAction}</span>

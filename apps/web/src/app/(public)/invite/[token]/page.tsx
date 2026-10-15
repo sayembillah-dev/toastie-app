@@ -10,7 +10,7 @@ interface InvitePreviewMeta {
 
 type InvitePageProps = { params: Promise<{ token: string }> };
 
-const FALLBACK_TITLE = "You're invited to Toastie";
+const FALLBACK_TITLE = "You're invited to Openfloor";
 const FALLBACK_DESCRIPTION = 'Open this link to accept your Toastmasters club invite.';
 
 /** Per-invite `<head>` tags so the link preview shown by iMessage, WhatsApp,
@@ -23,10 +23,10 @@ export async function generateMetadata({ params }: InvitePageProps): Promise<Met
   const preview = await apiFetch<InvitePreviewMeta>(`/public/invites/${token}`).catch(() => null);
 
   const title =
-    preview && preview.state === 'valid' ? `Join ${preview.clubName} on Toastie` : FALLBACK_TITLE;
+    preview && preview.state === 'valid' ? `Join ${preview.clubName} on Openfloor` : FALLBACK_TITLE;
   const description =
     preview && preview.state === 'valid'
-      ? `You've been invited to join ${preview.clubName} on Toastie. Tap to accept.`
+      ? `You've been invited to join ${preview.clubName} on Openfloor. Tap to accept.`
       : FALLBACK_DESCRIPTION;
 
   return {

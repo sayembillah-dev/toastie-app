@@ -36,8 +36,8 @@ const rawApiUrl = process.env.EXPO_PUBLIC_API_URL;
  * removes the whole class of report.
  *
  * `/api$` is anchored, so a host legitimately ending in `/apiary` is untouched,
- * and a deployment under a sub-path (`https://host/toastie/api`) correctly
- * reduces to `https://host/toastie` before the prefix goes back on.
+ * and a deployment under a sub-path (`https://host/openfloor/api`) correctly
+ * reduces to `https://host/openfloor` before the prefix goes back on.
  */
 export function normalizeOrigin(value: string | undefined): string | null {
   const trimmed = value?.trim();

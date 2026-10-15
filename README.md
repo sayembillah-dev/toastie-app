@@ -1,11 +1,11 @@
-# Toastie
+# Openfloor
 
-Club management for Toastmasters clubs. Toastie covers the full operating surface of a
+Club management for Toastmasters clubs. Openfloor covers the full operating surface of a
 club: meeting agendas and role assignments, member education and Pathways progress,
 guest pipelines, finance, inventory, tasks, and the district hierarchy that sits above
 it all.
 
-The product ships to users as **Toastie**. Internally the workspace and its packages use
+The product ships to users as **Openfloor**. Internally the workspace and its packages use
 the `@toastly/*` namespace, and the PM2 processes on the server are named `toastly-api`
 and `toastly-web`.
 

@@ -90,7 +90,7 @@ function describe(error: unknown): { title: string; hint: string; retryable: boo
 
   return {
     title: "Can't reach the server",
-    hint: 'Check your connection and try again. Toastie needs a network connection for everything but the offline screen.',
+    hint: 'Check your connection and try again. Openfloor needs a network connection for everything but the offline screen.',
     retryable: true,
   };
 }

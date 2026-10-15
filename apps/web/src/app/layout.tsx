@@ -11,26 +11,26 @@ import './print.css';
 
 // Falls back to prod so a build without `SITE_URL` set still produces
 // absolute og:image/canonical URLs instead of broken relative ones.
-const SITE_URL = process.env.SITE_URL ?? 'https://toastie.niftyitsolution.com';
+const SITE_URL = process.env.SITE_URL ?? 'https://openfloor.club';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: 'Toastie',
+  title: 'Openfloor',
   description: 'Club management for Toastmasters clubs — meetings, education, and members.',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Toastie',
+    title: 'Openfloor',
   },
   openGraph: {
-    title: 'Toastie',
+    title: 'Openfloor',
     description: 'Club management for Toastmasters clubs — meetings, education, and members.',
-    siteName: 'Toastie',
+    siteName: 'Openfloor',
     type: 'website',
   },
   twitter: {
     card: 'summary',
-    title: 'Toastie',
+    title: 'Openfloor',
     description: 'Club management for Toastmasters clubs — meetings, education, and members.',
   },
 };

@@ -18,8 +18,8 @@ import Link from 'next/link';
 const CONTACT_EMAIL = 'apps@niftyitsolution.com';
 
 export const metadata: Metadata = {
-  title: 'Delete your Toastie account',
-  description: 'How to delete your Toastie account and what happens to your data when you do.',
+  title: 'Delete your Openfloor account',
+  description: 'How to delete your Openfloor account and what happens to your data when you do.',
 };
 
 const DELETED = [
@@ -43,18 +43,18 @@ export default function AccountDeletionPage() {
     <article className="space-y-10">
       <header className="space-y-3">
         <h1 className="text-3xl font-semibold tracking-tight text-[#0b2a4c]">
-          Delete your Toastie account
+          Delete your Openfloor account
         </h1>
         <p className="text-black/70">
-          You can delete your Toastie account at any time. This page explains how, and exactly what
-          is removed and what your club keeps.
+          You can delete your Openfloor account at any time. This page explains how, and exactly
+          what is removed and what your club keeps.
         </p>
       </header>
 
       <section className="space-y-4">
         <h2 className="text-xl font-semibold text-[#0b2a4c]">In the app</h2>
         <ol className="list-decimal space-y-2 pl-5 text-black/80">
-          <li>Open Toastie and sign in.</li>
+          <li>Open Openfloor and sign in.</li>
           <li>
             Go to <strong>Profile</strong>.
           </li>
@@ -102,9 +102,9 @@ export default function AccountDeletionPage() {
       <section className="space-y-4">
         <h2 className="text-xl font-semibold text-[#0b2a4c]">What your club keeps</h2>
         <p className="text-black/80">
-          Toastie is a shared record for a club, not only a personal account. Your club’s minutes of
-          what happened at its meetings remain the club’s records, so the following stay after your
-          account is gone:
+          Openfloor is a shared record for a club, not only a personal account. Your club’s minutes
+          of what happened at its meetings remain the club’s records, so the following stay after
+          your account is gone:
         </p>
         <ul className="list-disc space-y-2 pl-5 text-black/80">
           {RETAINED.map((item) => (

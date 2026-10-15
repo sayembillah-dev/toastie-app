@@ -158,7 +158,7 @@ async function connect(): Promise<void> {
       version,
       auth,
       logger: baileysLogger(),
-      browser: Browsers.ubuntu('Toastie'),
+      browser: Browsers.ubuntu('Openfloor'),
       // Leave the phone's own notifications working, and skip the full chat
       // history — this number only ever sends. The default (recent) sync
       // stays on: Baileys needs it for phone-number ↔ LID mappings, and warns

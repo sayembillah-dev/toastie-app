@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Toastie',
-    short_name: 'Toastie',
+    name: 'Openfloor',
+    short_name: 'Openfloor',
     description: 'Club management for Toastmasters clubs — meetings, education, and members.',
     start_url: '/',
     display: 'standalone',

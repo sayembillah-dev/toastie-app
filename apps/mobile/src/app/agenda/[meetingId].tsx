@@ -32,7 +32,7 @@ export default function PublicAgendaScreen() {
         <ScrollView contentContainerStyle={styles.scroll}>
           <AgendaView meeting={meeting} />
           <ThemedText type="small" themeColor="textSecondary" style={styles.footer}>
-            Shared from Toastie. You do not need an account to view this agenda.
+            Shared from Openfloor. You do not need an account to view this agenda.
           </ThemedText>
         </ScrollView>
       </SafeAreaView>

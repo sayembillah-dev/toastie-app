@@ -1,6 +1,6 @@
 # Documentation index
 
-This folder holds the project documentation for Toastie: what it is, how it
+This folder holds the project documentation for Openfloor: what it is, how it
 is built, its data model, and where it is headed. These documents were
 reconstructed from the shipped codebase and git history on 2026-08-31, since
 the project did not have them written up front. Keep them updated as the

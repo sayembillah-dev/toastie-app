@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Toastie",
+    "name": "Openfloor",
     "slug": "Toastie",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "toastie",
+    "scheme": "openfloor",
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.toastie.app"

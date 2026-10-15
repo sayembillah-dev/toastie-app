@@ -38,7 +38,7 @@ export default function DashboardScreen() {
         >
           <View style={styles.header}>
             <ThemedText type="small" themeColor="textSecondary">
-              {clubName ?? 'Toastie'}
+              {clubName ?? 'Openfloor'}
             </ThemedText>
             <ThemedText type="subtitle">
               {session ? `Hello, ${session.user.firstName}` : 'Hello'}

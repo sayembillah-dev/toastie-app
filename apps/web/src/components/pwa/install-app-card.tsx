@@ -19,7 +19,7 @@ interface InstallAppCardProps {
   myRole: string | null;
 }
 
-/** Invites the member to install Toastie to their home screen. Chrome's own
+/** Invites the member to install Openfloor to their home screen. Chrome's own
  * mini-infobar is suppressed (see `INSTALL_CAPTURE_SCRIPT`), so this is the
  * install offer on Android/desktop; on iOS, which has no prompt API, it
  * shows the Share → Add to Home Screen steps instead. Renders nothing once
@@ -66,8 +66,8 @@ export function InstallAppCard({ myRole }: InstallAppCardProps) {
           <div>
             <p className="text-sm font-medium text-ink">
               {state === 'prompt'
-                ? 'Install Toastie on this device'
-                : 'Add Toastie to your Home Screen'}
+                ? 'Install Openfloor on this device'
+                : 'Add Openfloor to your Home Screen'}
             </p>
             <p className="mt-0.5 text-xs text-ink-soft">{pitch}</p>
             {state === 'ios' ? (
