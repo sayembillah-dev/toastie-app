@@ -124,6 +124,158 @@ class _PersonPickerState extends ConsumerState<_PersonPicker> {
   }
 }
 
+/// Multi-select version of [pickPerson]: tick any number of members and
+/// guests (or add typed names), then Done returns them all at once. People
+/// already on the list are passed as [exclude] and left out. Returns null
+/// when dismissed, an empty list never.
+Future<List<PersonPick>?> pickPeople(
+  BuildContext context, {
+  required String title,
+  List<PersonPick> exclude = const [],
+}) {
+  return showModalBottomSheet<List<PersonPick>>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    builder: (ctx) => Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+      child: _PeoplePicker(title: title, exclude: exclude),
+    ),
+  );
+}
+
+class _PeoplePicker extends ConsumerStatefulWidget {
+  const _PeoplePicker({required this.title, required this.exclude});
+  final String title;
+  final List<PersonPick> exclude;
+  @override
+  ConsumerState<_PeoplePicker> createState() => _PeoplePickerState();
+}
+
+class _PeoplePickerState extends ConsumerState<_PeoplePicker> {
+  final _q = TextEditingController();
+
+  /// Picks in the order they were ticked, keyed so a re-tap unticks.
+  final _picked = <String, PersonPick>{};
+
+  @override
+  void dispose() {
+    _q.dispose();
+    super.dispose();
+  }
+
+  static String _key(PersonPick p) => p.memberId != null
+      ? 'm:${p.memberId}'
+      : p.guestId != null
+          ? 'g:${p.guestId}'
+          : 'n:${p.name.trim().toLowerCase()}';
+
+  bool _excluded(PersonPick p) => widget.exclude.any((x) =>
+      (p.memberId != null && x.memberId == p.memberId) ||
+      (p.guestId != null && x.guestId == p.guestId) ||
+      x.name.trim().toLowerCase() == p.name.trim().toLowerCase());
+
+  void _toggle(PersonPick p) => setState(() {
+        final k = _key(p);
+        if (_picked.remove(k) == null) _picked[k] = p;
+      });
+
+  void _addTyped(String typed) {
+    final p = PersonPick(name: typed);
+    if (_excluded(p)) return;
+    setState(() {
+      _picked[_key(p)] = p;
+      _q.clear();
+    });
+  }
+
+  Widget _tile(PersonPick p, {String? label, String? avatarUrl}) {
+    final on = _picked.containsKey(_key(p));
+    return RowTile(
+      dense: true,
+      leading: Avatar(name: p.name, url: avatarUrl, size: 32),
+      title: label ?? p.name,
+      trailing: Checkbox(value: on, onChanged: (_) => _toggle(p)),
+      onTap: () => _toggle(p),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColors.of(context);
+    final people = ref.watch(peopleProvider).value;
+    final q = _q.text.trim().toLowerCase();
+    final typed = _q.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+    final members = (people?.members ?? const [])
+        .where((m) => m.isActive && (q.isEmpty || m.name.toLowerCase().contains(q)))
+        .map((m) => (pick: PersonPick(name: m.name, memberId: m.id), url: m.avatarUrl))
+        .where((e) => !_excluded(e.pick))
+        .take(50)
+        .toList();
+    final guests = (people?.guests ?? const [])
+        .where((g) => q.isNotEmpty && g.name.toLowerCase().contains(q))
+        .map((g) => PersonPick(name: g.name, guestId: g.id))
+        .where((p) => !_excluded(p))
+        .take(15)
+        .toList();
+    final typedPicks = _picked.values.where((p) => p.memberId == null && p.guestId == null).toList();
+    final canAddTyped = typed.isNotEmpty &&
+        !_excluded(PersonPick(name: typed)) &&
+        !_picked.containsKey(_key(PersonPick(name: typed))) &&
+        !members.any((e) => e.pick.name.toLowerCase() == typed.toLowerCase());
+    final count = _picked.length;
+
+    return SizedBox(
+      height: MediaQuery.of(context).size.height * 0.8,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+          child: Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: TextField(
+            controller: _q,
+            textCapitalization: TextCapitalization.words,
+            onChanged: (_) => setState(() {}),
+            onSubmitted: (_) {
+              if (canAddTyped) _addTyped(typed);
+            },
+            decoration: const InputDecoration(
+              hintText: 'Search or type a name…',
+              prefixIcon: Icon(PhosphorIconsRegular.magnifyingGlass, size: 20),
+            ),
+          ),
+        ),
+        Expanded(
+          child: ListView(children: [
+            if (canAddTyped)
+              RowTile(
+                leading: Icon(PhosphorIconsRegular.plusCircle, color: c.ink),
+                title: 'Add “$typed”',
+                subtitle: 'Not in the roster? Use the name as typed.',
+                onTap: () => _addTyped(typed),
+              ),
+            for (final p in typedPicks) _tile(p),
+            for (final e in members) _tile(e.pick, avatarUrl: e.url),
+            for (final g in guests) _tile(g, label: '${g.name} (Guest)'),
+          ]),
+        ),
+        SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: FilledButton(
+              onPressed: count == 0 ? null : () => Navigator.pop(context, _picked.values.toList()),
+              child: Text(count == 0 ? 'Select people' : 'Done · add $count'),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
 /// Loads the agenda sources (speakers, evaluators, GE, TTE) for "Take from agenda".
 Future<List<AgendaSource>> loadAgendaSources(WidgetRef ref, String meetingId) async {
   final speakers = await ref.read(speakersProvider(meetingId).future);

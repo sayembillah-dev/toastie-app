@@ -648,36 +648,39 @@ class _CategoryEditor extends ConsumerStatefulWidget {
 class _CategoryEditorState extends ConsumerState<_CategoryEditor> {
   bool _saving = false;
 
-  Future<void> _save(List<VoteCandidate> next) async {
-    if (_saving) return;
+  /// True when the list was saved.
+  Future<bool> _save(List<VoteCandidate> next) async {
+    if (_saving) return false;
     setState(() => _saving = true);
     try {
       await ref.read(apiProvider).setVoteCandidates(widget.meetingId, widget.categoryKey, next);
       ref.invalidate(voteSetupProvider(widget.meetingId));
       ref.invalidate(voteResultsProvider(widget.meetingId));
       await ref.read(voteSetupProvider(widget.meetingId).future);
+      return true;
     } catch (e) {
       if (mounted) showToast(context, errorText(e), error: true);
+      return false;
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
+  /// Pick several people at once; Done saves them all in one call.
   Future<void> _add(VoteCategory cat) async {
-    final p = await pickPerson(context, title: 'Add to ${cat.label}');
-    if (p == null) return;
-    final taken = cat.candidates.any((x) =>
-        (p.memberId != null && x.membershipId == p.memberId) ||
-        (p.guestId != null && x.guestId == p.guestId) ||
-        x.name.trim().toLowerCase() == p.name.trim().toLowerCase());
-    if (taken) {
-      if (mounted) showToast(context, '${p.name} is already on this award');
-      return;
-    }
-    await _save([
+    final picks = await pickPeople(
+      context,
+      title: 'Add to ${cat.label}',
+      exclude: [
+        for (final x in cat.candidates) PersonPick(name: x.name, memberId: x.membershipId, guestId: x.guestId),
+      ],
+    );
+    if (picks == null || picks.isEmpty) return;
+    final saved = await _save([
       ...cat.candidates,
-      VoteCandidate(id: '', name: p.name, membershipId: p.memberId, guestId: p.guestId),
+      for (final p in picks) VoteCandidate(id: '', name: p.name, membershipId: p.memberId, guestId: p.guestId),
     ]);
+    if (saved && mounted) showToast(context, picks.length == 1 ? 'Added ${picks.first.name}' : 'Added ${picks.length} people');
   }
 
   @override

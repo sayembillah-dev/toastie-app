@@ -159,21 +159,24 @@ interface AddCandidateSelectProps {
   existing: VoteCandidate[];
   members: Member[];
   guests: Guest[];
-  onAdd: (candidate: { name: string; membershipId?: string; guestId?: string }) => void;
+  saving: boolean;
+  /** Called once with everyone picked — one save for the whole batch. */
+  onAdd: (candidates: CandidateInput[]) => void;
 }
 
-/** One control for both cases: pick a roster member / pipeline guest, or
- * type a name that isn't in either and add it free-form (a walk-in the
- * check-in never captured). Custom entries surface as an `Add "<name>"`
- * option once the search text matches nothing exactly. */
-function AddCandidateSelect({ existing, members, guests, onAdd }: AddCandidateSelectProps) {
+/** Pick several people, then Done adds them all in one save. Covers roster
+ * members, pipeline guests, and typed names that are in neither (a walk-in
+ * the check-in never captured) — a custom entry surfaces as `Add "<name>"`
+ * once the search text matches nothing exactly. */
+function AddCandidateSelect({ existing, members, guests, saving, onAdd }: AddCandidateSelectProps) {
   const [search, setSearch] = useState('');
-
-  const takenMembers = new Set(existing.map((c) => c.membershipId).filter(Boolean));
-  const takenGuests = new Set(existing.map((c) => c.guestId).filter(Boolean));
-  const takenNames = new Set(existing.map((c) => c.name.trim().toLowerCase()));
+  const [picked, setPicked] = useState<string[]>([]);
 
   const options = useMemo(() => {
+    const takenMembers = new Set(existing.map((c) => c.membershipId).filter(Boolean));
+    const takenGuests = new Set(existing.map((c) => c.guestId).filter(Boolean));
+    const takenNames = new Set(existing.map((c) => c.name.trim().toLowerCase()));
+
     const list: { value: string; label: string }[] = [];
     for (const member of members) {
       if (takenMembers.has(member.id)) continue;
@@ -183,45 +186,68 @@ function AddCandidateSelect({ existing, members, guests, onAdd }: AddCandidateSe
       if (takenGuests.has(guest.id)) continue;
       list.push({ value: `g:${guest.id}`, label: `${getGuestFullName(guest)} (Guest)` });
     }
+    /* Typed names already picked stay as options so their tags keep a label. */
+    for (const value of picked) {
+      if (value.startsWith('n:')) list.push({ value, label: value.slice(2) });
+    }
     const typed = search.trim().replace(/\s+/g, ' ');
-    if (typed && !takenNames.has(typed.toLowerCase())) {
-      const exact = list.some((option) => option.label.toLowerCase() === typed.toLowerCase());
+    const lower = typed.toLowerCase();
+    if (typed && !takenNames.has(lower)) {
+      const exact = list.some(
+        (option) => option.label.toLowerCase() === lower || option.value === `n:${typed}`,
+      );
       if (!exact) list.push({ value: `n:${typed}`, label: `Add "${typed}"` });
     }
     return list;
-    /* takenMembers/takenGuests/takenNames are rebuilt per render but stable
-     * in content for a given `existing`; eslint's exhaustive-deps accepts
-     * them through `existing`. */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [existing, members, guests, search]);
+  }, [existing, members, guests, picked, search]);
+
+  function toCandidate(value: string): CandidateInput | null {
+    if (value.startsWith('m:')) {
+      const member = members.find((entry) => entry.id === value.slice(2));
+      return member
+        ? { name: `${member.firstName} ${member.lastName}`, membershipId: member.id }
+        : null;
+    }
+    if (value.startsWith('g:')) {
+      const guest = guests.find((entry) => entry.id === value.slice(2));
+      return guest ? { name: getGuestFullName(guest), guestId: guest.id } : null;
+    }
+    return value.startsWith('n:') ? { name: value.slice(2) } : null;
+  }
+
+  function handleDone() {
+    const candidates = picked.map(toCandidate).filter((c): c is CandidateInput => c !== null);
+    if (candidates.length === 0) return;
+    onAdd(candidates);
+    setPicked([]);
+    setSearch('');
+  }
 
   return (
-    <Select
-      className="w-full"
-      size="middle"
-      showSearch
-      value={null}
-      searchValue={search}
-      onSearch={setSearch}
-      onChange={(value: string) => {
-        setSearch('');
-        if (value.startsWith('m:')) {
-          const member = members.find((entry) => entry.id === value.slice(2));
-          if (member) {
-            onAdd({ name: `${member.firstName} ${member.lastName}`, membershipId: member.id });
-          }
-        } else if (value.startsWith('g:')) {
-          const guest = guests.find((entry) => entry.id === value.slice(2));
-          if (guest) onAdd({ name: getGuestFullName(guest), guestId: guest.id });
-        } else if (value.startsWith('n:')) {
-          onAdd({ name: value.slice(2) });
-        }
-      }}
-      options={options}
-      placeholder="Add a person…"
-      suffixIcon={<Plus size={14} className="text-ink-muted" />}
-      aria-label="Add a candidate"
-    />
+    <div className="flex items-start gap-2">
+      <Select
+        className="min-w-0 flex-1"
+        size="middle"
+        mode="multiple"
+        showSearch
+        value={picked}
+        searchValue={search}
+        onSearch={setSearch}
+        onChange={(values: string[]) => {
+          setPicked(values);
+          setSearch('');
+        }}
+        optionFilterProp="label"
+        options={options}
+        placeholder="Add people…"
+        suffixIcon={<Plus size={14} className="text-ink-muted" />}
+        aria-label="Add candidates"
+        disabled={saving}
+      />
+      <Button type="primary" onClick={handleDone} disabled={picked.length === 0} loading={saving}>
+        {picked.length > 1 ? `Add ${picked.length}` : 'Done'}
+      </Button>
+    </div>
   );
 }
 
@@ -260,8 +286,8 @@ function CategorySetupCard({ category, members, guests, saving, onSave }: Catego
     );
   }
 
-  function handleAdd(candidate: CandidateInput) {
-    onSave(category.key, [...current(), candidate]);
+  function handleAdd(candidates: CandidateInput[]) {
+    onSave(category.key, [...current(), ...candidates]);
   }
 
   return (
@@ -303,6 +329,7 @@ function CategorySetupCard({ category, members, guests, saving, onSave }: Catego
             existing={category.candidates}
             members={members}
             guests={guests}
+            saving={saving}
             onAdd={handleAdd}
           />
         </div>
