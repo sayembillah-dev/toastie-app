@@ -42,27 +42,3 @@ openfloor.club {
                 }
         }
 }
-
-# Old domain from before the Openfloor rebrand. Mobile builds already on
-# people's phones have this host baked in as their API URL, so /api keeps
-# proxying straight through (a redirect would break their requests). Every
-# web page redirects permanently to the same path on the new domain, which
-# keeps old invite and agenda links working.
-toastie.niftyitsolution.com {
-        encode zstd gzip
-
-        request_body {
-                max_size 25MB
-        }
-
-        @api path /api/*
-        handle @api {
-                reverse_proxy 127.0.0.1:4000 {
-                        header_up X-Real-IP {http.request.remote.host}
-                }
-        }
-
-        handle {
-                redir https://openfloor.club{uri} permanent
-        }
-}
