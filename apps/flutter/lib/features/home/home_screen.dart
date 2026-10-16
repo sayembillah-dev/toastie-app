@@ -130,6 +130,7 @@ class _NextMeetingHero extends ConsumerWidget {
     final t = Theme.of(context).textTheme;
     final now = ref.watch(nowProvider).value ?? DateTime.now().toUtc();
     final hasRole = mine.isNotEmpty;
+    final step = myNextStep(mine);
     final live = meeting.isLive(now);
     final diff = meeting.dateTime.difference(now);
 
@@ -174,16 +175,8 @@ class _NextMeetingHero extends ConsumerWidget {
                   if (hasRole) ...[
                     const SizedBox(height: 14),
                     Wrap(spacing: 8, runSpacing: 8, children: [
-                      for (final r in mine.take(2))
-                        _RoleChip(
-                          label: 'You’re ${r.label}',
-                          onTap: () => context.push(
-                            r.toolRoute == null
-                                ? '/meetings/${meeting.id}'
-                                : '/meetings/${meeting.id}/${r.toolRoute}',
-                          ),
-                        ),
-                      if (mine.length > 2) _RoleChip(label: '+${mine.length - 2}', onTap: null),
+                      for (final r in mine.take(2)) _RoleChip(label: 'You’re ${r.label}'),
+                      if (mine.length > 2) _RoleChip(label: '+${mine.length - 2}'),
                     ]),
                   ],
                   const SizedBox(height: 16),
@@ -194,10 +187,10 @@ class _NextMeetingHero extends ConsumerWidget {
                   const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      style: TextButton.styleFrom(foregroundColor: Colors.white),
-                      onPressed: () => context.push('/meetings/${meeting.id}/agenda'),
-                      icon: const Text('View agenda'),
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: c.ink),
+                      onPressed: () => context.push('/meetings/${meeting.id}/${step.route}'),
+                      icon: Text(step.label),
                       label: const Icon(PhosphorIconsRegular.arrowRight, size: 16),
                     ),
                   ),
@@ -218,27 +211,24 @@ class _NextMeetingHero extends ConsumerWidget {
 }
 
 class _RoleChip extends StatelessWidget {
-  const _RoleChip({required this.label, this.onTap});
+  const _RoleChip({required this.label});
   final String label;
-  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final c = AppColors.of(context);
-    return Material(
-      color: c.mintSoft,
-      shape: StadiumBorder(side: BorderSide(color: c.mint.withValues(alpha: 0.6))),
-      child: InkWell(
-        customBorder: const StadiumBorder(),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(PhosphorIconsRegular.microphoneStage, size: 16, color: c.mint),
-            const SizedBox(width: 6),
-            Text(label, style: TextStyle(color: c.mint, fontWeight: FontWeight.w600, fontSize: 14)),
-          ]),
-        ),
+    return DecoratedBox(
+      decoration: ShapeDecoration(
+        color: c.mintSoft,
+        shape: StadiumBorder(side: BorderSide(color: c.mint.withValues(alpha: 0.6))),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(PhosphorIconsRegular.microphoneStage, size: 16, color: c.mint),
+          const SizedBox(width: 6),
+          Text(label, style: TextStyle(color: c.mint, fontWeight: FontWeight.w600, fontSize: 14)),
+        ]),
       ),
     );
   }

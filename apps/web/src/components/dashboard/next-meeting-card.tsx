@@ -4,6 +4,7 @@ import { ArrowRight, CalendarBlank, Clock, MicrophoneStage } from '@phosphor-ico
 import Link from 'next/link';
 
 import type { Meeting } from '@/lib/meetings/meetings';
+import type { MyNextStep } from '@/lib/meetings/my-next-step';
 import { dhakaFormat } from '@/lib/time';
 
 import { useCountdown } from './use-countdown';
@@ -38,12 +39,15 @@ interface NextMeetingCardProps {
   /** The label of whichever role this member holds at the meeting, e.g.
    * "Table Topics Master" — `null` when unassigned. */
   myRole: string | null;
+  /** The member's own next action — the hero's only button. Null while the
+   * meeting's roles are still loading. */
+  nextStep: MyNextStep | null;
 }
 
 /** The dashboard's hero: which meeting is coming up, how long until it
  * starts, and — the one thing every member actually wants to know at a
  * glance — whether they're on the agenda and in what capacity. */
-export function NextMeetingCard({ meeting, myRole }: NextMeetingCardProps) {
+export function NextMeetingCard({ meeting, myRole, nextStep }: NextMeetingCardProps) {
   /* Called unconditionally — hooks can't follow the early return below — with
    * a stable placeholder target when there's no meeting to count down to. */
   const countdown = useCountdown(meeting?.dateTime ?? '2100-01-01T00:00:00Z');
@@ -124,13 +128,15 @@ export function NextMeetingCard({ meeting, myRole }: NextMeetingCardProps) {
           </div>
         )}
 
-        <Link
-          href={`/meetings/${meeting.id}`}
-          className="ml-auto inline-flex items-center gap-1.5 rounded-lg text-white px-3.5 py-2 text-sm font-medium no-underline transition-colors hover:bg-white/15"
-        >
-          View agenda
-          <ArrowRight size={14} weight="bold" />
-        </Link>
+        {nextStep ? (
+          <Link
+            href={`/meetings/${meeting.id}?tab=${nextStep.tab}`}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-white px-3.5 py-2 text-sm font-semibold text-slate-900 no-underline transition-colors hover:bg-slate-100"
+          >
+            {nextStep.label}
+            <ArrowRight size={14} weight="bold" />
+          </Link>
+        ) : null}
       </div>
     </section>
   );

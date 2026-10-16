@@ -12,6 +12,7 @@ import { computeEngagement, countActive } from '@/lib/education/engagement';
 import type { HistoryEvent } from '@/lib/education/history';
 import { useCurrentMemberId } from '@/lib/me/current-member';
 import { partitionMeetings } from '@/lib/meetings/meetings';
+import { myNextStep } from '@/lib/meetings/my-next-step';
 import { buildRoles } from '@/lib/meetings/roles';
 import {
   useGetActivityLogsQuery,
@@ -25,6 +26,7 @@ import {
   useGetMemberStatsQuery,
   useGetMembersQuery,
   useGetMemberTimerEntriesQuery,
+  useGetPreparedSpeakersQuery,
 } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 import { useAppSelector } from '@/store/hooks';
@@ -90,6 +92,7 @@ function DashboardContent({ memberId }: { memberId: string }) {
   const now = new Date();
   const nextMeeting = meetings ? partitionMeetings(meetings, now.getTime()).current : null;
   const { data: nextMeetingRoles } = useGetMeetingRolesQuery(nextMeeting?.id ?? skipToken);
+  const { data: nextMeetingSpeakers } = useGetPreparedSpeakersQuery(nextMeeting?.id ?? skipToken);
 
   if (!member || !stats || !history || !meetings || !members) return <DashboardSkeleton />;
 
@@ -122,6 +125,15 @@ function DashboardContent({ memberId }: { memberId: string }) {
         })()
       : null;
 
+  const nextStep = nextMeeting
+    ? myNextStep(
+        memberId,
+        buildRoles(nextMeeting),
+        nextMeetingRoles ?? [],
+        nextMeetingSpeakers ?? [],
+      )
+    : null;
+
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <GreetingHeader
@@ -130,7 +142,7 @@ function DashboardContent({ memberId }: { memberId: string }) {
         now={now}
       />
 
-      <NextMeetingCard meeting={nextMeeting} myRole={myRole} />
+      <NextMeetingCard meeting={nextMeeting} myRole={myRole} nextStep={nextStep} />
 
       <InstallAppCard myRole={myRole} />
 
