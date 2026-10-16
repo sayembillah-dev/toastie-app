@@ -402,7 +402,7 @@ Welcome screen with two options:
   and go to Sign in.
 - Never retry a 403.
 - **Base URL:** set per flavour (`dev`, `staging`, `prod`). Prod is
-  `https://toastie.niftyitsolution.com`. Normalise it so there is exactly one
+  `https://openfloor.club`. Normalise it so there is exactly one
   `/api` suffix.
 - **Every request sends:**
   - `Accept: application/json`
