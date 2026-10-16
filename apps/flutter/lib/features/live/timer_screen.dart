@@ -88,7 +88,7 @@ class _TimerScreenState extends ConsumerState<TimerScreen> {
             'memberId': ?p.memberId,
             'guestId': ?p.guestId,
             'name': p.name,
-            'type': p.type ?? 'Prepared Speaker',
+            'type': p.type ?? timerSpeakerTypes.first,
             'status': 'idle',
             'elapsed': 0,
           }),

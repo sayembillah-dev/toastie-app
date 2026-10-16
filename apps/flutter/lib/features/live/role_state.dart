@@ -32,13 +32,14 @@ Map<String, dynamic> _clean(Map<String, dynamic> m) => m..removeWhere((_, v) => 
 
 // ───────────────────────── Timer ─────────────────────────
 
+// Table Topic first: it's the default pick when adding a speaker.
 const timerSpeakerTypes = [
+  'Table Topic',
+  'Ice Breaker',
   'Prepared Speaker',
   'Keynote',
-  'Ice Breaker',
-  'Table Topic',
-  'Speech Evaluator',
   'TT Evaluator',
+  'Speech Evaluator',
   'General Evaluator',
 ];
 
