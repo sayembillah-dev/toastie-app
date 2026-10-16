@@ -38,9 +38,23 @@ extension ToastieAdminApi on ToastieApi {
       http.put('meetings/$meetingId/attendance/mark-all', body: {'present': present});
 
   // ── Voting ──
-  Future<List<VoteCategory>> voteCandidates(String meetingId) async =>
-      _list(_map(await http.get('meetings/$meetingId/vote/candidates', cache: false))['categories'], VoteCategory.fromJson);
-  Future<void> syncVoteCandidates(String meetingId) => http.post('meetings/$meetingId/vote/candidates/sync');
+  /// Officer reads top every award up from the meeting data server-side.
+  Future<VoteSetup> voteSetup(String meetingId) async =>
+      VoteSetup.fromJson(_map(await http.get('meetings/$meetingId/vote/candidates', cache: false)));
+
+  /// Start / Reopen. Returns the new status and how many WhatsApp messages
+  /// were queued (the link only ever goes out once per meeting).
+  Future<({VotingStatus status, int whatsappQueued})> openVoting(String meetingId, {bool notifyWhatsapp = false}) async {
+    final j = _map(await http.post('meetings/$meetingId/vote/open', body: {'notifyWhatsapp': notifyWhatsapp}));
+    final queued = j['whatsappQueued'];
+    return (
+      status: VotingStatus.fromJson(_map(j['status'])),
+      whatsappQueued: queued is num ? queued.toInt() : 0,
+    );
+  }
+
+  Future<VotingStatus> closeVoting(String meetingId) async =>
+      VotingStatus.fromJson(_map(await http.post('meetings/$meetingId/vote/close')));
   Future<void> setVoteCandidates(String meetingId, String category, List<VoteCandidate> candidates) =>
       http.put('meetings/$meetingId/vote/candidates/$category',
           body: {'candidates': candidates.map((c) => c.toInput()).toList()});

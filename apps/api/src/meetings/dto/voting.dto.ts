@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsObject,
   IsOptional,
   IsString,
@@ -55,4 +56,13 @@ export class SubmitPublicVoteDto {
 
   @IsObject()
   picks!: Record<string, unknown>;
+}
+
+/** Body for `POST /meetings/:meetingId/vote/open` (Start / Reopen).
+ * `notifyWhatsapp` sends the voting link to everyone checked in — once per
+ * meeting; ignored when it already went out. */
+export class OpenVotingDto {
+  @IsOptional()
+  @IsBoolean()
+  notifyWhatsapp?: boolean;
 }

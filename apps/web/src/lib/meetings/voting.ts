@@ -21,10 +21,10 @@ export const VOTE_CATEGORIES = [
     key: 'best-table-topics-speaker',
     label: 'Best Table Topics Speaker',
     question: 'Who is the best table topic speaker?',
-    /* Table topics is open floor — anyone present might be called up, so
-     * the options are simply everyone at the meeting. The service keeps
-     * this list in step with attendance on every read and rejects manual
-     * edits; `auto` is what tells both ends to treat it that way. */
+    /* Table topics is open floor, so nobody is booked in advance. The
+     * service tops this list up on every read from the Timer's "Table Topic"
+     * speakers and from attendance; officers can still add or remove anyone
+     * by hand, and a removed name stays removed. `auto` marks that top-up. */
     auto: true,
   },
   {
@@ -36,7 +36,8 @@ export const VOTE_CATEGORIES = [
 
 export type VoteCategoryKey = (typeof VOTE_CATEGORIES)[number]['key'];
 
-/** Is this a self-maintaining category (attendance-fed, no manual edits)? */
+/** Does this category top itself up on every read (Timer + attendance)?
+ * It stays fully editable either way. */
 export function isAutoVoteCategory(key: string): boolean {
   return (VOTE_CATEGORIES as readonly { key: string; auto?: boolean }[]).some(
     (entry) => entry.key === key && entry.auto === true,
@@ -68,9 +69,47 @@ export interface VoteCategory<Candidate = VoteCandidate> {
   candidates: Candidate[];
 }
 
+/** Where the meeting's vote stands. `setup` = Start not pressed yet (the
+ * ballot still accepts votes, for older clients); `open` = Start pressed;
+ * `closed` = Close pressed — the only state that refuses ballots. */
+export type VotingState = 'setup' | 'open' | 'closed';
+
+/** `GET /meetings/:id/vote/status`, and the `status` riding on the setup and
+ * results reads. */
+export interface MeetingVotingStatus {
+  state: VotingState;
+  openedAt: string | null;
+  closedAt: string | null;
+  whatsapp: {
+    /** The WhatsApp sender is configured on this server. */
+    available: boolean;
+    /** People checked in present with a usable number — who Start would
+     * message right now (0 once sent, closed or unavailable). */
+    recipients: number;
+    /** When the link went out — set once; a reopen never resends. */
+    sentAt: string | null;
+    /** In-memory send progress; null when nothing went out or after an API
+     * restart. */
+    delivery: { queued: number; sent: number; failed: number } | null;
+  };
+}
+
+/** Body for `POST /meetings/:id/vote/open` (Start and Reopen). */
+export interface OpenVotingInput {
+  notifyWhatsapp?: boolean;
+}
+
+/** Response of `POST /meetings/:id/vote/open`. */
+export interface OpenVotingResult {
+  status: MeetingVotingStatus;
+  /** WhatsApp messages queued by this call. */
+  whatsappQueued: number;
+}
+
 /** `GET /meetings/:id/vote/candidates` — the Voting tab's setup view. */
 export interface MeetingVoteSetup {
   categories: VoteCategory[];
+  status: MeetingVotingStatus;
 }
 
 export interface VoteCategoryResults {
@@ -86,6 +125,7 @@ export interface VoteCategoryResults {
 export interface MeetingVoteResults {
   totalBallots: number;
   categories: VoteCategoryResults[];
+  status: MeetingVotingStatus;
 }
 
 /** `GET /public/meetings/:id/vote?t=` — the anonymous ballot page's whole
@@ -101,6 +141,8 @@ export interface PublicMeetingVote {
   };
   categories: VoteCategory<PublicVoteCandidate>[];
   picks: Record<string, string> | null;
+  /** `closed` = show "Voting has closed" instead of the form. */
+  state: VotingState;
 }
 
 /** Body for `PUT /meetings/:id/vote/candidates/:category` — replaces the

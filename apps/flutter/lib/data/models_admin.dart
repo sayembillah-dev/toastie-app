@@ -3,6 +3,7 @@ import 'models.dart';
 
 String _s(Object? v) => v is String ? v : (v?.toString() ?? '');
 String? _so(Object? v) => v is String && v.isNotEmpty ? v : null;
+Json _m(Object? v) => v is Map ? Map<String, dynamic>.from(v) : <String, dynamic>{};
 int _i(Object? v) => v is int ? v : (v is num ? v.toInt() : int.tryParse('$v') ?? 0);
 List<T> _list<T>(Object? v, T Function(Json) f) =>
     v is List ? v.whereType<Map>().map((e) => f(Map<String, dynamic>.from(e))).toList() : <T>[];
@@ -49,7 +50,8 @@ class VoteCategory {
   final String question;
   final List<VoteCandidate> candidates;
 
-  /// Best Table Topics Speaker is filled in during the meeting.
+  /// Best Table Topics Speaker tops itself up from the Timer and attendance;
+  /// it stays fully editable like every other category.
   bool get isAuto => key == 'best-table-topics-speaker';
 
   factory VoteCategory.fromJson(Json j) => VoteCategory(
@@ -78,11 +80,76 @@ class VoteResultCategory {
 }
 
 class VoteResults {
-  VoteResults({required this.totalBallots, required this.categories});
+  VoteResults({required this.totalBallots, required this.categories, required this.status});
   final int totalBallots;
   final List<VoteResultCategory> categories;
-  factory VoteResults.fromJson(Json j) =>
-      VoteResults(totalBallots: _i(j['totalBallots']), categories: _list(j['categories'], VoteResultCategory.fromJson));
+  final VotingStatus status;
+  factory VoteResults.fromJson(Json j) => VoteResults(
+        totalBallots: _i(j['totalBallots']),
+        categories: _list(j['categories'], VoteResultCategory.fromJson),
+        status: VotingStatus.fromJson(_m(j['status'])),
+      );
+}
+
+/// Where the vote stands: `setup` (Start not pressed — ballots still count),
+/// `open`, or `closed` (the ballot refuses votes). Mirrors the API's
+/// `MeetingVotingStatusWire`.
+enum VotingState {
+  setup,
+  open,
+  closed;
+
+  static VotingState parse(Object? v) => switch (v) {
+        'open' => VotingState.open,
+        'closed' => VotingState.closed,
+        _ => VotingState.setup,
+      };
+}
+
+class VotingStatus {
+  VotingStatus({
+    required this.state,
+    required this.whatsappAvailable,
+    required this.whatsappRecipients,
+    this.linkSentAt,
+    this.delivery,
+  });
+  final VotingState state;
+
+  /// The WhatsApp sender is linked on the server.
+  final bool whatsappAvailable;
+
+  /// People checked in present with a WhatsApp number — who Start would
+  /// message right now (0 once the link went out).
+  final int whatsappRecipients;
+
+  /// Set once the link went out; it is never sent twice.
+  final DateTime? linkSentAt;
+
+  /// Live send progress, or null (none sent, or the server restarted).
+  final ({int queued, int sent, int failed})? delivery;
+
+  factory VotingStatus.fromJson(Json j) {
+    final wa = _m(j['whatsapp']);
+    final d = wa['delivery'];
+    return VotingStatus(
+      state: VotingState.parse(j['state']),
+      whatsappAvailable: wa['available'] == true,
+      whatsappRecipients: _i(wa['recipients']),
+      linkSentAt: DateTime.tryParse(_s(wa['sentAt'])),
+      delivery: d is Map ? (queued: _i(d['queued']), sent: _i(d['sent']), failed: _i(d['failed'])) : null,
+    );
+  }
+}
+
+class VoteSetup {
+  VoteSetup({required this.categories, required this.status});
+  final List<VoteCategory> categories;
+  final VotingStatus status;
+  factory VoteSetup.fromJson(Json j) => VoteSetup(
+        categories: _list(j['categories'], VoteCategory.fromJson),
+        status: VotingStatus.fromJson(_m(j['status'])),
+      );
 }
 
 // ───────────────────────── Planner ─────────────────────────

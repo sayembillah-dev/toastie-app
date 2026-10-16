@@ -25,6 +25,26 @@ interface Recipient {
   inApp: boolean;
 }
 
+/** Someone the voting link goes to — checked in present, with a number. */
+export interface VotingRecipient {
+  firstName: string;
+  number: string;
+}
+
+/** Live count of one meeting's voting-link sends — see `votingDelivery`. */
+export interface VotingLinkDelivery {
+  queued: number;
+  sent: number;
+  failed: number;
+}
+
+interface OutboxItem {
+  number: string;
+  text: string;
+  /** Told whether the send went through. Must not throw. */
+  onSettled?: (ok: boolean) => void;
+}
+
 interface MeetingSummary {
   id: string;
   meetingNumber: number;
@@ -80,15 +100,21 @@ const dateFormat = new Intl.DateTimeFormat('en-GB', {
  * surfaced to the request that triggered it. Callers invoke these only after
  * their transaction commits, so a rolled-back change never sends anything.
  *
- * Sends go through one in-process outbox, one at a time with a random gap.
- * It isn't persisted: a deploy restart mid-announcement drops whatever was
- * still waiting. */
+ * Sends go through one in-process outbox, one at a time with a random gap;
+ * the voting link jumps the queue (`urgent`). It isn't persisted: a deploy
+ * restart mid-announcement drops whatever was still waiting. */
 @Injectable()
 export class MeetingNotificationsService {
   private readonly logger = new Logger(MeetingNotificationsService.name);
   private readonly webUrl: string;
-  private outbox: Promise<void> = Promise.resolve();
+  /* Two lanes, one sender: time-critical sends (the voting link, while the
+   * room is waiting) go before anything already queued, but every send still
+   * keeps the same spacing from the one before it. */
+  private readonly urgentOutbox: OutboxItem[] = [];
+  private readonly outbox: OutboxItem[] = [];
+  private draining = false;
   private nextSendAt = 0;
+  private readonly votingDeliveries = new Map<string, VotingLinkDelivery>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -257,6 +283,89 @@ export class MeetingNotificationsService {
     });
   }
 
+  /** The WhatsApp sender is linked on this server. */
+  get whatsappAvailable(): boolean {
+    return this.whatsapp.isConfigured;
+  }
+
+  /** Everyone checked in present at the meeting — members and guests — who
+   * has a usable WhatsApp number, one entry per number. Legacy free-text
+   * guest rows carry no number and are skipped. */
+  async votingRecipients(clubId: string, meetingId: string): Promise<VotingRecipient[]> {
+    const [members, guests] = await Promise.all([
+      this.prisma.meetingAttendance.findMany({
+        where: { clubId, meetingId, present: true },
+        select: { membership: { select: memberSelect } },
+      }),
+      this.prisma.meetingGuestAttendance.findMany({
+        where: { clubId, meetingId, present: true, guestId: { not: null } },
+        select: { guest: { select: { firstName: true, whatsapp: true, phone: true } } },
+      }),
+    ]);
+    const byNumber = new Map<string, VotingRecipient>();
+    for (const row of members) {
+      const recipient = toMemberRecipient(row.membership);
+      if (recipient?.number && !byNumber.has(recipient.number)) {
+        byNumber.set(recipient.number, {
+          firstName: recipient.firstName,
+          number: recipient.number,
+        });
+      }
+    }
+    for (const row of guests) {
+      if (!row.guest) continue;
+      const number = firstWhatsappNumber(row.guest.whatsapp, row.guest.phone);
+      if (number && !byNumber.has(number)) {
+        byNumber.set(number, { firstName: row.guest.firstName, number });
+      }
+    }
+    return [...byNumber.values()];
+  }
+
+  /** Queues the voting link to each recipient ahead of any other waiting
+   * message, and starts counting deliveries for `votingDelivery`. Returns how
+   * many were queued (0 when the sender isn't linked). The caller has
+   * already claimed `Meeting.votingLinkSentAt`. */
+  sendVotingLink(
+    meeting: { id: string; meetingNumber: number; shareToken: string; clubName: string },
+    recipients: VotingRecipient[],
+  ): number {
+    if (!this.whatsapp.isConfigured || recipients.length === 0) return 0;
+    const link = `${this.webUrl}/meetings/${meeting.id}/vote?t=${encodeURIComponent(meeting.shareToken)}`;
+    const delivery: VotingLinkDelivery = { queued: recipients.length, sent: 0, failed: 0 };
+    this.votingDeliveries.set(meeting.id, delivery);
+    for (const recipient of recipients) {
+      this.enqueue(
+        recipient.number,
+        [
+          `Hi ${recipient.firstName}, *voting is open* 🗳️`,
+          `${meeting.clubName} — Meeting #${meeting.meetingNumber}`,
+          '',
+          `Pick today's best speakers. It's anonymous and takes a minute:`,
+          link,
+        ].join('\n'),
+        {
+          urgent: true,
+          onSettled: (ok) => {
+            if (ok) delivery.sent += 1;
+            else delivery.failed += 1;
+          },
+        },
+      );
+    }
+    this.logger.log(
+      `Meeting #${meeting.meetingNumber} voting link: ${recipients.length} WhatsApp queued`,
+    );
+    return recipients.length;
+  }
+
+  /** How the meeting's voting-link sends are going, or null when none went
+   * out since this process started. */
+  votingDelivery(meetingId: string): VotingLinkDelivery | null {
+    const delivery = this.votingDeliveries.get(meetingId);
+    return delivery ? { ...delivery } : null;
+  }
+
   /** Runs the lookup in the background — the triggering request never waits
    * on it or sees its errors. Skipped outright while neither WhatsApp nor
    * native push is set up. */
@@ -279,20 +388,53 @@ export class MeetingNotificationsService {
     if (recipient.userId) await this.push.send([recipient.userId], push);
   }
 
-  private enqueue(number: string, text: string): void {
-    this.outbox = this.outbox.then(() => this.deliver(number, text));
+  private enqueue(
+    number: string,
+    text: string,
+    options: { urgent?: boolean; onSettled?: (ok: boolean) => void } = {},
+  ): void {
+    (options.urgent ? this.urgentOutbox : this.outbox).push({
+      number,
+      text,
+      onSettled: options.onSettled,
+    });
+    void this.drain();
   }
 
-  /** Never rejects — the outbox chain has to survive a failed send. */
-  private async deliver(number: string, text: string): Promise<void> {
+  /** One sender for both lanes, urgent first. Re-entrant calls return at
+   * once — the running loop picks up whatever they queued. */
+  private async drain(): Promise<void> {
+    if (this.draining) return;
+    this.draining = true;
+    try {
+      for (;;) {
+        const item = this.urgentOutbox.shift() ?? this.outbox.shift();
+        if (!item) break;
+        const ok = await this.deliver(item.number, item.text);
+        try {
+          item.onSettled?.(ok);
+        } catch {
+          // A counter callback must never stall the outbox.
+        }
+      }
+    } finally {
+      this.draining = false;
+    }
+  }
+
+  /** Never rejects — the outbox has to survive a failed send. */
+  private async deliver(number: string, text: string): Promise<boolean> {
     const wait = this.nextSendAt - Date.now();
     if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    let ok = true;
     try {
       await this.whatsapp.sendText(number, text);
     } catch (error) {
+      ok = false;
       this.logger.warn(`WhatsApp send to ${number} failed: ${errorMessage(error)}`);
     }
     this.nextSendAt = Date.now() + MIN_GAP_MS + Math.random() * (MAX_GAP_MS - MIN_GAP_MS);
+    return ok;
   }
 
   /** In-app members land on the meeting (on `tab` when given); everyone else

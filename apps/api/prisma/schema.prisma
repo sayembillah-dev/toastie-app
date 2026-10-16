@@ -638,6 +638,16 @@ model Meeting {
   /// publish and never cleared, so unpublishing and re-publishing doesn't
   /// message the whole club twice.
   announcedAt      DateTime?
+  /// Voting lifecycle, driven by Start / Close / Reopen on the Voting tab.
+  /// Not started = opened null; open = opened set, closed null; closed =
+  /// closed set. Reopening clears `votingClosedAt` only. Ballots are refused
+  /// only while closed — a meeting that never pressed Start still votes, so
+  /// clients that predate the lifecycle keep working.
+  votingOpenedAt   DateTime?
+  votingClosedAt   DateTime?
+  /// When the voting link went out on WhatsApp to the people checked in —
+  /// claimed once, never cleared, so a reopen doesn't message the room twice.
+  votingLinkSentAt DateTime?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
@@ -861,6 +871,11 @@ model MeetingVoteCandidate {
   /// `auto` (derived from meeting data by a sync) or `manual` (added by hand
   /// from the Voting tab). Informational only.
   source       String   @default("auto")
+  /// Set when an officer takes the name off the ballot. The row stays so the
+  /// automatic top-ups (Timer, attendance, "Sync from meeting data") know not
+  /// to bring that person back; adding them again by hand clears it and
+  /// restores any votes already cast for them.
+  removedAt    DateTime?
   createdAt    DateTime @default(now())
 
   meeting    Meeting     @relation("MeetingVoteCandidates", fields: [clubId, meetingId], references: [clubId, id], onDelete: Cascade)

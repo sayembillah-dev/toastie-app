@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -9,23 +10,45 @@ import { can, type PermissionSubject } from '@toastly/access';
 import { PrismaService } from '@/prisma';
 
 import type {
+  OpenVotingDto,
   SetVoteCandidatesDto,
   SubmitPublicVoteDto,
   VoteCandidateInputDto,
 } from './dto/voting.dto';
+import { MeetingNotificationsService } from './meeting-notifications.service';
 import {
   fullName,
-  isAutoVoteCategory,
   isVoteCategoryKey,
   type MeetingVoteResultsWire,
   type MeetingVoteSetupWire,
+  type MeetingVotingStatusWire,
   normalizeCandidateName,
+  type OpenVotingResultWire,
   type PublicMeetingVoteWire,
+  tableTopicsSpeakersFromTimerState,
   VOTE_CATEGORIES,
   type VoteCategoryKey,
   type VoteCategoryResultsWire,
   type VoteCategoryWire,
+  votingStateOf,
 } from './voting';
+
+/** The meeting columns every voting read needs. */
+const meetingVotingSelect = {
+  id: true,
+  clubId: true,
+  votingOpenedAt: true,
+  votingClosedAt: true,
+  votingLinkSentAt: true,
+} as const;
+
+type VotingMeeting = {
+  id: string;
+  clubId: string;
+  votingOpenedAt: Date | null;
+  votingClosedAt: Date | null;
+  votingLinkSentAt: Date | null;
+};
 
 /** Desired candidate for one category, produced by the meeting-data
  * derivation in `syncCandidates`. */
@@ -48,7 +71,10 @@ interface DerivedCandidate {
  */
 @Injectable()
 export class VotingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: MeetingNotificationsService,
+  ) {}
 
   // ---------------------------------------------------------- authed --
 
@@ -58,23 +84,113 @@ export class VotingService {
   ): Promise<MeetingVoteSetupWire> {
     const meeting = await this.loadMeeting(meetingId);
     this.assertCan(subject, 'read', meeting.clubId);
-    await this.syncAutoCategories(meeting.clubId, meetingId);
-    return this.readSetup(meeting.clubId, meetingId);
+    /* Officers' reads keep every award topped up from the meeting data, so
+     * the ballot needs no manual "sync" step. Viewers only top up the
+     * self-filling category, as every read always has. */
+    if (can(subject, 'update', 'meeting', { clubId: meeting.clubId })) {
+      await this.insertDerivedCandidates(meeting.clubId, meetingId);
+    } else {
+      await this.syncAutoCategories(meeting.clubId, meetingId);
+    }
+    return this.readSetup(meeting);
+  }
+
+  /** `GET /meetings/:id/vote/status` — the lifecycle and WhatsApp state on
+   * their own, for clients that only need to poll that. */
+  async getStatus(subject: PermissionSubject, meetingId: string): Promise<MeetingVotingStatusWire> {
+    const meeting = await this.loadMeeting(meetingId);
+    this.assertCan(subject, 'read', meeting.clubId);
+    return this.readStatus(meeting);
+  }
+
+  /** Start / Reopen. Tops the ballot up from the meeting data, marks voting
+   * open (a reopen clears the close and keeps the first opening time), and —
+   * when asked, and only the first time — sends the voting link on WhatsApp
+   * to everyone checked in. The send is claimed with a conditional update
+   * so two officers pressing Start together message the room once, and it
+   * is only claimed when there is someone to message. */
+  async openVoting(
+    subject: PermissionSubject,
+    meetingId: string,
+    dto: OpenVotingDto,
+  ): Promise<OpenVotingResultWire> {
+    const meeting = await this.loadMeeting(meetingId);
+    this.assertCan(subject, 'update', meeting.clubId);
+    const clubId = meeting.clubId;
+
+    await this.insertDerivedCandidates(clubId, meetingId);
+    const now = new Date();
+    await this.prisma.meeting.update({
+      where: { id: meetingId },
+      data: { votingOpenedAt: meeting.votingOpenedAt ?? now, votingClosedAt: null },
+    });
+
+    let whatsappQueued = 0;
+    if (dto.notifyWhatsapp && !meeting.votingLinkSentAt && this.notifications.whatsappAvailable) {
+      const recipients = await this.notifications.votingRecipients(clubId, meetingId);
+      if (recipients.length > 0) {
+        const claimed = await this.prisma.meeting.updateMany({
+          where: { id: meetingId, votingLinkSentAt: null },
+          data: { votingLinkSentAt: now },
+        });
+        if (claimed.count === 1) {
+          const details = await this.prisma.meeting.findUniqueOrThrow({
+            where: { id: meetingId },
+            select: {
+              id: true,
+              meetingNumber: true,
+              shareToken: true,
+              club: { select: { name: true } },
+            },
+          });
+          whatsappQueued = this.notifications.sendVotingLink(
+            { ...details, clubName: details.club.name },
+            recipients,
+          );
+        }
+      }
+    }
+
+    return { status: await this.readStatus(await this.loadMeeting(meetingId)), whatsappQueued };
+  }
+
+  /** Close — the ballot stops accepting votes and the winners can be shown.
+   * Closing a vote that was never started counts as having opened it now. */
+  async closeVoting(
+    subject: PermissionSubject,
+    meetingId: string,
+  ): Promise<MeetingVotingStatusWire> {
+    const meeting = await this.loadMeeting(meetingId);
+    this.assertCan(subject, 'update', meeting.clubId);
+    if (!meeting.votingClosedAt) {
+      const now = new Date();
+      await this.prisma.meeting.update({
+        where: { id: meetingId },
+        data: { votingOpenedAt: meeting.votingOpenedAt ?? now, votingClosedAt: now },
+      });
+    }
+    return this.readStatus(await this.loadMeeting(meetingId));
   }
 
   /** "Sync from meeting data" — derive each category's candidates from what
    * the meeting already knows (speakers, evaluators, present attendees, role
    * holders) and insert the ones not already on the ballot. Never removes
-   * anything: officer edits and manual additions survive a sync, and a
-   * re-sync after the agenda changes only tops the lists up. */
+   * anything, and never brings back a name an officer removed: the dedupe
+   * set below deliberately includes removed rows. */
   async syncCandidates(
     subject: PermissionSubject,
     meetingId: string,
   ): Promise<MeetingVoteSetupWire> {
     const meeting = await this.loadMeeting(meetingId);
     this.assertCan(subject, 'update', meeting.clubId);
-    const clubId = meeting.clubId;
+    await this.insertDerivedCandidates(meeting.clubId, meetingId);
+    return this.readSetup(meeting);
+  }
 
+  /** Insert every derived candidate not already on the ballot (removed rows
+   * included in the dedupe, so a removed name stays removed). Shared by the
+   * officer setup read, Start, and the explicit sync endpoint. */
+  private async insertDerivedCandidates(clubId: string, meetingId: string): Promise<void> {
     const derived = await this.deriveCandidates(clubId, meetingId);
     const existing = await this.prisma.meetingVoteCandidate.findMany({
       where: { clubId, meetingId },
@@ -82,9 +198,9 @@ export class VotingService {
     });
 
     /* A candidate is "already there" when it matches on the roster link
-     * (same person, renamed) or, failing a link, on the folded name. */
+     * (same person, renamed) or on the folded name. */
     const seen = new Set(
-      existing.map((row) => dedupeKey(row.category, row.membershipId, row.guestId, row.name)),
+      existing.flatMap((row) => dedupeKeys(row.category, row.membershipId, row.guestId, row.name)),
     );
 
     const creates: {
@@ -98,9 +214,9 @@ export class VotingService {
     }[] = [];
     for (const [category, people] of derived) {
       for (const person of people) {
-        const key = dedupeKey(category, person.membershipId, person.guestId, person.name);
-        if (seen.has(key)) continue;
-        seen.add(key);
+        const keys = dedupeKeys(category, person.membershipId, person.guestId, person.name);
+        if (keys.some((key) => seen.has(key))) continue;
+        for (const key of keys) seen.add(key);
         creates.push({
           clubId,
           meetingId,
@@ -119,13 +235,14 @@ export class VotingService {
        * can share a member's name). */
       await this.prisma.meetingVoteCandidate.createMany({ data: creates, skipDuplicates: true });
     }
-    return this.readSetup(clubId, meetingId);
   }
 
-  /** Replace one category's candidate list with the officer's edit. Rows
-   * whose name survived the edit keep their id — and therefore the votes
-   * already cast for them; removed names take their picks out of the tally
-   * (the ballots themselves are untouched). */
+  /** Replace one category's candidate list with the officer's edit — the
+   * same for every category, Table Topics included. Rows whose name survived
+   * the edit keep their id (and the votes cast for them). Names left out are
+   * marked removed rather than deleted, so the automatic top-ups don't bring
+   * them back; their picks drop out of the tally. Adding a removed name
+   * again restores the same row, votes and all. */
   async setCategoryCandidates(
     subject: PermissionSubject,
     meetingId: string,
@@ -136,13 +253,6 @@ export class VotingService {
       throw new BadRequestException({
         code: 'UNKNOWN_VOTE_CATEGORY',
         message: `Vote category must be one of: ${VOTE_CATEGORIES.map((c) => c.key).join(', ')}`,
-      });
-    }
-    if (isAutoVoteCategory(category)) {
-      throw new BadRequestException({
-        code: 'AUTO_VOTE_CATEGORY',
-        message:
-          'This list maintains itself from the meeting’s attendance — it can’t be edited by hand',
       });
     }
     const meeting = await this.loadMeeting(meetingId);
@@ -162,17 +272,23 @@ export class VotingService {
     await this.assertRosterLinks(clubId, [...incoming.values()]);
 
     await this.prisma.$transaction(async (tx) => {
+      /* Removed rows included: the name-unique index still covers them, so
+       * re-adding one must restore that row rather than create a twin. */
       const existing = await tx.meetingVoteCandidate.findMany({
         where: { clubId, meetingId, category },
-        select: { id: true, name: true },
+        select: { id: true, name: true, removedAt: true },
       });
       const existingByNorm = new Map(
         existing.map((row) => [normalizeCandidateName(row.name), row] as const),
       );
 
-      const deleteIds = existing
-        .filter((row) => !incoming.has(normalizeCandidateName(row.name)))
+      const removeIds = existing
+        .filter((row) => !row.removedAt && !incoming.has(normalizeCandidateName(row.name)))
         .map((row) => row.id);
+      const restores = [...incoming.entries()].flatMap(([norm, candidate]) => {
+        const row = existingByNorm.get(norm);
+        return row?.removedAt ? [{ id: row.id, candidate }] : [];
+      });
       const toCreate = [...incoming.entries()]
         .filter(([norm]) => !existingByNorm.has(norm))
         .map(([, candidate]) => ({
@@ -185,28 +301,43 @@ export class VotingService {
           source: 'manual' as const,
         }));
 
-      if (deleteIds.length > 0) {
-        await tx.meetingVoteCandidate.deleteMany({ where: { id: { in: deleteIds } } });
+      if (removeIds.length > 0) {
+        await tx.meetingVoteCandidate.updateMany({
+          where: { id: { in: removeIds } },
+          data: { removedAt: new Date() },
+        });
+      }
+      for (const { id, candidate } of restores) {
+        await tx.meetingVoteCandidate.update({
+          where: { id },
+          data: {
+            removedAt: null,
+            source: 'manual',
+            name: candidate.name,
+            membershipId: candidate.membershipId ?? null,
+            guestId: candidate.guestId ?? null,
+          },
+        });
       }
       if (toCreate.length > 0) {
         await tx.meetingVoteCandidate.createMany({ data: toCreate, skipDuplicates: true });
       }
     });
 
-    return this.readSetup(clubId, meetingId);
+    return this.readSetup(meeting);
   }
 
   async getResults(subject: PermissionSubject, meetingId: string): Promise<MeetingVoteResultsWire> {
     const meeting = await this.loadMeeting(meetingId);
     this.assertCan(subject, 'read', meeting.clubId);
-    /* Keep the attendance-fed category current so the board shows a late
-     * check-in (with 0 votes) without waiting for someone to revisit the
-     * setup read. */
+    /* Keep the self-topping category current so the board shows a late
+     * Table Topics speaker (with 0 votes) without waiting for someone to
+     * revisit the setup read. */
     await this.syncAutoCategories(meeting.clubId, meetingId);
 
     const [candidates, ballots] = await Promise.all([
       this.prisma.meetingVoteCandidate.findMany({
-        where: { clubId: meeting.clubId, meetingId },
+        where: { clubId: meeting.clubId, meetingId, removedAt: null },
         orderBy: { name: 'asc' },
         select: { id: true, category: true, name: true },
       }),
@@ -247,7 +378,11 @@ export class VotingService {
       totalVotes: categoryTotals.get(category.key) ?? 0,
       candidates: tallies.get(category.key) ?? [],
     }));
-    return { totalBallots: ballots.length, categories };
+    return {
+      totalBallots: ballots.length,
+      categories,
+      status: await this.readStatus(meeting),
+    };
   }
 
   /** "Clear" on one award — wipes that category's pick out of every ballot
@@ -304,13 +439,13 @@ export class VotingService {
     voterKey?: string,
   ): Promise<PublicMeetingVoteWire> {
     const meeting = await this.loadMeetingByToken(meetingId, token);
-    /* The ballot must offer everyone who is actually at the meeting — top
-     * up the attendance-fed category before reading it back. */
+    /* The ballot must offer every Table Topics speaker the meeting knows
+     * about — top that category up before reading it back. */
     await this.syncAutoCategories(meeting.clubId, meetingId);
 
     const [candidates, ballot] = await Promise.all([
       this.prisma.meetingVoteCandidate.findMany({
-        where: { clubId: meeting.clubId, meetingId },
+        where: { clubId: meeting.clubId, meetingId, removedAt: null },
         orderBy: { name: 'asc' },
         select: { id: true, category: true, name: true },
       }),
@@ -350,6 +485,7 @@ export class VotingService {
       },
       categories,
       picks,
+      state: votingStateOf(meeting),
     };
   }
 
@@ -361,9 +497,15 @@ export class VotingService {
     dto: SubmitPublicVoteDto,
   ): Promise<{ id: string }> {
     const meeting = await this.loadMeetingByToken(meetingId, token);
+    if (votingStateOf(meeting) === 'closed') {
+      throw new ConflictException({
+        code: 'VOTING_CLOSED',
+        message: 'Voting has closed for this meeting',
+      });
+    }
 
     const candidates = await this.prisma.meetingVoteCandidate.findMany({
-      where: { clubId: meeting.clubId, meetingId },
+      where: { clubId: meeting.clubId, meetingId, removedAt: null },
       select: { id: true, category: true },
     });
     const valid = new Map(candidates.map((c) => [c.id, c.category] as const));
@@ -397,10 +539,10 @@ export class VotingService {
 
   // ---------------------------------------------------------- helpers --
 
-  private async loadMeeting(meetingId: string): Promise<{ id: string; clubId: string }> {
+  private async loadMeeting(meetingId: string): Promise<VotingMeeting> {
     const meeting = await this.prisma.meeting.findUnique({
       where: { id: meetingId },
-      select: { id: true, clubId: true },
+      select: meetingVotingSelect,
     });
     if (!meeting) {
       throw new NotFoundException({
@@ -425,6 +567,8 @@ export class VotingService {
         meetingNumber: true,
         dateTime: true,
         theme: true,
+        votingOpenedAt: true,
+        votingClosedAt: true,
         club: { select: { name: true } },
       },
     });
@@ -448,10 +592,10 @@ export class VotingService {
   /** Pull every category's candidates out of the meeting's own rows:
    * - best-prepared-speaker  ← prepared/keynote speaker slots (speaker side)
    * - best-evaluator         ← the evaluators attached to those slots
-   * - best-table-topics-speaker ← everyone checked in present (members and
-   *   guests) — table topics is open floor, so attendance is the universe.
-   *   This one also maintains itself (see `syncAutoCategories`); the full
-   *   sync just shares the same derivation.
+   * - best-table-topics-speaker ← the Timer's Table Topic speakers plus
+   *   everyone checked in present (see `deriveTableTopicsCandidates`). This
+   *   one also tops itself up on every read (see `syncAutoCategories`); both
+   *   paths share the same derivation.
    * - best-role-taker        ← assigned meeting role holders */
   private async deriveCandidates(
     clubId: string,
@@ -474,7 +618,7 @@ export class VotingService {
           guest: { select: { id: true, firstName: true, lastName: true } },
         },
       }),
-      this.deriveTableTopicsAttendees(clubId, meetingId),
+      this.deriveTableTopicsCandidates(clubId, meetingId),
     ]);
 
     const derived = new Map<VoteCategoryKey, DerivedCandidate[]>([
@@ -498,14 +642,20 @@ export class VotingService {
     return derived;
   }
 
-  /** Everyone at the meeting — present members and guests — as candidate
-   * drafts. This is the whole universe for the table-topics award: open
-   * floor, so attendance decides who's pickable. */
-  private async deriveTableTopicsAttendees(
+  /** Who might win Best Table Topics Speaker: everyone the Timer timed as a
+   * "Table Topic" speaker, plus everyone checked in present (members and
+   * guests). Either source alone is enough — a club that skips attendance
+   * still gets the speakers, and one that skips the Timer still gets the
+   * room. Officers prune or add by hand from there. */
+  private async deriveTableTopicsCandidates(
     clubId: string,
     meetingId: string,
   ): Promise<DerivedCandidate[]> {
-    const [memberAttendance, guestAttendance] = await Promise.all([
+    const [timerRow, memberAttendance, guestAttendance] = await Promise.all([
+      this.prisma.meetingRoleState.findUnique({
+        where: { meetingId_kind: { meetingId, kind: 'timer' } },
+        select: { clubId: true, state: true },
+      }),
       this.prisma.meetingAttendance.findMany({
         where: { clubId, meetingId, present: true },
         select: {
@@ -521,38 +671,84 @@ export class VotingService {
       }),
     ]);
 
-    const attendees: DerivedCandidate[] = [];
+    const candidates: DerivedCandidate[] =
+      timerRow && timerRow.clubId === clubId
+        ? await this.verifiedTimerSpeakers(clubId, timerRow.state)
+        : [];
     for (const row of memberAttendance) {
-      pushPerson(attendees, row.membership, null);
+      pushPerson(candidates, row.membership, null);
     }
     for (const row of guestAttendance) {
       if (row.guest) {
-        pushPerson(attendees, null, row.guest);
+        pushPerson(candidates, null, row.guest);
       } else if (row.name.trim()) {
         /* Legacy free-text row with no Prospect link — the snapshot name is
          * all there is, and all the ballot needs. */
-        attendees.push({ name: row.name.trim() });
+        candidates.push({ name: row.name.trim() });
       }
     }
-    return attendees;
+    return candidates;
   }
 
-  /** Self-maintaining categories (today: best-table-topics-speaker) top
-   * themselves up from meeting data on every read that serves them — the
-   * officer setup view, the results board, and the public ballot alike.
-   * Only ever ADDS: someone whose check-in is later undone stays on the
-   * ballot rather than taking already-cast votes down with them. */
+  /** The Timer's Table Topic speakers with their roster links checked
+   * against this club. The Timer state is client-written JSON, so a stale or
+   * foreign id would otherwise break the insert on the composite foreign
+   * key — and this runs on every ballot read. An unknown link keeps the
+   * typed name and drops the link. */
+  private async verifiedTimerSpeakers(clubId: string, state: unknown) {
+    const speakers = tableTopicsSpeakersFromTimerState(state);
+    if (speakers.length === 0) return [];
+
+    const membershipIds = [
+      ...new Set(speakers.map((s) => s.membershipId).filter((id): id is string => !!id)),
+    ];
+    const guestIds = [
+      ...new Set(speakers.map((s) => s.guestId).filter((id): id is string => !!id)),
+    ];
+    const [members, guests] = await Promise.all([
+      membershipIds.length
+        ? this.prisma.membership.findMany({
+            where: { clubId, id: { in: membershipIds } },
+            select: { id: true },
+          })
+        : [],
+      guestIds.length
+        ? this.prisma.prospect.findMany({
+            where: { clubId, id: { in: guestIds } },
+            select: { id: true },
+          })
+        : [],
+    ]);
+    const validMembers = new Set(members.map((m) => m.id));
+    const validGuests = new Set(guests.map((g) => g.id));
+
+    return speakers.map((speaker): DerivedCandidate => {
+      if (speaker.membershipId && validMembers.has(speaker.membershipId)) {
+        return { name: speaker.name, membershipId: speaker.membershipId };
+      }
+      if (speaker.guestId && validGuests.has(speaker.guestId)) {
+        return { name: speaker.name, guestId: speaker.guestId };
+      }
+      return { name: speaker.name };
+    });
+  }
+
+  /** Self-topping categories (today: best-table-topics-speaker) add anyone
+   * new from meeting data on every read that serves them — the officer
+   * setup view, the results board, and the public ballot alike. Only ever
+   * ADDS, and never re-adds a name an officer removed: `existing` includes
+   * removed rows on purpose. */
   private async syncAutoCategories(clubId: string, meetingId: string) {
     const category: VoteCategoryKey = 'best-table-topics-speaker';
-    const attendees = await this.deriveTableTopicsAttendees(clubId, meetingId);
-    if (attendees.length === 0) return;
+    const people = await this.deriveTableTopicsCandidates(clubId, meetingId);
+    if (people.length === 0) return;
 
     const existing = await this.prisma.meetingVoteCandidate.findMany({
       where: { clubId, meetingId, category },
       select: { name: true, membershipId: true, guestId: true },
     });
     const seen = new Set(
-      existing.map((row) => dedupeKey(category, row.membershipId, row.guestId, row.name)),
+      existing.flatMap((row) => dedupeKeys(category, row.membershipId, row.guestId, row.name)),
     );
 
     const creates: {
@@ -564,10 +760,10 @@ export class VotingService {
       guestId?: string;
       source: 'auto';
     }[] = [];
-    for (const person of attendees) {
-      const key = dedupeKey(category, person.membershipId, person.guestId, person.name);
-      if (seen.has(key)) continue;
-      seen.add(key);
+    for (const person of people) {
+      const keys = dedupeKeys(category, person.membershipId, person.guestId, person.name);
+      if (keys.some((key) => seen.has(key))) continue;
+      for (const key of keys) seen.add(key);
       creates.push({
         clubId,
         meetingId,
@@ -622,9 +818,32 @@ export class VotingService {
     }
   }
 
-  private async readSetup(clubId: string, meetingId: string): Promise<MeetingVoteSetupWire> {
+  /** Lifecycle + WhatsApp state. The recipient count is only worked out
+   * while it can still matter (sender linked, link not sent, not closed). */
+  private async readStatus(meeting: VotingMeeting): Promise<MeetingVotingStatusWire> {
+    const state = votingStateOf(meeting);
+    const available = this.notifications.whatsappAvailable;
+    const recipients =
+      available && !meeting.votingLinkSentAt && state !== 'closed'
+        ? (await this.notifications.votingRecipients(meeting.clubId, meeting.id)).length
+        : 0;
+    return {
+      state,
+      openedAt: meeting.votingOpenedAt?.toISOString() ?? null,
+      closedAt: meeting.votingClosedAt?.toISOString() ?? null,
+      whatsapp: {
+        available,
+        recipients,
+        sentAt: meeting.votingLinkSentAt?.toISOString() ?? null,
+        delivery: this.notifications.votingDelivery(meeting.id),
+      },
+    };
+  }
+
+  private async readSetup(meeting: VotingMeeting): Promise<MeetingVoteSetupWire> {
+    const { clubId, id: meetingId } = meeting;
     const rows = await this.prisma.meetingVoteCandidate.findMany({
-      where: { clubId, meetingId },
+      where: { clubId, meetingId, removedAt: null },
       orderBy: [{ category: 'asc' }, { name: 'asc' }],
       select: {
         id: true,
@@ -653,21 +872,25 @@ export class VotingService {
         guestId: row.guestId,
       });
     }
-    return { categories };
+    return { categories, status: await this.readStatus(meeting) };
   }
 }
 
-/** Dedupe identity for one candidate within a category: the roster link when
- * there is one (a rename doesn't fool it), the folded name otherwise. */
-function dedupeKey(
+/** Dedupe identities for one candidate within a category: the roster link
+ * when there is one (a rename doesn't fool it) and always the folded name —
+ * the unique index is per name, and the Timer may hold the same person as a
+ * typed name that attendance holds as a roster link. Two entries match when
+ * any key is shared. */
+function dedupeKeys(
   category: string,
   membershipId: string | null | undefined,
   guestId: string | null | undefined,
   name: string,
-): string {
-  if (membershipId) return `${category}|m:${membershipId}`;
-  if (guestId) return `${category}|g:${guestId}`;
-  return `${category}|n:${normalizeCandidateName(name)}`;
+): string[] {
+  const keys = [`${category}|n:${normalizeCandidateName(name)}`];
+  if (membershipId) keys.push(`${category}|m:${membershipId}`);
+  if (guestId) keys.push(`${category}|g:${guestId}`);
+  return keys;
 }
 
 /** Append a member- or guest-shaped person to a derived list, skipping

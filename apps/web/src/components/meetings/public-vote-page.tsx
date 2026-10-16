@@ -21,6 +21,18 @@ import { dhakaFormat } from '@/lib/time';
 import { useGetPublicMeetingVoteQuery, useSubmitPublicMeetingVoteMutation } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
+/** The submit was refused because an officer closed voting (409 with
+ * `code: 'VOTING_CLOSED'`) — the page swaps to its closed state instead of
+ * showing a generic error. */
+function isVotingClosedError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const { status, data } = error as { status?: unknown; data?: unknown };
+  if (typeof data === 'object' && data !== null && 'code' in data) {
+    return (data as { code: unknown }).code === 'VOTING_CLOSED';
+  }
+  return status === 409;
+}
+
 const MEETING_DATE_FMT = dhakaFormat('en-GB', {
   weekday: 'long',
   day: 'numeric',
@@ -44,7 +56,7 @@ export function PublicVotePage() {
    * memo is the right home for it; SSR renders '' and skips the query. */
   const voterKey = useMemo(() => (meetingId ? ensureVoterKey(meetingId) : ''), [meetingId]);
 
-  const { data, isLoading } = useGetPublicMeetingVoteQuery(
+  const { data, isLoading, refetch } = useGetPublicMeetingVoteQuery(
     { meetingId, token, voterKey },
     { skip: !meetingId || !token || !voterKey },
   );
@@ -63,6 +75,9 @@ export function PublicVotePage() {
   const [draft, setDraft] = useState<Record<string, string> | null>(null);
   const picks = draft ?? data?.picks ?? localPicks;
   const [submitted, setSubmitted] = useState(false);
+  /* Set when a submit bounces off a closed vote, so the closed state shows
+   * at once rather than waiting on the refetch. */
+  const [closedOnSubmit, setClosedOnSubmit] = useState(false);
 
   const hasAnyPick = Object.values(picks).some(Boolean);
 
@@ -77,6 +92,12 @@ export function PublicVotePage() {
       setSubmitted(true);
       window.scrollTo({ top: 0 });
     } catch (error) {
+      if (isVotingClosedError(error)) {
+        setClosedOnSubmit(true);
+        window.scrollTo({ top: 0 });
+        refetch();
+        return;
+      }
       message.error(getApiErrorMessage(error, 'Could not submit your vote — please try again.'));
     }
   }
@@ -105,6 +126,23 @@ export function PublicVotePage() {
 
   const { meeting } = data;
   const ballotEmpty = data.categories.every((category) => category.candidates.length === 0);
+
+  if (data.state === 'closed' || closedOnSubmit) {
+    return (
+      <Centered>
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-fill text-ink-soft">
+          <LockSimple size={22} />
+        </div>
+        <p className="mt-3 text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+          {meeting.clubName} · Meeting #{meeting.meetingNumber}
+        </p>
+        <h1 className="mt-1 text-lg font-semibold text-ink">Voting has closed</h1>
+        <p className="mt-1.5 text-sm text-ink-soft">
+          Thanks for being here — the winners will be announced in the meeting.
+        </p>
+      </Centered>
+    );
+  }
 
   if (submitted) {
     return (

@@ -1,40 +1,73 @@
 'use client';
 
 import {
+  ArrowCounterClockwise,
   ArrowsClockwise,
-  ChartBar,
+  CaretDown,
+  Check,
   Copy,
   DownloadSimple,
   Eraser,
-  Info,
+  LockSimple,
+  PencilSimple,
   Plus,
   QrCode,
   Trophy,
+  Users,
+  WhatsappLogo,
 } from '@phosphor-icons/react/dist/ssr';
-import { App, Button, Input, Popconfirm, QRCode, Select, Skeleton, Tag, Tooltip } from 'antd';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  App,
+  Button,
+  Checkbox,
+  Input,
+  Popconfirm,
+  QRCode,
+  Select,
+  Skeleton,
+  Tag,
+  Tooltip,
+} from 'antd';
+import { useMemo, useRef, useState } from 'react';
 
 import { ReadOnly, useReadOnly } from '@/components/permissions/read-only';
 import type { Member } from '@/lib/education/members';
 import type { Meeting } from '@/lib/meetings/meetings';
-import type { VoteCandidate, VoteCategory } from '@/lib/meetings/voting';
+import type {
+  MeetingVoteResults,
+  MeetingVotingStatus,
+  VoteCandidate,
+  VoteCategory,
+  VoteCategoryResults,
+  VotingState,
+} from '@/lib/meetings/voting';
 import { isAutoVoteCategory } from '@/lib/meetings/voting';
 import { type Guest, getGuestFullName } from '@/lib/people/guests';
 import {
   useClearMeetingVoteCategoryMutation,
+  useCloseMeetingVotingMutation,
   useGetGuestsQuery,
   useGetMeetingVoteCandidatesQuery,
   useGetMeetingVoteResultsQuery,
   useGetMembersQuery,
+  useOpenMeetingVotingMutation,
   useSetMeetingVoteCandidatesMutation,
-  useSyncMeetingVoteCandidatesMutation,
 } from '@/store/api';
 import { getApiErrorMessage } from '@/store/api-error';
 
-/* How often the results board re-polls — ballots arrive through the
- * anonymous public endpoint, so nothing on this client invalidates the
- * cache and polling is how the board stays live while the room votes. */
-const RESULTS_POLL_MS = 15_000;
+/* How often the results read re-polls. Ballots arrive through the anonymous
+ * public endpoint, so nothing on this client invalidates the cache — polling
+ * is how the ballot count stays live. Faster while the room is voting; the
+ * slow rate otherwise still picks up a Start/Close pressed on another device
+ * (the results read carries `status`). */
+const RESULTS_POLL_OPEN_MS = 5_000;
+const RESULTS_POLL_IDLE_MS = 15_000;
+
+type CandidateInput = { name: string; membershipId?: string; guestId?: string };
+
+function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
 
 /* ------------------------------------------------------------------ share */
 
@@ -197,68 +230,61 @@ interface CategorySetupCardProps {
   members: Member[];
   guests: Guest[];
   saving: boolean;
-  onSave: (
-    category: string,
-    candidates: { name: string; membershipId?: string; guestId?: string }[],
-  ) => void;
+  onSave: (category: string, candidates: CandidateInput[]) => void;
 }
 
 /** One award's candidate list: closable tags for who's on it, one select for
  * adding. Every change commits immediately — the list is small and the
  * officer is usually pruning it seconds before showing the QR.
  *
- * Self-maintaining categories (table topics — see `isAutoVoteCategory`)
- * render read-only for everyone: the server keeps that list in step with
- * attendance, so there is nothing to add or prune by hand. */
+ * Self-topping categories (table topics — see `isAutoVoteCategory`) also gain
+ * names on their own from the Timer and attendance; a name removed here
+ * stays removed. An empty card is tinted so a gap is obvious before Start. */
 function CategorySetupCard({ category, members, guests, saving, onSave }: CategorySetupCardProps) {
   const readOnly = useReadOnly('meeting', 'update');
   const auto = isAutoVoteCategory(category.key);
+  const empty = category.candidates.length === 0;
+
+  function current(): CandidateInput[] {
+    return category.candidates.map((entry) => ({
+      name: entry.name,
+      membershipId: entry.membershipId ?? undefined,
+      guestId: entry.guestId ?? undefined,
+    }));
+  }
 
   function handleRemove(candidate: VoteCandidate) {
     onSave(
       category.key,
-      category.candidates
-        .filter((entry) => entry.id !== candidate.id)
-        .map((entry) => ({
-          name: entry.name,
-          membershipId: entry.membershipId ?? undefined,
-          guestId: entry.guestId ?? undefined,
-        })),
+      current().filter((_entry, index) => category.candidates[index].id !== candidate.id),
     );
   }
 
-  function handleAdd(candidate: { name: string; membershipId?: string; guestId?: string }) {
-    onSave(category.key, [
-      ...category.candidates.map((entry) => ({
-        name: entry.name,
-        membershipId: entry.membershipId ?? undefined,
-        guestId: entry.guestId ?? undefined,
-      })),
-      candidate,
-    ]);
+  function handleAdd(candidate: CandidateInput) {
+    onSave(category.key, [...current(), candidate]);
   }
 
   return (
-    <div className="rounded-2xl border border-line bg-canvas p-4">
-      <p className="text-sm font-semibold text-ink">{category.question}</p>
-      <p className="mt-0.5 text-[11px] text-ink-muted">
-        {auto
-          ? 'Filled automatically — everyone marked present (members + guests)'
-          : `${category.candidates.length} option(s)`}
-      </p>
+    <div
+      className={`rounded-2xl border p-4 ${empty ? 'border-amber-300 bg-amber-50/60' : 'border-line bg-canvas'}`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-ink">{category.label}</p>
+        {auto && (
+          <Tag className="!me-0 !text-[11px]" bordered={false}>
+            From Timer
+          </Tag>
+        )}
+      </div>
 
       <div className="mt-3 flex flex-wrap gap-1.5">
-        {category.candidates.length === 0 ? (
-          <span className="text-xs text-ink-muted">
-            {auto
-              ? 'No one checked in yet — this fills itself as attendance is marked.'
-              : 'No options yet — sync or add below.'}
-          </span>
+        {empty ? (
+          <span className="text-xs font-medium text-amber-700">Add names</span>
         ) : (
           category.candidates.map((candidate) => (
             <Tag
               key={candidate.id}
-              closable={!auto && !readOnly && !saving}
+              closable={!readOnly && !saving}
               onClose={(event) => {
                 event.preventDefault();
                 handleRemove(candidate);
@@ -271,55 +297,441 @@ function CategorySetupCard({ category, members, guests, saving, onSave }: Catego
         )}
       </div>
 
-      {!auto && (
-        <ReadOnly resource="meeting" action="update" display="block" className="mt-3">
-          <div className="mt-3">
-            <AddCandidateSelect
-              existing={category.candidates}
-              members={members}
-              guests={guests}
-              onAdd={handleAdd}
-            />
+      <ReadOnly resource="meeting" action="update" display="block" className="mt-3">
+        <div className="mt-3">
+          <AddCandidateSelect
+            existing={category.candidates}
+            members={members}
+            guests={guests}
+            onAdd={handleAdd}
+          />
+        </div>
+      </ReadOnly>
+    </div>
+  );
+}
+
+interface CandidateGridProps {
+  meetingId: string;
+  categories: VoteCategory[] | undefined;
+}
+
+/** The four setup cards, wired to the candidate-list save. Shared by the
+ * setup step and the open step's "Edit candidates" section. */
+function CandidateGrid({ meetingId, categories }: CandidateGridProps) {
+  const { message } = App.useApp();
+  const { data: members } = useGetMembersQuery();
+  const { data: guests } = useGetGuestsQuery();
+  const [setCandidates, { isLoading: saving }] = useSetMeetingVoteCandidatesMutation();
+
+  async function handleSave(category: string, candidates: CandidateInput[]) {
+    try {
+      await setCandidates({ meetingId, category, candidates }).unwrap();
+    } catch (error) {
+      message.error(getApiErrorMessage(error, 'Could not save the candidate list'));
+    }
+  }
+
+  if (!categories) return <Skeleton active paragraph={{ rows: 3 }} title={false} />;
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      {categories.map((category) => (
+        <CategorySetupCard
+          key={category.key}
+          category={category}
+          members={members ?? []}
+          guests={guests ?? []}
+          saving={saving}
+          onSave={handleSave}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ steps */
+
+const STEPS: { state: VotingState; label: string }[] = [
+  { state: 'setup', label: 'Candidates' },
+  { state: 'open', label: 'Vote' },
+  { state: 'closed', label: 'Winners' },
+];
+
+/** 1 Candidates → 2 Vote → 3 Winners, driven by the server's voting state. */
+function StepIndicator({ state }: { state: VotingState }) {
+  const currentIndex = STEPS.findIndex((step) => step.state === state);
+  return (
+    <ol className="flex items-center gap-2" aria-label="Voting progress">
+      {STEPS.map((step, index) => {
+        const done = index < currentIndex;
+        const active = index === currentIndex;
+        return (
+          <li
+            key={step.state}
+            className="flex min-w-0 flex-1 items-center gap-2"
+            aria-current={active ? 'step' : undefined}
+          >
+            <span
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
+                active
+                  ? 'bg-ink text-canvas'
+                  : done
+                    ? 'bg-emerald-500 text-white'
+                    : 'bg-fill text-ink-muted'
+              }`}
+            >
+              {done ? <Check size={12} weight="bold" /> : index + 1}
+            </span>
+            <span
+              className={`truncate text-xs ${active ? 'font-semibold text-ink' : 'text-ink-muted'}`}
+            >
+              {step.label}
+            </span>
+            {index < STEPS.length - 1 && <span className="h-px flex-1 bg-line" />}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/* ------------------------------------------------------------- 1: setup */
+
+interface SetupStepProps {
+  meetingId: string;
+  categories: VoteCategory[] | undefined;
+  status: MeetingVotingStatus;
+}
+
+/** Step 1 — check the candidate lists, then Start. The server tops every
+ * list up from the meeting data on each read, so there is usually nothing
+ * to do here but prune. Start can also send the voting link on WhatsApp to
+ * everyone checked in — once per meeting. */
+function SetupStep({ meetingId, categories, status }: SetupStepProps) {
+  const { message } = App.useApp();
+  const readOnly = useReadOnly('meeting', 'update');
+  const [openVoting, { isLoading: opening }] = useOpenMeetingVotingMutation();
+  const [sendWhatsapp, setSendWhatsapp] = useState(true);
+
+  const { whatsapp } = status;
+  const canSend = whatsapp.available && !whatsapp.sentAt && whatsapp.recipients > 0;
+
+  async function handleStart() {
+    try {
+      const { whatsappQueued } = await openVoting({
+        meetingId,
+        notifyWhatsapp: canSend && sendWhatsapp,
+      }).unwrap();
+      message.success(
+        whatsappQueued > 0
+          ? `Voting is open — link sent to ${plural(whatsappQueued, 'person', 'people')} on WhatsApp`
+          : 'Voting is open',
+      );
+    } catch (error) {
+      message.error(getApiErrorMessage(error, 'Could not start voting'));
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <CandidateGrid meetingId={meetingId} categories={categories} />
+
+      {readOnly ? (
+        <p className="text-xs text-ink-muted">Voting hasn&apos;t started yet.</p>
+      ) : (
+        <section className="flex flex-col gap-3 rounded-2xl border border-line bg-canvas p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-xs text-ink-soft">
+            {!whatsapp.available ? null : whatsapp.sentAt ? (
+              <span className="flex items-center gap-1.5">
+                <WhatsappLogo size={15} className="text-emerald-600" />
+                Link already sent on WhatsApp
+              </span>
+            ) : whatsapp.recipients === 0 ? (
+              <Checkbox checked={false} disabled>
+                No one checked in has a WhatsApp number yet
+              </Checkbox>
+            ) : (
+              <Checkbox checked={sendWhatsapp} onChange={(e) => setSendWhatsapp(e.target.checked)}>
+                Also send the link on WhatsApp to {plural(whatsapp.recipients, 'person', 'people')}{' '}
+                here
+              </Checkbox>
+            )}
           </div>
-        </ReadOnly>
+          <Button type="primary" size="large" loading={opening} onClick={handleStart}>
+            Start voting
+          </Button>
+        </section>
       )}
     </div>
   );
 }
 
-/* ---------------------------------------------------------------- results */
+/* -------------------------------------------------------------- 2: open */
 
-/** The live tally. Polls on an interval — see RESULTS_POLL_MS. The leader
- * (everyone tied at the top, provided they have at least one vote) wears the
- * trophy; everyone else's bar sizes against the leader's count. Each card
- * carries a Clear button (officers only) that wipes every ballot's pick in
- * that category — test votes, a re-run after a mix-up — while the
- * candidates stay put. */
-function ResultsBoard({ meetingId }: { meetingId: string }) {
+interface OpenStepProps {
+  meeting: Meeting;
+  categories: VoteCategory[] | undefined;
+  status: MeetingVotingStatus;
+  results: MeetingVoteResults | undefined;
+}
+
+/** Step 2 — the room votes. QR up front, a live ballot count, and no
+ * per-candidate tallies: showing who's ahead while people are still voting
+ * would sway the vote. Candidates stay editable behind a toggle for a late
+ * fix (a name typo, a forgotten speaker). */
+function OpenStep({ meeting, categories, status, results }: OpenStepProps) {
   const { message } = App.useApp();
   const readOnly = useReadOnly('meeting', 'update');
-  const {
-    data: results,
-    isLoading,
-    refetch,
-    isFetching,
-  } = useGetMeetingVoteResultsQuery(meetingId, { pollingInterval: RESULTS_POLL_MS });
-  const [clearCategory, { isLoading: clearing }] = useClearMeetingVoteCategoryMutation();
+  const [closeVoting, { isLoading: closing }] = useCloseMeetingVotingMutation();
+  const [editing, setEditing] = useState(false);
 
-  async function handleClear(categoryKey: string, label: string) {
+  const ballots = results?.totalBallots ?? 0;
+  const delivery = status.whatsapp.delivery;
+
+  async function handleClose() {
     try {
-      const { cleared } = await clearCategory({ meetingId, category: categoryKey }).unwrap();
+      await closeVoting(meeting.id).unwrap();
+      message.success('Voting closed');
+    } catch (error) {
+      message.error(getApiErrorMessage(error, 'Could not close voting'));
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <SharePanel meeting={meeting} />
+
+      <section className="flex flex-col gap-4 rounded-2xl border border-line bg-canvas p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 text-lg font-semibold text-ink">
+            <Users size={20} weight="bold" className="text-ink-muted" />
+            {!results
+              ? 'Counting…'
+              : ballots === 0
+                ? 'No votes yet'
+                : `${plural(ballots, 'person has', 'people have')} voted`}
+          </p>
+          <p className="mt-1 flex items-center gap-1.5 text-xs text-ink-soft">
+            <LockSimple size={13} className="shrink-0" />
+            Results stay hidden until you close voting.
+          </p>
+          {delivery && (
+            <p className="mt-1 flex items-center gap-1.5 text-xs text-ink-soft">
+              <WhatsappLogo size={13} className="shrink-0 text-emerald-600" />
+              WhatsApp: sent {delivery.sent} of {delivery.queued}
+              {delivery.failed > 0 && (
+                <span className="text-red-600">· {delivery.failed} failed</span>
+              )}
+            </p>
+          )}
+        </div>
+        {!readOnly && (
+          <Button type="primary" size="large" loading={closing} onClick={handleClose}>
+            Close voting &amp; show winners
+          </Button>
+        )}
+      </section>
+
+      {!readOnly && (
+        <section className="rounded-2xl border border-line bg-canvas p-5 sm:p-6">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-2 text-left text-sm font-semibold text-ink"
+            aria-expanded={editing}
+            onClick={() => setEditing((value) => !value)}
+          >
+            <span className="flex items-center gap-2">
+              <PencilSimple size={16} weight="bold" className="text-ink-muted" />
+              Edit candidates
+            </span>
+            <CaretDown
+              size={14}
+              className={`text-ink-muted transition-transform ${editing ? 'rotate-180' : ''}`}
+            />
+          </button>
+          {editing && (
+            <div className="mt-4">
+              <CandidateGrid meetingId={meeting.id} categories={categories} />
+            </div>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------ 3: closed */
+
+/** One award's full tally — the leader(s) wear the trophy, every bar sizes
+ * against the top count. */
+function TallyBars({ category }: { category: VoteCategoryResults }) {
+  const ranked = [...category.candidates].sort(
+    (a, b) => b.votes - a.votes || a.name.localeCompare(b.name),
+  );
+  const top = ranked[0]?.votes ?? 0;
+
+  if (ranked.length === 0) {
+    return <p className="text-xs text-ink-muted">No options on this ballot.</p>;
+  }
+
+  return (
+    <ul className="flex flex-col gap-2">
+      {ranked.map((candidate) => {
+        const leader = top > 0 && candidate.votes === top;
+        const width = top > 0 ? Math.max((candidate.votes / top) * 100, 4) : 0;
+        return (
+          <li key={candidate.id}>
+            <div className="flex items-center justify-between gap-2">
+              <span
+                className={`flex min-w-0 items-center gap-1.5 text-xs ${leader ? 'font-semibold text-ink' : 'text-ink-soft'}`}
+              >
+                {leader ? (
+                  <Trophy size={13} weight="fill" className="shrink-0 text-amber-500" />
+                ) : null}
+                <span className="truncate">{candidate.name}</span>
+              </span>
+              <span className="shrink-0 text-[11px] tabular-nums text-ink-muted">
+                {candidate.votes}
+              </span>
+            </div>
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-fill">
+              <div
+                className={`h-full rounded-full transition-[width] ${leader ? 'bg-amber-400' : 'bg-slate-400/70'}`}
+                style={{ width: `${width}%` }}
+              />
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+interface WinnerCardProps {
+  meetingId: string;
+  category: VoteCategoryResults;
+}
+
+/** One award's winner — name(s) large, ties joined with "&" — with the full
+ * tally behind a toggle. Clear (officers only) lives inside the tally: it
+ * wipes every ballot's pick in this category (test votes, a re-run) while
+ * the candidates stay put, so it shouldn't sit next to the headline. */
+function WinnerCard({ meetingId, category }: WinnerCardProps) {
+  const { message } = App.useApp();
+  const readOnly = useReadOnly('meeting', 'update');
+  const [clearCategory, { isLoading: clearing }] = useClearMeetingVoteCategoryMutation();
+  const [expanded, setExpanded] = useState(false);
+
+  const top = category.candidates.reduce((max, c) => Math.max(max, c.votes), 0);
+  const winners = top > 0 ? category.candidates.filter((c) => c.votes === top) : [];
+
+  async function handleClear() {
+    try {
+      const { cleared } = await clearCategory({ meetingId, category: category.key }).unwrap();
       message.success(
         cleared === 0
-          ? `No votes to clear for ${label}`
-          : `Cleared ${cleared} vote${cleared === 1 ? '' : 's'} for ${label}`,
+          ? `No votes to clear for ${category.label}`
+          : `Cleared ${plural(cleared, 'vote', 'votes')} for ${category.label}`,
       );
     } catch (error) {
       message.error(getApiErrorMessage(error, 'Could not clear votes'));
     }
   }
 
-  if (isLoading || !results) {
+  return (
+    <div className="rounded-2xl border border-line bg-canvas p-5">
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-muted">
+          <Trophy size={14} weight="fill" className="text-amber-500" />
+          {category.label}
+        </p>
+        {winners.length > 1 && (
+          <Tag color="gold" className="!me-0">
+            Tie
+          </Tag>
+        )}
+      </div>
+
+      {winners.length === 0 ? (
+        <p className="mt-2 text-lg font-semibold text-ink-muted">No votes</p>
+      ) : (
+        <>
+          <p className="mt-2 text-xl font-bold leading-tight text-ink">
+            {winners.map((winner) => winner.name).join(' & ')}
+          </p>
+          <p className="mt-1 text-xs tabular-nums text-ink-soft">
+            {plural(top, 'vote', 'votes')}
+            {category.totalVotes > 0 ? ` of ${category.totalVotes}` : ''}
+          </p>
+        </>
+      )}
+
+      <button
+        type="button"
+        className="mt-3 flex items-center gap-1 text-xs text-ink-muted hover:text-ink"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+      >
+        Full tally
+        <CaretDown size={12} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      </button>
+
+      {expanded && (
+        <div className="mt-3 border-t border-line pt-3">
+          <TallyBars category={category} />
+          {!readOnly && (
+            <div className="mt-3 flex justify-end">
+              <Popconfirm
+                title={`Clear votes for "${category.label}"?`}
+                description="Every pick in this category is wiped. Candidates stay on the ballot."
+                okText="Clear"
+                okButtonProps={{ danger: true }}
+                onConfirm={handleClear}
+                disabled={category.totalVotes === 0}
+              >
+                <Button
+                  type="text"
+                  size="small"
+                  danger
+                  disabled={category.totalVotes === 0 || clearing}
+                  icon={<Eraser size={14} />}
+                >
+                  Clear votes
+                </Button>
+              </Popconfirm>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface ClosedStepProps {
+  meetingId: string;
+  results: MeetingVoteResults | undefined;
+  refreshing: boolean;
+  onRefresh: () => void;
+}
+
+/** Step 3 — the winners, one card per award. Reopen goes back to step 2
+ * without re-sending the WhatsApp link. */
+function ClosedStep({ meetingId, results, refreshing, onRefresh }: ClosedStepProps) {
+  const { message } = App.useApp();
+  const readOnly = useReadOnly('meeting', 'update');
+  const [openVoting, { isLoading: reopening }] = useOpenMeetingVotingMutation();
+
+  async function handleReopen() {
+    try {
+      await openVoting({ meetingId, notifyWhatsapp: false }).unwrap();
+      message.success('Voting reopened');
+    } catch (error) {
+      message.error(getApiErrorMessage(error, 'Could not reopen voting'));
+    }
+  }
+
+  if (!results) {
     return (
       <section className="rounded-2xl border border-line bg-canvas p-5 sm:p-6">
         <Skeleton active paragraph={{ rows: 4 }} title={{ width: 180 }} />
@@ -328,104 +740,39 @@ function ResultsBoard({ meetingId }: { meetingId: string }) {
   }
 
   return (
-    <section className="rounded-2xl border border-line bg-canvas p-5 sm:p-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
-            <ChartBar size={16} weight="bold" className="text-ink-muted" />
-            Results
-          </h3>
-          <p className="mt-1 text-xs text-ink-soft">
-            {results.totalBallots === 0
-              ? 'No votes in yet — share the link above when you open voting.'
-              : `${results.totalBallots} ballot${results.totalBallots === 1 ? '' : 's'} in · updates automatically`}
-          </p>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-ink-soft">
+          Voting closed · {plural(results.totalBallots, 'ballot', 'ballots')}
+        </p>
+        <div className="flex items-center gap-1">
+          <Tooltip title="Refresh results">
+            <Button
+              type="text"
+              size="small"
+              aria-label="Refresh results"
+              icon={<ArrowsClockwise size={16} className={refreshing ? 'animate-spin' : ''} />}
+              onClick={onRefresh}
+            />
+          </Tooltip>
+          {!readOnly && (
+            <Button
+              icon={<ArrowCounterClockwise size={16} />}
+              loading={reopening}
+              onClick={handleReopen}
+            >
+              Reopen voting
+            </Button>
+          )}
         </div>
-        <Tooltip title="Refresh results">
-          <Button
-            type="text"
-            size="small"
-            aria-label="Refresh results"
-            icon={<ArrowsClockwise size={16} className={isFetching ? 'animate-spin' : ''} />}
-            onClick={() => refetch()}
-          />
-        </Tooltip>
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        {results.categories.map((category) => {
-          const ranked = [...category.candidates].sort(
-            (a, b) => b.votes - a.votes || a.name.localeCompare(b.name),
-          );
-          const top = ranked[0]?.votes ?? 0;
-          return (
-            <div key={category.key} className="rounded-xl border border-line bg-sidebar p-4">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold text-ink">{category.label}</p>
-                <div className="flex shrink-0 items-center gap-1">
-                  <p className="text-[11px] tabular-nums text-ink-muted">
-                    {category.totalVotes} vote{category.totalVotes === 1 ? '' : 's'}
-                  </p>
-                  {!readOnly && (
-                    <Popconfirm
-                      title={`Clear votes for "${category.label}"?`}
-                      description="Every pick in this category is wiped. Candidates stay on the ballot."
-                      okText="Clear"
-                      okButtonProps={{ danger: true }}
-                      onConfirm={() => handleClear(category.key, category.label)}
-                      disabled={category.totalVotes === 0}
-                    >
-                      <Button
-                        type="text"
-                        size="small"
-                        danger
-                        disabled={category.totalVotes === 0 || clearing}
-                        aria-label={`Clear votes for ${category.label}`}
-                        icon={<Eraser size={14} />}
-                      />
-                    </Popconfirm>
-                  )}
-                </div>
-              </div>
-
-              {ranked.length === 0 ? (
-                <p className="mt-3 text-xs text-ink-muted">No options on this ballot yet.</p>
-              ) : (
-                <ul className="mt-3 flex flex-col gap-2">
-                  {ranked.map((candidate) => {
-                    const leader = top > 0 && candidate.votes === top;
-                    const width = top > 0 ? Math.max((candidate.votes / top) * 100, 4) : 0;
-                    return (
-                      <li key={candidate.id}>
-                        <div className="flex items-center justify-between gap-2">
-                          <span
-                            className={`flex min-w-0 items-center gap-1.5 text-xs ${leader ? 'font-semibold text-ink' : 'text-ink-soft'}`}
-                          >
-                            {leader ? (
-                              <Trophy size={13} weight="fill" className="shrink-0 text-amber-500" />
-                            ) : null}
-                            <span className="truncate">{candidate.name}</span>
-                          </span>
-                          <span className="shrink-0 text-[11px] tabular-nums text-ink-muted">
-                            {candidate.votes}
-                          </span>
-                        </div>
-                        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-fill">
-                          <div
-                            className={`h-full rounded-full transition-[width] ${leader ? 'bg-amber-400' : 'bg-slate-400/70'}`}
-                            style={{ width: `${width}%` }}
-                          />
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-          );
-        })}
+      <div className="grid gap-4 md:grid-cols-2">
+        {results.categories.map((category) => (
+          <WinnerCard key={category.key} meetingId={meetingId} category={category} />
+        ))}
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -435,111 +782,58 @@ interface VotingTabProps {
   meeting: Meeting;
 }
 
-/** Voting tab — the meeting's "best of the evening" ballot. Officers set the
- * candidate lists (or let "Sync from meeting data" derive them from
- * speakers, evaluators, attendees and role holders), share the QR/link with
- * the room, and watch the anonymous tally come in. The ballot itself is the
- * public page at `/meetings/:id/vote`. */
+/** Voting tab — the meeting's "best of the evening" ballot, as three steps
+ * driven by the server's voting state: 1 check the candidates and Start,
+ * 2 share the QR while the room votes, 3 close and read out the winners.
+ * The ballot itself is the public page at `/meetings/:id/vote`. */
 export function VotingTab({ meeting }: VotingTabProps) {
-  const { message } = App.useApp();
   const meetingId = meeting.id;
-  const readOnly = useReadOnly('meeting', 'update');
 
   const { data: setup, isLoading: setupLoading } = useGetMeetingVoteCandidatesQuery(meetingId);
-  const { data: members } = useGetMembersQuery();
-  const { data: guests } = useGetGuestsQuery();
-  const [syncCandidates, { isLoading: syncing }] = useSyncMeetingVoteCandidatesMutation();
-  const [setCandidates, { isLoading: saving }] = useSetMeetingVoteCandidatesMutation();
+  /* Status rides on both reads. The results read is the polled one, so it
+   * wins when present — a Start/Close from another device lands here. */
+  const [pollState, setPollState] = useState<VotingState>('setup');
+  const {
+    data: results,
+    refetch,
+    isFetching,
+  } = useGetMeetingVoteResultsQuery(meetingId, {
+    pollingInterval: pollState === 'open' ? RESULTS_POLL_OPEN_MS : RESULTS_POLL_IDLE_MS,
+  });
+  const status = results?.status ?? setup?.status;
+  if (status && status.state !== pollState) setPollState(status.state);
 
-  /* First visit convenience: an untouched ballot (no candidates anywhere)
-   * syncs itself from the meeting data so the officer usually has nothing
-   * to set up at all. Only attempted once per mount, and never for
-   * read-only viewers — the sync is an `update`-gated write. */
-  const autoSynced = useRef(false);
-  useEffect(() => {
-    if (autoSynced.current || !setup || readOnly) return;
-    const untouched = setup.categories.every((category) => category.candidates.length === 0);
-    if (!untouched) return;
-    autoSynced.current = true;
-    syncCandidates(meetingId)
-      .unwrap()
-      .catch((error) => message.error(getApiErrorMessage(error, 'Could not sync candidates')));
-  }, [setup, readOnly, syncCandidates, meetingId, message]);
-
-  async function handleSync() {
-    try {
-      const next = await syncCandidates(meetingId).unwrap();
-      const added = next.categories.reduce((sum, c) => sum + c.candidates.length, 0);
-      message.success(
-        added === 0
-          ? 'Ballot is up to date with the meeting data'
-          : 'Candidate lists synced from the meeting data',
-      );
-    } catch (error) {
-      message.error(getApiErrorMessage(error, 'Could not sync candidates'));
-    }
-  }
-
-  async function handleSave(
-    category: string,
-    candidates: { name: string; membershipId?: string; guestId?: string }[],
-  ) {
-    try {
-      await setCandidates({ meetingId, category, candidates }).unwrap();
-    } catch (error) {
-      message.error(getApiErrorMessage(error, 'Could not save the candidate list'));
-    }
+  if (setupLoading || !status) {
+    return (
+      <section className="rounded-2xl border border-line bg-canvas p-5 sm:p-6">
+        <Skeleton active paragraph={{ rows: 4 }} title={{ width: 180 }} />
+      </section>
+    );
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <SharePanel meeting={meeting} />
+      <StepIndicator state={status.state} />
 
-      <ResultsBoard meetingId={meetingId} />
-
-      <section className="rounded-2xl border border-line bg-canvas p-5 sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
-              <Info size={16} weight="bold" className="text-ink-muted" />
-              Contestants
-            </h3>
-            <p className="mt-1 text-xs leading-relaxed text-ink-soft">
-              Who voters can pick for each award. Sync derives the lists from this meeting&apos;s
-              speakers, evaluators and role takers — prune or add by hand afterwards. Table topics
-              needs no setup: it always offers everyone marked present, members and guests alike.
-            </p>
-          </div>
-          <ReadOnly resource="meeting" action="update">
-            <Button
-              icon={<ArrowsClockwise size={16} className={syncing ? 'animate-spin' : ''} />}
-              loading={syncing}
-              onClick={handleSync}
-            >
-              Sync from meeting data
-            </Button>
-          </ReadOnly>
-        </div>
-
-        {setupLoading || !setup ? (
-          <div className="mt-4">
-            <Skeleton active paragraph={{ rows: 3 }} title={false} />
-          </div>
-        ) : (
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            {setup.categories.map((category) => (
-              <CategorySetupCard
-                key={category.key}
-                category={category}
-                members={members ?? []}
-                guests={guests ?? []}
-                saving={saving}
-                onSave={handleSave}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+      {status.state === 'setup' && (
+        <SetupStep meetingId={meetingId} categories={setup?.categories} status={status} />
+      )}
+      {status.state === 'open' && (
+        <OpenStep
+          meeting={meeting}
+          categories={setup?.categories}
+          status={status}
+          results={results}
+        />
+      )}
+      {status.state === 'closed' && (
+        <ClosedStep
+          meetingId={meetingId}
+          results={results}
+          refreshing={isFetching}
+          onRefresh={() => refetch()}
+        />
+      )}
     </div>
   );
 }

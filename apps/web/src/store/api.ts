@@ -96,6 +96,9 @@ import type { TimerEntry } from '@/lib/meetings/timer-reports';
 import type {
   MeetingVoteResults,
   MeetingVoteSetup,
+  MeetingVotingStatus,
+  OpenVotingInput,
+  OpenVotingResult,
   PublicMeetingVote,
   SetVoteCandidatesInput,
   SubmitPublicVoteInput,
@@ -675,6 +678,30 @@ export const toastlyApi = createApi({
         body,
       }),
       invalidatesTags: (_setup, _error, { meetingId }) => [
+        { type: 'MeetingVote', id: meetingId },
+        { type: 'MeetingVoteResults', id: meetingId },
+      ],
+    }),
+
+    /* Start / Reopen voting. Optionally sends the link on WhatsApp to
+     * everyone checked in (once per meeting — a reopen never resends). Both
+     * reads carry `status`, so both caches go out. */
+    openMeetingVoting: build.mutation<OpenVotingResult, { meetingId: string } & OpenVotingInput>({
+      query: ({ meetingId, ...body }) => ({
+        url: `/meetings/${meetingId}/vote/open`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_result, _error, { meetingId }) => [
+        { type: 'MeetingVote', id: meetingId },
+        { type: 'MeetingVoteResults', id: meetingId },
+      ],
+    }),
+
+    /* Close voting — the public ballot stops accepting votes. */
+    closeMeetingVoting: build.mutation<MeetingVotingStatus, string>({
+      query: (meetingId) => ({ url: `/meetings/${meetingId}/vote/close`, method: 'POST' }),
+      invalidatesTags: (_status, _error, meetingId) => [
         { type: 'MeetingVote', id: meetingId },
         { type: 'MeetingVoteResults', id: meetingId },
       ],
@@ -2831,6 +2858,8 @@ export const {
   useSetMeetingVoteCandidatesMutation,
   useGetMeetingVoteResultsQuery,
   useClearMeetingVoteCategoryMutation,
+  useOpenMeetingVotingMutation,
+  useCloseMeetingVotingMutation,
   useGetPublicMeetingVoteQuery,
   useSubmitPublicMeetingVoteMutation,
   useGetReceivedEvaluationsQuery,

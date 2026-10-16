@@ -2,8 +2,13 @@ import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common'
 
 import { CurrentContext, type RequestContext, Requires } from '@/access';
 
-import { SetVoteCandidatesDto } from './dto/voting.dto';
-import type { MeetingVoteResultsWire, MeetingVoteSetupWire } from './voting';
+import { OpenVotingDto, SetVoteCandidatesDto } from './dto/voting.dto';
+import type {
+  MeetingVoteResultsWire,
+  MeetingVoteSetupWire,
+  MeetingVotingStatusWire,
+  OpenVotingResultWire,
+} from './voting';
 import { VotingService } from './voting.service';
 
 /** The Voting tab's endpoints — ballot setup and the live tally. All nested
@@ -20,6 +25,37 @@ export class MeetingVotingController {
     @Param('meetingId') meetingId: string,
   ): Promise<MeetingVoteSetupWire> {
     return this.voting.listCandidates(ctx.subject, meetingId);
+  }
+
+  @Requires('meeting', 'read')
+  @Get('status')
+  getStatus(
+    @CurrentContext() ctx: RequestContext,
+    @Param('meetingId') meetingId: string,
+  ): Promise<MeetingVotingStatusWire> {
+    return this.voting.getStatus(ctx.subject, meetingId);
+  }
+
+  /** Start / Reopen — optionally sends the voting link on WhatsApp to
+   * everyone checked in (once per meeting). */
+  @Requires('meeting', 'update')
+  @Post('open')
+  openVoting(
+    @CurrentContext() ctx: RequestContext,
+    @Param('meetingId') meetingId: string,
+    @Body() dto: OpenVotingDto,
+  ): Promise<OpenVotingResultWire> {
+    return this.voting.openVoting(ctx.subject, meetingId, dto);
+  }
+
+  /** Close — the public ballot stops accepting votes. */
+  @Requires('meeting', 'update')
+  @Post('close')
+  closeVoting(
+    @CurrentContext() ctx: RequestContext,
+    @Param('meetingId') meetingId: string,
+  ): Promise<MeetingVotingStatusWire> {
+    return this.voting.closeVoting(ctx.subject, meetingId);
   }
 
   /** "Sync from meeting data" — tops the candidate lists up from speakers,
