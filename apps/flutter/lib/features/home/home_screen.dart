@@ -5,6 +5,7 @@ import '../../ui/icons.dart';
 
 import '../../app/data.dart';
 import '../../app/session.dart';
+import '../../core/access/access.dart';
 import '../../core/bd_time.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models.dart';
@@ -13,6 +14,7 @@ import '../../domain/my_roles.dart';
 import '../../domain/pathways.dart';
 import '../../ui/widgets.dart';
 import '../me/context_switcher.dart';
+import '../meetings/meetings_screen.dart' show showNewMeetingSheet;
 import '../org/org_home_screen.dart';
 
 /// Ticks every second — drives countdowns.
@@ -98,12 +100,25 @@ class _NextMeetingSection extends ConsumerWidget {
     // Drafts count too — any member can edit agendas, and the hero flags them.
     final next = MeetingPartition.of(meetings, now).current;
     if (next == null) {
-      return const Padding(
-        padding: EdgeInsets.only(top: 12),
+      final canCreate = ref.watch(canProvider)(Act.create, 'meeting');
+      return Padding(
+        padding: const EdgeInsets.only(top: 12),
         child: EmptyState(
           icon: PhosphorIconsRegular.calendarBlank,
           title: 'No meeting on the calendar',
-          message: 'Once the next meeting is scheduled, its countdown and lineup will show up here.',
+          message: canCreate
+              ? 'Schedule the next meeting and its countdown and lineup will show up here.'
+              : 'Once the next meeting is scheduled, its countdown and lineup will show up here.',
+          action: canCreate
+              ? FilledButton.icon(
+                  onPressed: () => showNewMeetingSheet(context, ref),
+                  icon: const Icon(PhosphorIconsBold.plus, size: 18),
+                  label: const Text('Add meeting'),
+                )
+              : OutlinedButton(
+                  onPressed: () => context.go('/meetings'),
+                  child: const Text('See past meetings'),
+                ),
         ),
       );
     }
