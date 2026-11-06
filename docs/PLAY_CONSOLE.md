@@ -95,7 +95,8 @@ by those rows.
   bundle from the legacy Expo app on 31 Aug 2026, signed with a key EAS
   manages. If that bundle was ever uploaded, Play already expects EAS's upload
   key and will reject this one. Either download EAS's keystore
-  (`eas credentials -p android` in `apps/mobile`) and point `key.properties`
+  (expo.dev → project Toastie → Credentials → Android; keep that EAS
+  project until this is settled — deleting it deletes the key) and point `key.properties`
   at it, or ask Play for an upload-key reset using this key's certificate.
 
 ## Still open before production

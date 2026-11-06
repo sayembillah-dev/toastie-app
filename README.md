@@ -91,14 +91,13 @@ Caddy  (TLS, compression, 25MB body cap)
   +-- /*      --> 127.0.0.1:3000   Next.js  (PM2 cluster, 2 workers)
 ```
 
-Four workspace packages:
+Three workspace packages:
 
-| Package           | Path              | Port | Role                                          |
-| ----------------- | ----------------- | ---- | --------------------------------------------- |
-| `@toastly/web`    | `apps/web`        | 3000 | Next.js App Router frontend                   |
-| `@toastly/api`    | `apps/api`        | 4000 | NestJS REST API under a global `/api` prefix  |
-| `@toastly/mobile` | `apps/mobile`     | 8081 | Expo / React Native client (Metro dev server) |
-| `@toastly/access` | `packages/access` | n/a  | Permission engine shared by all three apps    |
+| Package           | Path              | Port | Role                                         |
+| ----------------- | ----------------- | ---- | -------------------------------------------- |
+| `@toastly/web`    | `apps/web`        | 3000 | Next.js App Router frontend                  |
+| `@toastly/api`    | `apps/api`        | 4000 | NestJS REST API under a global `/api` prefix |
+| `@toastly/access` | `packages/access` | n/a  | Permission engine shared by the API and web  |
 
 ### How the apps talk
 
@@ -152,18 +151,6 @@ process (Ctrl-C) tears down the others.
 - Frontend: <http://localhost:3000>
 - API: <http://localhost:4000/api>
 - Health check: <http://localhost:4000/api/health>
-
-The mobile client is deliberately not part of `pnpm dev` — it needs a device or simulator,
-not just a port. Start it on its own with `pnpm dev:mobile`.
-
-Unlike the web app it cannot proxy same-origin, so it has to be told where the API lives:
-put `EXPO_PUBLIC_API_URL` in `apps/mobile/.env` (Expo inlines `EXPO_PUBLIC_*` at build
-time). Use the machine's LAN address rather than `localhost`, which on a phone or simulator
-means the device itself:
-
-```bash
-echo "EXPO_PUBLIC_API_URL=http://192.168.1.10:4000" > apps/mobile/.env
-```
 
 ### Seeding
 
@@ -252,10 +239,9 @@ Run from the repository root.
 | `pnpm dev`          | Shared package watcher, API, and frontend together               |
 | `pnpm dev:web`      | Frontend only                                                    |
 | `pnpm dev:api`      | Backend only                                                     |
-| `pnpm dev:mobile`   | Expo dev server (Metro) for the mobile client                    |
 | `pnpm build`        | Builds `@toastly/access`, then the API, then the frontend        |
 | `pnpm start`        | Runs both production builds                                      |
-| `pnpm lint`         | Biome across the repo, plus ESLint for the Next and Expo apps    |
+| `pnpm lint`         | Biome across the repo, plus ESLint for the Next app              |
 | `pnpm lint:fix`     | The same, with autofix                                           |
 | `pnpm format`       | Biome for code, Prettier for Markdown and YAML                   |
 | `pnpm format:check` | Formatting check without writing                                 |
@@ -496,16 +482,9 @@ toastie-app/
 │   │       ├── components/         Feature-grouped UI
 │   │       ├── lib/                Domain logic and API types
 │   │       └── store/              Redux Toolkit Query client and slices
-│   └── mobile/                     Expo (React Native), expo-router
-│       ├── app.json                Expo config: scheme, icons, typed routes
-│       └── src/
-│           ├── app/                Routes: (app) tabs, sign-in, public agenda
-│           ├── api/                HTTP client, typed endpoints, response types
-│           ├── session/            Tokens, active context, permission subject
-│           ├── features/           Screen-level data hooks and views
-│           ├── components/         Themed UI primitives
-│           ├── domain/             Enums mirrored from the Prisma schema
-│           └── lib/                Config, formatting, secure storage
+│   └── flutter/                    Flutter Android/iOS app (the Play Store build)
+│       ├── android/                Gradle config, release signing via key.properties
+│       └── lib/                    App, features, API client, data models
 ├── packages/
 │   └── access/                     Shared permission engine, Vitest covered
 ├── deploy/
