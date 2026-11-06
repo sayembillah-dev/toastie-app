@@ -12,7 +12,7 @@ List<T> _list<T>(dynamic data, T Function(Json) f) =>
 Json _map(dynamic data) => data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
 
 /// Endpoints for attendance, voting, planner, club admin, the org tree,
-/// platform users, WhatsApp and uploads. Mirrors `apps/web/src/store/api.ts`.
+/// platform users and uploads. Mirrors `apps/web/src/store/api.ts`.
 extension ToastieAdminApi on ToastieApi {
   // ── Attendance ──
   Future<Map<String, bool>> attendanceMembers(String meetingId) async {
@@ -128,13 +128,6 @@ extension ToastieAdminApi on ToastieApi {
       http.post('users/$id/org-assignments', body: {'role': role, 'unitType': unitType, 'unitId': unitId});
   Future<void> removeUserOrgAssignment(String userId, String assignmentId) =>
       http.delete('users/$userId/org-assignments/$assignmentId');
-
-  // ── WhatsApp ──
-  Future<WhatsappStatus> whatsappStatus() async =>
-      WhatsappStatus.fromJson(_map(await http.get('whatsapp/status', cache: false)));
-  Future<void> whatsappConnect() => http.post('whatsapp/connect');
-  Future<void> whatsappDisconnect() => http.post('whatsapp/disconnect');
-  Future<void> whatsappTest(String phone) => http.post('whatsapp/test-message', body: {'phone': phone});
 
   // ── Uploads ──
   /// Uploads [bytes] for [surface] (avatar, guestAvatar, clubBanner, …) and

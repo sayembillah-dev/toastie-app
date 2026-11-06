@@ -9,6 +9,7 @@ import '../../app/data.dart';
 import '../../app/session.dart';
 import '../../core/access/access.dart';
 import '../../core/bd_time.dart';
+import '../../core/legal.dart';
 import '../../core/theme/theme_mode.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models.dart';
@@ -175,13 +176,34 @@ class MeScreen extends ConsumerWidget {
               subtitle: 'Coming soon — WhatsApp messages cover roles and meetings for now.',
             ),
           ]),
+          const SectionLabel('About'),
+          GroupCard(children: [
+            RowTile(
+              leading: const Icon(PhosphorIconsRegular.info),
+              title: 'Help & support',
+              trailing: const Chevron(),
+              onTap: () => openLegalPage(LegalPage.support),
+            ),
+            RowTile(
+              leading: const Icon(PhosphorIconsRegular.clipboardText),
+              title: 'Terms of use',
+              trailing: const Chevron(),
+              onTap: () => openLegalPage(LegalPage.terms),
+            ),
+            RowTile(
+              leading: const Icon(PhosphorIconsRegular.shieldCheck),
+              title: 'Privacy policy',
+              trailing: const Chevron(),
+              onTap: () => openLegalPage(LegalPage.privacy),
+            ),
+          ]),
           const SizedBox(height: 16),
           GroupCard(children: [
             RowTile(
               leading: Icon(PhosphorIconsRegular.signOut, color: c.ink),
               title: 'Sign out',
               onTap: () async {
-                final ok = await confirmDialog(context, title: 'Sign out of Open Floor?', confirmLabel: 'Sign out');
+                final ok = await confirmDialog(context, title: 'Sign out of Openfloor?', confirmLabel: 'Sign out');
                 if (ok) await ref.read(authProvider.notifier).signOut();
               },
             ),

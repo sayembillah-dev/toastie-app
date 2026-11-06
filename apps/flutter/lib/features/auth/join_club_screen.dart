@@ -77,7 +77,7 @@ class _JoinClubScreenState extends ConsumerState<JoinClubScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-              child: Text('Welcome to Open Floor${user == null ? '' : ', ${user.firstName}'}.', style: t.headlineMedium),
+              child: Text('Welcome to Openfloor${user == null ? '' : ', ${user.firstName}'}.', style: t.headlineMedium),
             ),
             const SizedBox(height: 16),
             AppCard(

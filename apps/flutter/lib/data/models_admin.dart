@@ -408,22 +408,3 @@ class OrgRoleAssignment {
         unitName: _s(j['unitName']),
       );
 }
-
-class WhatsappStatus {
-  WhatsappStatus({required this.state, this.qr, this.number, this.name, this.error});
-  final String state; // not-configured | worker-offline | disconnected | connecting | waiting-for-scan | connected
-  final String? qr;
-  final String? number;
-  final String? name;
-  final String? error;
-  factory WhatsappStatus.fromJson(Json j) {
-    final acc = j['account'] is Map ? j['account'] as Map : const {};
-    return WhatsappStatus(
-      state: _s(j['state']),
-      qr: _so(j['qr']),
-      number: _so(acc['number']),
-      name: _so(acc['name']),
-      error: _so(j['error']),
-    );
-  }
-}

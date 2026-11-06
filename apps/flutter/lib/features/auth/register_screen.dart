@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/session.dart';
 import '../../core/api/api_client.dart';
 import '../../core/bd_time.dart';
+import '../../core/legal.dart';
 import '../../core/theme/tokens.dart';
 import '../../ui/widgets.dart';
 import 'auth_scaffold.dart';
@@ -126,6 +127,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.2))
                     : const Text('Create account'),
               ),
+              const SizedBox(height: 10),
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text('By creating an account you agree to the', style: TextStyle(color: c.inkMuted, fontSize: 12.5)),
+                  _LegalLink('Terms of use', LegalPage.terms),
+                  Text('and', style: TextStyle(color: c.inkMuted, fontSize: 12.5)),
+                  _LegalLink('Privacy policy', LegalPage.privacy),
+                ],
+              ),
               const SizedBox(height: 12),
               Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 Text('Already have an account?', style: TextStyle(color: c.inkMuted)),
@@ -140,4 +152,22 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       ],
     );
   }
+}
+
+class _LegalLink extends StatelessWidget {
+  const _LegalLink(this.label, this.page);
+  final String label;
+  final LegalPage page;
+
+  @override
+  Widget build(BuildContext context) => TextButton(
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          minimumSize: const Size(0, 32),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          textStyle: const TextStyle(fontSize: 12.5, decoration: TextDecoration.underline),
+        ),
+        onPressed: () => openLegalPage(page),
+        child: Text(label),
+      );
 }

@@ -102,7 +102,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               ),
               const SizedBox(height: 16),
               Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Text('New to Open Floor?', style: TextStyle(color: c.inkMuted)),
+                Text('New to Openfloor?', style: TextStyle(color: c.inkMuted)),
                 TextButton(onPressed: () {
                     final from = GoRouterState.of(context).uri.queryParameters['from'];
                     context.push(from == null ? '/register' : '/register?from=$from');

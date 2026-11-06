@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Open Floor</string>
+	<string>Openfloor</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Open Floor</string>
+	<string>Openfloor</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -29,7 +29,7 @@
 			<string>com.toastie.app</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>toastie</string>
+				<string>openfloor</string>
 			</array>
 		</dict>
 	</array>
@@ -38,9 +38,9 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Open Floor uses the camera to take profile, guest and club banner photos.</string>
+	<string>Openfloor uses the camera to take profile, guest and club banner photos.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Open Floor lets you choose profile, guest and club banner photos from your library.</string>
+	<string>Openfloor lets you choose profile, guest and club banner photos from your library.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

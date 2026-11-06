@@ -191,7 +191,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 ],
                 if (p.createdAt != null) ...[
                   const SizedBox(height: 16),
-                  Text('On Open Floor since ${BdTime.date(DateTime.parse(p.createdAt!))}', style: Theme.of(context).textTheme.bodySmall),
+                  Text('On Openfloor since ${BdTime.date(DateTime.parse(p.createdAt!))}', style: Theme.of(context).textTheme.bodySmall),
                 ],
               ],
             ),

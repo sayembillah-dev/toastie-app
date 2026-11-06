@@ -3,7 +3,6 @@
 import { DownloadSimple } from '@phosphor-icons/react/dist/ssr';
 import { Button, Popover } from 'antd';
 import { Arimo } from 'next/font/google';
-import Image from 'next/image';
 import {
   Fragment,
   useEffect,
@@ -29,7 +28,6 @@ import { useGetClubProfileQuery, useGetGuestsQuery, useGetMembersQuery } from '@
 import { useAppSelector } from '@/store/hooks';
 import { selectMeetingDraft } from '@/store/meeting-draft-slice';
 
-import tmLogo from '../../../assets/tm.png';
 import { useMemberOf, useNameOf } from './use-name-of';
 
 /* The printed agenda is its own visual language — Toastmasters maroon branding
@@ -114,29 +112,6 @@ function SheetHeader({ meeting, theme }: { meeting: Meeting; theme: string }) {
           alignItems: 'center',
         }}
       >
-        <div
-          style={{
-            position: 'relative',
-            zIndex: 1,
-            flexShrink: 0,
-            width: 108,
-            height: 96,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            paddingLeft: 20,
-          }}
-        >
-          <Image
-            src={tmLogo}
-            alt="Toastmasters logo"
-            width={76}
-            height={76}
-            priority
-            unoptimized
-            style={{ width: 76, height: 76, objectFit: 'contain' }}
-          />
-        </div>
         <div
           style={{
             flex: '1 1 0%',

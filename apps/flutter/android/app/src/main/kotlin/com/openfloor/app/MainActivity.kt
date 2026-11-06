@@ -1,4 +1,4 @@
-package com.toastie.toastie
+package com.openfloor.app
 
 import io.flutter.embedding.android.FlutterActivity
 

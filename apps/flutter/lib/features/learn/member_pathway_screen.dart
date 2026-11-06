@@ -285,7 +285,7 @@ class _UpdatePathwayFormState extends ConsumerState<_UpdatePathwayForm> {
         DropdownButtonFormField<String>(
           initialValue: _pathway,
           isExpanded: true,
-          hint: const Text('Select a Toastmasters pathway'),
+          hint: const Text('Select a pathway'),
           items: [for (final x in cat.pathways) DropdownMenuItem(value: x.name, child: Text(x.name))],
           onChanged: (v) => setState(() {
             _pathway = v;

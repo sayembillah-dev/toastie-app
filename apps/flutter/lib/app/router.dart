@@ -39,7 +39,6 @@ import '../features/people/guest_profile_screen.dart';
 import '../features/people/people_screen.dart';
 import '../features/org/org_tree_screen.dart';
 import '../features/org/users_screen.dart';
-import '../features/org/whatsapp_screen.dart';
 import '../data/models_admin.dart' show OrgLevel;
 import 'session.dart';
 import 'shell.dart';
@@ -230,13 +229,9 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(
-              path: '/users',
-              builder: (_, _) => const UsersScreen(),
-              routes: [
-                GoRoute(path: 'whatsapp', builder: (_, _) => const WhatsappScreen()),
-              ],
-            ),
+            // Linking the WhatsApp sender number is web-only (Super Admin →
+            // WhatsApp): the store build must not drive an unofficial client.
+            GoRoute(path: '/users', builder: (_, _) => const UsersScreen()),
           ]),
         ],
       ),

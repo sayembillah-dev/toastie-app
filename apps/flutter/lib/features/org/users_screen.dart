@@ -681,7 +681,7 @@ class _CreateUserScreenState extends ConsumerState<CreateUserScreen> {
     if (_result != null) {
       final token = (_result!['credentialShare'] as Map?)?['token'];
       final link = token == null ? null : '${AppConfig.webOrigin}/credentials/${_result!['id']}?t=$token';
-      final creds = 'Open Floor sign-in\nPhone: ${_phone.text.trim()}\nPassword: ${_password.text}';
+      final creds = 'Openfloor sign-in\nPhone: ${_phone.text.trim()}\nPassword: ${_password.text}';
       return Scaffold(
         appBar: AppBar(title: const Text('Account created'), automaticallyImplyLeading: false),
         body: ListView(padding: const EdgeInsets.all(20), children: [

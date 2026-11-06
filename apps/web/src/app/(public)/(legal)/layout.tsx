@@ -6,8 +6,8 @@ import { dhakaParts } from '@/lib/time';
 
 import openfloorLogo from '../../../../assets/openfloor.svg';
 
-/** Shell for the public policy pages — the privacy policy and the account
- * deletion request page.
+/** Shell for the public policy pages — privacy policy, account deletion,
+ * terms of use and help & support.
  *
  * A route group, so these live at `/privacy` and `/account-deletion` rather
  * than under a `/legal` prefix. Both URLs are submitted to Google Play (the
@@ -41,6 +41,12 @@ export default function LegalLayout({ children }: { children: ReactNode }) {
           </Link>
           <Link href="/account-deletion" className="hover:text-[#0b2a4c]">
             Delete your account
+          </Link>
+          <Link href="/terms" className="hover:text-[#0b2a4c]">
+            Terms of use
+          </Link>
+          <Link href="/support" className="hover:text-[#0b2a4c]">
+            Help & support
           </Link>
         </div>
       </footer>

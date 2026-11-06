@@ -279,7 +279,7 @@ class _OrgNodeFormState extends ConsumerState<OrgNodeForm> {
               OrgLevel.district => 'District 88',
               OrgLevel.division => 'Division A',
               OrgLevel.area => 'Area A1',
-              OrgLevel.club => 'Sunrise Toastmasters',
+              OrgLevel.club => 'Sunrise Speakers',
             },
           ),
         ),

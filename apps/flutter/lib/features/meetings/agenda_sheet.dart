@@ -16,7 +16,7 @@ import 'agenda_screen.dart' show AgendaData;
 /// `lib/meetings/agenda.ts`). The web prints that sheet through the browser;
 /// here the same markup and inline styles go through the platform's own web
 /// engine (`Printing.convertHtml`: Chromium WebView on Android, WebKit on iOS),
-/// with the same Arimo font and Toastmasters logo bundled, so the PDF matches
+/// with the same Arimo font bundled, so the PDF matches
 /// the web's. Keep the two in lock step — any change to the web sheet's
 /// layout, styles or run-of-show belongs here too.
 
@@ -218,16 +218,17 @@ String railDate(DateTime instant) {
   return '${_fullMonths[w.month - 1]} ${w.day}, ${w.year}';
 }
 
-/// Fonts, logo and banner image, inlined as data URIs so the page renders
-/// complete the moment it loads — no network, no file access.
+/// Fonts and banner image, inlined as data URIs so the page renders complete
+/// the moment it loads — no network, no file access.
+///
+/// No Toastmasters International logo: the app is not licensed to ship TI's
+/// marks. A club that wants its own logo on the sheet puts it in its banner.
 class SheetAssets {
-  const SheetAssets({required this.fontFaces, required this.logo, this.bannerImage});
+  const SheetAssets({required this.fontFaces, this.bannerImage});
   final String fontFaces;
-  final String logo;
   final String? bannerImage;
 
   static String? _fonts;
-  static String? _logo;
 
   static Future<SheetAssets> load({String? bannerImageUrl}) async {
     _fonts ??= [
@@ -240,8 +241,7 @@ class SheetAssets {
         "@font-face{font-family:'Arimo';font-style:$style;font-weight:$weight;"
             "src:url(data:font/ttf;base64,${base64Encode((await rootBundle.load('assets/agenda/$file')).buffer.asUint8List())}) format('truetype');}",
     ].join();
-    _logo ??= 'data:image/png;base64,${base64Encode((await rootBundle.load('assets/agenda/tm.png')).buffer.asUint8List())}';
-    return SheetAssets(fontFaces: _fonts!, logo: _logo!, bannerImage: await _fetchImage(bannerImageUrl));
+    return SheetAssets(fontFaces: _fonts!, bannerImage: await _fetchImage(bannerImageUrl));
   }
 
   static Future<String?> _fetchImage(String? url) async {
@@ -314,8 +314,6 @@ String agendaSheetHtml(AgendaData a, List<SheetRow> rows, SheetAssets assets, {d
   // ── Header: banner strip + info bar ──
   out
     ..write('<div style="${banner}position:relative;overflow:hidden;height:96px;display:flex;align-items:center">')
-    ..write('<div style="position:relative;z-index:1;flex-shrink:0;width:108px;height:96px;display:flex;align-items:center;justify-content:center;padding-left:20px">')
-    ..write('<img alt="Toastmasters logo" width="76" height="76" src="${assets.logo}" style="width:76px;height:76px;object-fit:contain"></div>')
     ..write('<div style="flex:1 1 0%;text-align:right;padding-right:20px;position:relative;z-index:1">')
     ..write('<div style="font-size:20px;font-weight:bold;color:white;letter-spacing:0.5px">${_e(a.clubName)}</div>');
   if (themeLine.isNotEmpty) {

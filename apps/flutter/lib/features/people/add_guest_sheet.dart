@@ -181,7 +181,7 @@ class _AddGuestFormState extends ConsumerState<_AddGuestForm> {
               _Notice(
                 icon: PhosphorIconsRegular.sparkle,
                 text: l.claimed
-                    ? 'Has an Open Floor account — we filled in what we know.'
+                    ? 'Has an Openfloor account — we filled in what we know.'
                     : 'Known to another club — we filled in what we know.',
                 color: c.success,
               ),

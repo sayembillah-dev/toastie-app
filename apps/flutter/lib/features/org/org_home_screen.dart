@@ -84,13 +84,6 @@ class OrgHomeScreen extends ConsumerWidget {
                 trailing: const Chevron(),
                 onTap: () => context.go('/users'),
               ),
-              RowTile(
-                leading: const Icon(PhosphorIconsRegular.whatsappLogo),
-                title: 'WhatsApp',
-                subtitle: 'The number Open Floor sends messages from',
-                trailing: const Chevron(),
-                onTap: () => context.push('/users/whatsapp'),
-              ),
             ],
           ]),
           if (s.memberships.isNotEmpty) ...[

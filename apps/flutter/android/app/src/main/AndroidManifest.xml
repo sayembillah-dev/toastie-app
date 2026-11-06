@@ -3,7 +3,7 @@
          without it a release build can't reach the API at all. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="Open Floor"
+        android:label="Openfloor"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -31,7 +31,7 @@
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="toastie"/>
+                <data android:scheme="openfloor"/>
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.

@@ -11,14 +11,14 @@ Widget _app() => const MaterialApp(home: IntroSplash(child: Scaffold(body: Cente
 void main() {
   testWidgets('plays over the app, then gets out of the way', (tester) async {
     await tester.pumpWidget(_app());
-    expect(find.text('Open Floor'), findsOneWidget);
+    expect(find.text('Openfloor'), findsOneWidget);
     expect(find.text('APP'), findsOneWidget); // already built underneath
 
     await tester.pump(const Duration(milliseconds: 1000));
-    expect(find.text('Open Floor'), findsOneWidget);
+    expect(find.text('Openfloor'), findsOneWidget);
 
     await tester.pumpAndSettle();
-    expect(find.text('Open Floor'), findsNothing);
+    expect(find.text('Openfloor'), findsNothing);
     expect(find.text('APP'), findsOneWidget);
   });
 
@@ -31,7 +31,7 @@ void main() {
     for (var i = 0; i < 8; i++) {
       await tester.pump(const Duration(milliseconds: 100));
     }
-    expect(find.text('Open Floor'), findsNothing);
+    expect(find.text('Openfloor'), findsNothing);
   });
 
   testWidgets('reduced motion goes straight to a short fade', (tester) async {
@@ -41,7 +41,7 @@ void main() {
     ));
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump();
-    expect(find.text('Open Floor'), findsNothing);
+    expect(find.text('Openfloor'), findsNothing);
   });
 
   // Visual check: SPLASH_FRAMES_DIR=/some/dir flutter test test/splash_test.dart

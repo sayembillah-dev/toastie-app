@@ -12,7 +12,7 @@ import Link from 'next/link';
  */
 
 const CONTACT_EMAIL = 'apps@niftyitsolution.com';
-const LAST_UPDATED = '31 August 2026';
+const LAST_UPDATED = '6 November 2026';
 
 export const metadata: Metadata = {
   title: 'Privacy policy',
@@ -44,10 +44,11 @@ export default function PrivacyPolicyPage() {
       <Section title="What we collect">
         <p>
           <strong>Your account.</strong> Your phone number, which is how you sign in; your first and
-          last name; and your password, which is stored only as a cryptographic hash and is never
-          readable by us. Optionally, an email address, a short bio, a profile photo, links to your
-          social profiles, and your Toastmasters International member number if you choose to add
-          it.
+          last name; and your password, which is stored as a cryptographic hash. If an administrator
+          creates your account for you, the starting password they set is held only until your first
+          sign-in, so it can be handed to you through a one-time link, and is then erased.
+          Optionally, an email address, a short bio, a profile photo, links to your social profiles,
+          and your Toastmasters International member number if you choose to add it.
         </p>
         <p>
           <strong>Your club membership.</strong> Which clubs you belong to, the officer roles you
@@ -58,6 +59,11 @@ export default function PrivacyPolicyPage() {
           are assigned, speeches you deliver, and evaluations you give and receive. Evaluations may
           include written feedback, images and audio recordings, when an evaluator chooses to submit
           them.
+        </p>
+        <p>
+          <strong>Votes.</strong> Votes cast through a meeting’s voting link are anonymous. Each
+          ballot is tied to a random key your browser generates, so you can change your vote — not
+          to your name, account or phone number.
         </p>
         <p>
           <strong>Records your club’s officers enter.</strong> If you are recorded as a guest of a
@@ -74,8 +80,25 @@ export default function PrivacyPolicyPage() {
         <p>
           Openfloor contains no analytics, advertising or tracking software of any kind. We do not
           build advertising profiles, we do not sell or rent your data, and we do not share it with
-          data brokers. The app does not request your location, your contacts, your camera roll or
-          your microphone in the background.
+          data brokers. The app never accesses your location or your contacts. It uses your camera
+          or photo library only when you choose to add a photo, and only for the photo you pick.
+        </p>
+      </Section>
+
+      <Section title="Messages we send">
+        <p>
+          Openfloor sends meeting announcements, the roles you are given, and links to a meeting’s
+          agenda or voting page as WhatsApp messages to the phone number on your profile or on your
+          club’s roster. To deliver them, your phone number and the text of the message pass through
+          WhatsApp, a service of Meta Platforms, which handles them under{' '}
+          <a
+            href="https://www.whatsapp.com/legal/privacy-policy"
+            className="font-medium text-[#0b2a4c] underline underline-offset-4"
+          >
+            WhatsApp’s privacy policy
+          </a>
+          . We send nothing else to WhatsApp. If you would rather not receive these messages, ask an
+          officer of your club or write to us at the address below.
         </p>
       </Section>
 
@@ -97,11 +120,14 @@ export default function PrivacyPolicyPage() {
         <p>
           <strong>Anyone with a share link.</strong> A club can publish a meeting agenda as a public
           link so guests can read it without an account. A published agenda shows the names and
-          roles of the people taking part in that meeting.
+          roles of the people taking part in that meeting. A club can also share a link that lets
+          people at the meeting vote, or lets an evaluator submit feedback on a speech; those pages
+          show the names of the people on the ballot or the speaker being evaluated.
         </p>
         <p>
           <strong>Nobody else.</strong> We do not disclose your information to third parties except
-          the infrastructure providers below, or where we are required to by law.
+          the infrastructure providers below, WhatsApp for the messages described above, or where we
+          are required to by law.
         </p>
       </Section>
 

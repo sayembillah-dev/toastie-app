@@ -39,7 +39,7 @@ class AuthScaffold extends StatelessWidget {
                         child: Image.asset('assets/logo.png', width: 36, height: 36),
                       ),
                       const SizedBox(width: 10),
-                      const Text('Open Floor',
+                      const Text('Openfloor',
                           style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)),
                     ]),
                     const SizedBox(height: 36),

@@ -137,6 +137,17 @@ function RegisterPageContent() {
               Create account
             </Button>
           </Form.Item>
+          <p className="mt-3 text-center text-xs text-black/55">
+            By creating an account you agree to the{' '}
+            <Link href="/terms" target="_blank" className="underline underline-offset-2">
+              Terms of use
+            </Link>{' '}
+            and{' '}
+            <Link href="/privacy" target="_blank" className="underline underline-offset-2">
+              Privacy policy
+            </Link>
+            .
+          </p>
         </Form>
       </AuthCard>
     </AuthShell>

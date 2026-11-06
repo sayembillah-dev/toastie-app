@@ -82,7 +82,7 @@ class ClubAdminScreen extends ConsumerWidget {
                   icon: const Icon(PhosphorIconsRegular.shareNetwork),
                   onPressed: code.value == null
                       ? null
-                      : () => shareText(context, 'Join our club on Open Floor with the code ${code.value}'),
+                      : () => shareText(context, 'Join our club on Openfloor with the code ${code.value}'),
                 ),
               ]),
             ]),

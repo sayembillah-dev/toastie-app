@@ -126,12 +126,12 @@ class _IntroSplashState extends State<IntroSplash> with SingleTickerProviderStat
                 opacity: words,
                 child: const Column(mainAxisSize: MainAxisSize.min, children: [
                   Text(
-                    'Open Floor',
+                    'Openfloor',
                     style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w700, letterSpacing: 0.3),
                   ),
                   SizedBox(height: 6),
                   Text(
-                    'TOASTMASTERS CLUB OPERATIONS',
+                    'SPEAKING CLUB OPERATIONS',
                     style: TextStyle(color: _mint, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 2.4),
                   ),
                 ]),
