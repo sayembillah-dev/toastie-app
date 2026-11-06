@@ -108,6 +108,10 @@ class TokenStore {
   }
 }
 
+/// What a refresh attempt established: new tokens, a definite "this session
+/// is over" from the server, or nothing at all (offline, timeout, 5xx).
+enum _RefreshOutcome { refreshed, rejected, unavailable }
+
 /// HTTP client for the Toastie API.
 ///
 /// - Bearer token + `X-Toastly-Context` on every request.
@@ -144,10 +148,23 @@ class ApiClient {
             !req.path.contains('auth/login') &&
             tokens.refreshToken != null;
         if (!canRefresh) return handler.next(err);
-        final ok = await _refresh();
-        if (!ok) {
-          onSessionExpired?.call();
-          return handler.next(err);
+        final outcome = await _refresh();
+        if (outcome != _RefreshOutcome.refreshed) {
+          // Only a server that looked at the refresh token and refused it
+          // ends the session. Offline, a timeout or a deploy restarting the
+          // API keeps the tokens so the next request can try again.
+          if (outcome == _RefreshOutcome.rejected) {
+            onSessionExpired?.call();
+            return handler.next(err);
+          }
+          // Surface it as a network failure, not the 401: callers (startup
+          // above all) read a 401 as "signed out" and would wipe the tokens.
+          return handler.next(DioException(
+            requestOptions: req,
+            type: DioExceptionType.connectionError,
+            error: err.error,
+            message: 'Session refresh could not reach the server',
+          ));
         }
         try {
           req.extra['retried'] = true;
@@ -163,7 +180,7 @@ class ApiClient {
 
   final TokenStore tokens;
   late final Dio _dio;
-  Future<bool>? _refreshing;
+  Future<_RefreshOutcome>? _refreshing;
 
   /// Called when refresh fails — the session controller signs the user out.
   VoidCallback? onSessionExpired;
@@ -171,7 +188,7 @@ class ApiClient {
   /// True while the app is serving cached data because the network failed.
   final ValueNotifier<bool> offline = ValueNotifier(false);
 
-  Future<bool> _refresh() {
+  Future<_RefreshOutcome> _refresh() {
     return _refreshing ??= () async {
       try {
         final res = await _dio.post<dynamic>(
@@ -182,9 +199,14 @@ class ApiClient {
         final data = res.data as Map;
         final t = (data['tokens'] ?? data) as Map;
         await tokens.saveTokens(t['accessToken'] as String, t['refreshToken'] as String);
-        return true;
+        return _RefreshOutcome.refreshed;
+      } on DioException catch (e) {
+        final status = e.response?.statusCode;
+        return status == 400 || status == 401 || status == 403
+            ? _RefreshOutcome.rejected
+            : _RefreshOutcome.unavailable;
       } catch (_) {
-        return false;
+        return _RefreshOutcome.unavailable;
       } finally {
         // Let the next 401 start a fresh refresh once this one settles.
         Future<void>.delayed(Duration.zero, () => _refreshing = null);

@@ -3,53 +3,57 @@
 import type { ActiveContextKey, SessionResponse } from '@toastly/access';
 import { useCallback, useEffect } from 'react';
 
+import { refreshSession } from '@/lib/auth/refresh';
 import {
   clearAuthStorage,
   readAccessToken,
-  readRefreshToken,
   readStoredContext,
-  writeAccessToken,
-  writeRefreshToken,
   writeStoredContext,
 } from '@/lib/auth/token-storage';
 import { useAppDispatch } from '@/store/hooks';
 import { isContextKeyValid, sessionLoaded, sessionUnauthenticated } from '@/store/session-slice';
 
+/** Result of loading the session at startup: the payload, a definite
+ * sign-out, or no verdict because the server could not be reached. */
+type LiveSession = SessionResponse | 'signed-out' | 'unavailable';
+
 /** Fetch `/auth/session`, and on 401 try the refresh dance once before
  * giving up. This is deliberately a plain `fetch` rather than an RTK
  * Query call — we run it before the store is ready to render anything
  * gated on the session, and we don't want to add a cache entry for a
- * one-shot bootstrap request. */
-async function fetchLiveSession(): Promise<SessionResponse | null> {
+ * one-shot bootstrap request. The refresh itself goes through the same
+ * `refreshSession()` as RTK Query, so the two can never spend one refresh
+ * token twice. */
+async function fetchLiveSession(): Promise<LiveSession> {
   const access = readAccessToken();
-  if (!access) return null;
+  if (!access) return 'signed-out';
 
-  const attempt = async (token: string): Promise<Response> =>
-    fetch('/api/auth/session', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+  const attempt = async (token: string): Promise<Response | null> => {
+    try {
+      return await fetch('/api/auth/session', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch {
+      return null;
+    }
+  };
 
-  const res = await attempt(access);
+  let res = await attempt(access);
+  if (!res) return 'unavailable';
   if (res.status === 401) {
-    const refresh = readRefreshToken();
-    if (!refresh) return null;
-    const refreshRes = await fetch('/api/auth/refresh', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ refreshToken: refresh }),
-    });
-    if (!refreshRes.ok) return null;
-    const data = (await refreshRes.json()) as {
-      tokens: { accessToken: string; refreshToken: string };
-      session: SessionResponse;
-    };
-    writeAccessToken(data.tokens.accessToken);
-    writeRefreshToken(data.tokens.refreshToken);
-    // The refresh endpoint already returns the session — no need for a
-    // second round-trip.
-    return data.session;
+    const outcome = await refreshSession();
+    if (outcome.kind === 'rejected') return 'signed-out';
+    if (outcome.kind === 'unavailable') return 'unavailable';
+    // The refresh endpoint returns the session; when another tab did the
+    // rotating, fetch it with the token that tab stored.
+    if (outcome.session) return outcome.session;
+    const fresh = readAccessToken();
+    if (!fresh) return 'signed-out';
+    res = await attempt(fresh);
+    if (!res) return 'unavailable';
+    if (res.status === 401) return 'signed-out';
   }
-  if (!res.ok) return null;
+  if (!res.ok) return 'unavailable';
   return (await res.json()) as SessionResponse;
 }
 
@@ -77,13 +81,15 @@ export function useSessionRefresh(): () => Promise<void> {
   const dispatch = useAppDispatch();
 
   return useCallback(async () => {
-    const payload = await fetchLiveSession();
-    if (!payload) {
+    const result = await fetchLiveSession();
+    // Unreachable: keep showing the session already loaded.
+    if (result === 'unavailable') return;
+    if (result === 'signed-out') {
       clearAuthStorage();
       dispatch(sessionUnauthenticated());
       return;
     }
-    applySessionPayload(dispatch, payload);
+    applySessionPayload(dispatch, result);
   }, [dispatch]);
 }
 
@@ -100,14 +106,26 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
 
     async function hydrate() {
-      const payload = await fetchLiveSession();
+      // A server that is briefly unreachable (a deploy, a dropped signal)
+      // gets a few more tries before the screen gives up — and even then the
+      // tokens stay, so the next reload picks the session straight back up.
+      let result = await fetchLiveSession();
+      for (const wait of [1000, 3000, 6000]) {
+        if (result !== 'unavailable' || cancelled) break;
+        await new Promise((resolve) => setTimeout(resolve, wait));
+        result = await fetchLiveSession();
+      }
       if (cancelled) return;
-      if (!payload) {
+      if (result === 'signed-out') {
         clearAuthStorage();
         dispatch(sessionUnauthenticated());
         return;
       }
-      applySessionPayload(dispatch, payload);
+      if (result === 'unavailable') {
+        dispatch(sessionUnauthenticated());
+        return;
+      }
+      applySessionPayload(dispatch, result);
     }
 
     void hydrate();

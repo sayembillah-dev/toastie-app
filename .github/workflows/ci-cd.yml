@@ -280,8 +280,8 @@ jobs:
           SITE_URL: ${{ secrets.SITE_URL }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
-          JWT_ACCESS_TTL: ${{ vars.JWT_ACCESS_TTL || '15m' }}
-          JWT_REFRESH_TTL: ${{ vars.JWT_REFRESH_TTL || '30d' }}
+          JWT_ACCESS_TTL: ${{ vars.JWT_ACCESS_TTL || '1h' }}
+          JWT_REFRESH_TTL: ${{ vars.JWT_REFRESH_TTL || '90d' }}
           REDIS_URL: ${{ secrets.REDIS_URL }}
           # Bucket name and region are configuration, not secrets, so they live
           # in repo variables alongside CORS_ORIGINS. The IAM pair are secrets.

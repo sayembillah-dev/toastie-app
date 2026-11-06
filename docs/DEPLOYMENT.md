@@ -123,7 +123,7 @@ Create an environment named **`production`** (Settings → Environments), then a
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `SSH_PRIVATE_KEY`       | Private half of a dedicated deploy keypair — don't reuse a personal key; generate one with `ssh-keygen`, append the `.pub` half to the deploy user's `authorized_keys`, and only the private half goes in here |
 | `SSH_HOST`              | VPS hostname or IP                                                                                                                                                                                             |
-| `SSH_USER`              | Whatever user owns `/srv/toastly` — currently `deploy`                                                                                                                                                               |
+| `SSH_USER`              | Whatever user owns `/srv/toastly` — currently `deploy`                                                                                                                                                         |
 | `DATABASE_URL`          | Managed Postgres, pooled endpoint. Set `connection_limit` deliberately — see below                                                                                                                             |
 | `DIRECT_DATABASE_URL`   | Same database, unpooled endpoint — Neon: the same host with `-pooler` removed. Used only by `prisma migrate deploy` in CI; see below                                                                           |
 | `JWT_ACCESS_SECRET`     | ≥16 chars. Boot fails if it is still the `.env.example` placeholder                                                                                                                                            |
@@ -134,8 +134,8 @@ Create an environment named **`production`** (Settings → Environments), then a
 | Variable                | Value                                       |
 | ----------------------- | ------------------------------------------- |
 | `CORS_ORIGINS`          | `https://your-domain`                       |
-| `JWT_ACCESS_TTL`        | optional, defaults to `15m`                 |
-| `JWT_REFRESH_TTL`       | optional, defaults to `30d`                 |
+| `JWT_ACCESS_TTL`        | optional, defaults to `1h`                  |
+| `JWT_REFRESH_TTL`       | optional, defaults to `90d`                 |
 | `FILE_STORAGE_PROVIDER` | `s3` or `local-db` — defaults to `local-db` |
 | `AWS_REGION`            | e.g. `ap-southeast-1`. Required when `s3`   |
 | `AWS_S3_BUCKET`         | Bucket name. Required when `s3`             |

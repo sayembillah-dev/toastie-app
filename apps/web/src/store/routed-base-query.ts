@@ -1,14 +1,8 @@
 import type { BaseQueryFn, FetchArgs } from '@reduxjs/toolkit/query';
 import { fetchBaseQuery } from '@reduxjs/toolkit/query';
 
-import {
-  clearAuthStorage,
-  readAccessToken,
-  readRefreshToken,
-  readStoredContext,
-  writeAccessToken,
-  writeRefreshToken,
-} from '@/lib/auth/token-storage';
+import { refreshSession } from '@/lib/auth/refresh';
+import { clearAuthStorage, readAccessToken, readStoredContext } from '@/lib/auth/token-storage';
 
 import { sessionUnauthenticated } from './session-slice';
 
@@ -43,42 +37,6 @@ function isPublicUrl(args: string | FetchArgs): boolean {
   return url.startsWith('/public/') || url.startsWith('public/');
 }
 
-/** Coalesces concurrent refreshes: if three tabs 401 at once we still only
- * spend one refresh token, and the other two await its resolution. */
-let refreshInflight: Promise<boolean> | null = null;
-
-async function tryRefresh(): Promise<boolean> {
-  if (refreshInflight) return refreshInflight;
-  refreshInflight = (async () => {
-    const refreshToken = readRefreshToken();
-    if (!refreshToken) return false;
-    try {
-      const res = await fetch('/api/auth/refresh', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
-      });
-      if (!res.ok) return false;
-      const data = (await res.json()) as {
-        tokens?: { accessToken?: string; refreshToken?: string };
-      };
-      const access = data.tokens?.accessToken;
-      const next = data.tokens?.refreshToken;
-      if (!access || !next) return false;
-      writeAccessToken(access);
-      writeRefreshToken(next);
-      return true;
-    } catch {
-      return false;
-    }
-  })();
-  try {
-    return await refreshInflight;
-  } finally {
-    refreshInflight = null;
-  }
-}
-
 export const routedBaseQuery: BaseQueryFn<string | FetchArgs, unknown, unknown> = async (
   args,
   api,
@@ -100,13 +58,15 @@ export const routedBaseQuery: BaseQueryFn<string | FetchArgs, unknown, unknown> 
       api.dispatch(sessionUnauthenticated());
       return result;
     }
-    const refreshed = await tryRefresh();
-    if (refreshed) {
+    const outcome = await refreshSession();
+    if (outcome.kind === 'refreshed') {
       result = await liveFetch(args, api, extraOptions);
-    } else {
+    } else if (outcome.kind === 'rejected') {
       clearAuthStorage();
       api.dispatch(sessionUnauthenticated());
     }
+    // `unavailable`: leave the session alone and let this request fail like
+    // any other network error — a blip or a deploy is not a sign-out.
   }
   return result;
 };

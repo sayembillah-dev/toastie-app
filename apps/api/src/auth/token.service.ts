@@ -19,14 +19,15 @@ interface JwtPayload {
   sub: string;
 }
 
-/** Access tokens are JWTs (15-min default TTL) signed with `JWT_ACCESS_SECRET`.
+/** Access tokens are JWTs (1-hour default TTL) signed with `JWT_ACCESS_SECRET`.
  * Refresh tokens are opaque random strings — no need for claims, since the
  * only thing the server does with them is look up a `RefreshToken` row by
  * hash. See §Locked-decisions in the plan for the "short access TTL +
  * rotating refresh with family reuse detection" mitigation model.
  *
  * A refresh replay (the client sends a token whose `revokedAt` is already
- * set) is treated as a stolen credential: the whole `familyId` is revoked,
+ * set, outside the short `REUSE_GRACE_MS` window after its rotation) is
+ * treated as a stolen credential: the whole `familyId` is revoked,
  * forcing the legitimate user to log in again. This is the single most
  * important behavior in this file — do not soften it. */
 @Injectable()
@@ -40,8 +41,8 @@ export class TokenService {
     private readonly jwtService: JwtService,
     config: ConfigService,
   ) {
-    this.accessTtlSeconds = parseTtlToSeconds(config.get<string>('JWT_ACCESS_TTL') ?? '15m');
-    this.refreshTtlSeconds = parseTtlToSeconds(config.get<string>('JWT_REFRESH_TTL') ?? '30d');
+    this.accessTtlSeconds = parseTtlToSeconds(config.get<string>('JWT_ACCESS_TTL') ?? '1h');
+    this.refreshTtlSeconds = parseTtlToSeconds(config.get<string>('JWT_REFRESH_TTL') ?? '90d');
   }
 
   async hashPassword(plain: string): Promise<string> {
@@ -70,6 +71,17 @@ export class TokenService {
     if (!existing) throw new UnauthorizedException({ code: 'REFRESH_UNKNOWN' });
 
     if (existing.revokedAt) {
+      // A token rotated moments ago is a race, not a theft: two tabs (or the
+      // session bootstrap and a query in the same tab) refreshing at once, or
+      // a phone that lost the response to the rotation it caused. Issue a new
+      // pair in the same family instead of logging the person out everywhere.
+      // `replacedById` separates a rotation from a logout revocation, which
+      // stays a hard failure.
+      const sinceRevoked = now.getTime() - existing.revokedAt.getTime();
+      if (existing.replacedById && sinceRevoked >= 0 && sinceRevoked <= REUSE_GRACE_MS) {
+        const minted = await this.mint(existing.userId, existing.familyId, now);
+        return minted.tokens;
+      }
       await this.revokeFamily(existing.familyId, now);
       this.logger.warn(
         `refresh reuse detected for family ${existing.familyId} (user ${existing.userId})`,
@@ -150,6 +162,12 @@ export class TokenService {
     };
   }
 }
+
+/** How long a just-rotated refresh token may be presented again without
+ * counting as reuse. Long enough to cover concurrent refreshes and a lost
+ * response on a slow mobile link; short enough that a token lifted from a
+ * device is useless by the time anyone could replay it. */
+const REUSE_GRACE_MS = 60_000;
 
 /** 32 bytes of entropy, base64url — 43 chars, url-safe, plenty of headroom
  * against birthday collisions across 100 clubs × 1,000 users × decades. */
