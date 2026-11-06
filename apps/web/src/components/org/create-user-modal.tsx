@@ -473,7 +473,8 @@ function CredentialsCard({
   const loginUrl = `${origin}/login`;
   /* Same data the credentials card already shows, on a page the recipient
    * can open themselves — the direct link and QR code both point here.
-   * Stops working the moment they log in once (see `AuthService.login`). */
+   * Stops working the moment they log in once (see `AuthService.login`), or
+   * after 14 days. */
   const credentialsUrl = `${origin}/credentials/${result.id}?t=${encodeURIComponent(result.credentialShare.token)}`;
 
   const summaryLines = [
@@ -518,7 +519,8 @@ function CredentialsCard({
 
       <p className="text-xs text-ink-muted">
         The password is shown here once. Share it with {result.firstName} however works best — copy
-        the text below, send the direct link, or let them scan the QR code.
+        the text below, send the direct link, or let them scan the QR code. The link works until
+        they first sign in, for up to 14 days.
       </p>
 
       <pre className="whitespace-pre-wrap rounded-lg border border-line bg-fill px-3 py-2.5 text-xs text-ink">

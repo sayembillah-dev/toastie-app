@@ -3,6 +3,8 @@ import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common
 import { Public } from '@/access';
 import { PrismaService } from '@/prisma';
 
+import { hashShareToken, openCredential } from './credential-share';
+
 /** Wire shape returned by `/public/users/:userId/credentials` — exactly
  * what the handoff page renders, nothing more (no email, no role, no
  * account id beyond what's already in the URL). */
@@ -23,9 +25,10 @@ export interface CredentialShareWire {
  * — a leaked link works from a browser with no login, same as the
  * meeting share pages.
  *
- * The row is deleted the moment `AuthService.login` sees this user log in
- * successfully, so once the recipient has actually signed in, the link
- * stops working — see `CredentialShare` in schema.prisma. */
+ * The row is matched on the token's hash and the password decrypts only with
+ * the token from the URL. It is deleted the moment `AuthService.login` sees
+ * this user sign in, and stops matching after `expiresAt` — see
+ * `CredentialShare` in schema.prisma. */
 @Public()
 @Controller('public/users')
 export class PublicUsersController {
@@ -40,12 +43,13 @@ export class PublicUsersController {
       throw new NotFoundException('No credentials match that link');
     }
     const row = await this.prisma.credentialShare.findFirst({
-      where: { userId, token },
-      select: { firstName: true, lastName: true, phone: true, password: true },
+      where: { userId, tokenHash: hashShareToken(token), expiresAt: { gt: new Date() } },
+      select: { firstName: true, lastName: true, phone: true, passwordCipher: true },
     });
-    if (!row) {
+    const password = row?.passwordCipher ? openCredential(token, row.passwordCipher) : null;
+    if (!row || password === null) {
       throw new NotFoundException('No credentials match that link');
     }
-    return row;
+    return { firstName: row.firstName, lastName: row.lastName, phone: row.phone, password };
   }
 }

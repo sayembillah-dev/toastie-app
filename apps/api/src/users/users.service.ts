@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+
 import {
   BadRequestException,
   ConflictException,
@@ -6,7 +8,6 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { createId } from '@paralleldrive/cuid2';
 import { Prisma } from '@prisma/client';
 import { can, type PermissionSubject } from '@toastly/access';
 
@@ -17,6 +18,7 @@ import { type OfficerRole, toClubRoles } from '@/memberships';
 import { PrismaService } from '@/prisma';
 import { StorageService } from '@/storage';
 
+import { sealCredential } from './credential-share';
 import type { DeleteAccountDto, UpdateProfileDto } from './dto/profile.dto';
 import type { CreateUserDto, SetUserPasswordDto, UpdateUserDto } from './dto/users.dto';
 import {
@@ -206,7 +208,9 @@ export class UsersService {
     const isClubAdmin = dto.isClubAdmin ?? false;
     const memberType = club ? (dto.memberType ?? null) : null;
 
-    const credentialShareToken = createId();
+    // Lives only in the link handed back below; the row keeps its hash.
+    const credentialShareToken = randomBytes(32).toString('base64url');
+    const now = new Date();
 
     try {
       const user = await this.prisma.$transaction(async (tx) => {
@@ -251,11 +255,10 @@ export class UsersService {
         await tx.credentialShare.create({
           data: {
             userId: created.id,
-            token: credentialShareToken,
+            ...sealCredential(credentialShareToken, dto.password, now),
             firstName,
             lastName,
             phone,
-            password: dto.password,
           },
         });
         return created;
@@ -498,6 +501,12 @@ export class UsersService {
    * (`WHERE phone = ? AND userId IS NULL`), so whoever is issued that number
    * next would silently claim the row and inherit a stranger's speech
    * history. Email and phone are cleared; the name stays, as a club record.
+   *
+   * The same goes for the shared identity: the `Person` row behind their
+   * number (bio, photo, socials, whatsapp, organisation — synced from the
+   * profile) is deleted outright, guest records linked to it lose every
+   * contact and profile field, and the photo files go from storage. This is
+   * what `/account-deletion` and the in-app screen promise; keep them in step.
    */
   /** `GET /profile/history` (IDENTITY_PLAN §7a): the account holder's whole
    * cross-club story — everywhere their number has been, guest and member
@@ -619,15 +628,61 @@ export class UsersService {
 
     await this.assertNotLastAdmin(user.id, user.isSuperAdmin);
 
-    // Scrub before the delete, not after: `userId` is what identifies the
-    // rows, and deleting the user nulls it.
+    // Find what to scrub before the delete, not after: `userId` is what
+    // identifies these rows, and deleting the user nulls it.
+    const full = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { avatarUrl: true },
+    });
+    const person = await this.prisma.person.findFirst({
+      where: { userId },
+      select: { id: true, avatarUrl: true },
+    });
+    const guestRows = person
+      ? await this.prisma.prospect.findMany({
+          where: { personId: person.id },
+          select: { avatarUrl: true },
+        })
+      : [];
+
     await this.prisma.$transaction([
       this.prisma.membership.updateMany({
-        where: { userId },
+        where: { OR: [{ userId }, ...(person ? [{ personId: person.id }] : [])] },
         data: { email: null, phone: null },
       }),
+      // Guest records clubs kept about this person: the name and the club's
+      // own notes stay, everything that identifies or reaches them goes.
+      ...(person
+        ? [
+            this.prisma.prospect.updateMany({
+              where: { personId: person.id },
+              data: {
+                email: null,
+                phone: null,
+                whatsapp: null,
+                avatarUrl: null,
+                bio: null,
+                organization: null,
+                socials: [],
+              },
+            }),
+            // The shared identity behind their number (bio, photo, socials,
+            // whatsapp…). Roster and guest rows keep their history through
+            // `onDelete: SetNull`, and the number is free to be claimed fresh.
+            this.prisma.person.delete({ where: { id: person.id } }),
+          ]
+        : []),
       this.prisma.user.delete({ where: { id: userId } }),
     ]);
+
+    // Files last: the rows no longer point at them, and `remove` is
+    // best-effort, so a storage hiccup cannot undo a finished deletion.
+    const files = new Set(
+      [full.avatarUrl, person?.avatarUrl, ...guestRows.map((g) => g.avatarUrl)].filter(
+        (f): f is string => !!f,
+      ),
+    );
+    await Promise.all([...files].map((f) => this.storage.remove(f)));
   }
 
   /** Refuses a self-delete that would strand a club with nobody able to

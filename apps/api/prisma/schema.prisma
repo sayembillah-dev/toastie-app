@@ -240,22 +240,34 @@ model Person {
 
 /// A one-time, unauthenticated handoff of a freshly-created account's
 /// credentials — what the Super Admin's "direct link" / QR code point at.
-/// Deliberately its own table rather than columns on `User`: it holds a
-/// plaintext password, which is a meaningfully different sensitivity level
-/// than the rest of the profile, so it should be trivial to reason about
-/// and to wipe. There is no expiry column — the row is deleted the moment
-/// the recipient's first successful login consumes it (see `AuthService.login`);
-/// until then it lives indefinitely, since an admin may create a batch of
-/// accounts and send the links out later.
+/// Deliberately its own table rather than columns on `User`, so it is
+/// trivial to reason about and to wipe.
+///
+/// Nothing here can be read back without the link. The share token only
+/// ever exists in the URL: the row keeps its SHA-256 (`tokenHash`), and the
+/// starting password is AES-256-GCM encrypted under a key derived from that
+/// same token (`passwordCipher`; see `users/credential-share.ts`). A copy of
+/// the database therefore yields neither a usable link nor a password.
+///
+/// The row is deleted the moment the recipient's first successful login
+/// consumes it (see `AuthService.login`), or after `expiresAt` (14 days —
+/// long enough for an admin who creates a batch and sends links later).
+///
+/// `token` and `password` are the legacy plaintext columns. They are only
+/// ever null now: `CredentialShareService` converts any leftover rows at
+/// boot. Drop them once every environment has booted this version.
 model CredentialShare {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  token     String   @unique
-  firstName String
-  lastName  String
-  phone     String
-  password  String
-  createdAt DateTime @default(now())
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  tokenHash      String?   @unique
+  passwordCipher String?
+  expiresAt      DateTime?
+  token          String?   @unique
+  password       String?
+  firstName      String
+  lastName       String
+  phone          String
+  createdAt      DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

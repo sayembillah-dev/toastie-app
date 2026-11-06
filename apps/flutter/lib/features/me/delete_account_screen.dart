@@ -82,12 +82,14 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
       body: ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 40), children: [
         Text('What gets removed', style: t.titleMedium),
         bullet(PhosphorIconsRegular.x, 'Your sign-in, password and profile (photo, bio, socials).'),
-        bullet(PhosphorIconsRegular.x, 'Access to every club on Open Floor.'),
+        bullet(PhosphorIconsRegular.x, 'Access to every club on Openfloor.'),
+        bullet(PhosphorIconsRegular.x, 'Your phone number, email and photo on every club’s roster and guest records.'),
         const SizedBox(height: 12),
         Text('What the club keeps', style: t.titleMedium),
         bullet(PhosphorIconsRegular.check, 'Meeting history — speeches, roles and evaluations you took part in.'),
         bullet(PhosphorIconsRegular.check,
-            'Your row on the club roster. Deleting your account does not take you off the roster — ask a club officer for that.'),
+            'Your name on the club roster. Deleting your account does not take you off the roster — ask a club officer for that.'),
+        bullet(PhosphorIconsRegular.check, 'Guest records from before you joined — your name and the club’s notes only.'),
         if (isAdmin) ...[
           const SizedBox(height: 12),
           Container(

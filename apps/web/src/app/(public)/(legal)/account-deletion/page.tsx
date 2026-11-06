@@ -26,6 +26,7 @@ const DELETED = [
   'Your sign-in credentials and password',
   'Your phone number and email address',
   'Your profile details, photo, bio and any social links',
+  'Contact details and photos on any club’s guest records about you',
   'Your sessions on every device, so you are signed out everywhere',
   'Any push notification subscriptions',
   'Any club invitations you sent and join requests you made',
@@ -36,6 +37,7 @@ const RETAINED = [
   'Speeches you delivered, and the evaluations you gave and received',
   'Your attendance at past meetings and the roles you held',
   'Dues and payment records your club’s treasurer recorded',
+  'Guest records from before you joined a club — your name and the club’s notes only',
 ];
 
 export default function AccountDeletionPage() {

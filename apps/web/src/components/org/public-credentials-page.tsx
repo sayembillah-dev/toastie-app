@@ -57,10 +57,10 @@ export function PublicCredentialsPage({ userId, token }: PublicCredentialsPagePr
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-fill text-ink-soft">
             <Warning size={22} />
           </div>
-          <h1 className="mt-3 text-lg font-semibold text-ink">This link has been used</h1>
+          <h1 className="mt-3 text-lg font-semibold text-ink">This link no longer works</h1>
           <p className="mt-1.5 text-sm text-ink-soft">
-            It stops working the moment its account signs in for the first time — or the link may
-            just be out of date. Ask your Club Admin or Super Admin for a fresh one.
+            It stops working the moment its account signs in for the first time, and 14 days after
+            it was created. Ask your Club Admin or Super Admin for a fresh one.
           </p>
         </section>
       </div>
