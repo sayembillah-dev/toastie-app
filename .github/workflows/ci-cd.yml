@@ -294,6 +294,13 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           # Optional. Set → the WhatsApp worker runs (see ecosystem.config.cjs).
           WHATSAPP_API_KEY: ${{ secrets.WHATSAPP_API_KEY }}
+          # Outgoing email (see apps/api/src/mail). Configuration, not secrets:
+          # SES reuses the AWS key pair above. MAIL_PROVIDER defaults to
+          # console, which in production logs that a send was skipped and
+          # never the body, so a repo without SES still deploys.
+          MAIL_PROVIDER: ${{ vars.MAIL_PROVIDER || 'console' }}
+          SES_REGION: ${{ vars.SES_REGION }}
+          MAIL_FROM: ${{ vars.MAIL_FROM }}
         run: |
           set -euo pipefail
           # Secrets go over stdin, never as argv: process arguments are visible
@@ -324,6 +331,12 @@ jobs:
               echo "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY"
             fi
             if [ -n "${WHATSAPP_API_KEY:-}" ]; then echo "WHATSAPP_API_KEY=$WHATSAPP_API_KEY"; fi
+            echo "MAIL_PROVIDER=$MAIL_PROVIDER"
+            if [ -n "${SES_REGION:-}" ]; then echo "SES_REGION=$SES_REGION"; fi
+            # Quoted: the value carries a space and angle brackets
+            # ("Openfloor <no-reply@openfloor.club>"). Both the ecosystem
+            # parser and dotenv strip one layer of matching quotes.
+            if [ -n "${MAIL_FROM:-}" ]; then echo "MAIL_FROM=\"$MAIL_FROM\""; fi
           } | ssh deploy-target '
             set -euo pipefail
             umask 077

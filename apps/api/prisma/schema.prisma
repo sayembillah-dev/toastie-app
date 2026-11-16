@@ -41,6 +41,22 @@ enum UserStatus {
   suspended
 }
 
+/// How a one-time code reaches its owner. `target` on `OtpCode` is an email
+/// address for `email` and a local phone number for `whatsapp`.
+enum OtpChannel {
+  email
+  whatsapp
+}
+
+/// What a one-time code unlocks. A code issued for one purpose never
+/// verifies for another — the purpose is part of the hashed input.
+enum OtpPurpose {
+  signup
+  verify_email
+  reset
+  whatsapp_recovery
+}
+
 enum ClubDirectoryStatus {
   active
   low
@@ -199,6 +215,7 @@ model User {
   invitesSent       Invite[]           @relation("InviteInvitedBy")
   joinRequests      JoinRequest[]
   credentialShare   CredentialShare?
+  otpCodes          OtpCode[]
   pushSubscriptions PushSubscription[]
   deviceTokens      DeviceToken[]
   person            Person?
@@ -270,6 +287,35 @@ model CredentialShare {
   createdAt      DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// One-time codes for sign-up, email verification, password reset and
+/// WhatsApp recovery (see src/auth/otp.service.ts). Only an HMAC of the code
+/// is stored — the plain code exists only in the message sent to the person.
+///
+/// Rows are never deleted on use: `consumedAt` marks a used code, and an
+/// older code is retired by pulling `expiresAt` back to the moment a newer
+/// one was issued. Keeping the rows is what lets the per-target send limits
+/// count recent codes. `target` is stored normalised (email lower-cased).
+model OtpCode {
+  id         String     @id @default(cuid())
+  channel    OtpChannel
+  target     String
+  purpose    OtpPurpose
+  /// Null for a sign-up code — no account exists yet.
+  userId     String?
+  codeHash   String
+  expiresAt  DateTime
+  /// Every verify attempt is counted up front, the correct one included —
+  /// see `OtpService.verify` for why the count happens before the compare.
+  attempts   Int        @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime   @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([target, purpose, createdAt])
+  @@index([userId])
 }
 
 /// Refresh tokens are hashed (`sha256`) — the raw value the client holds is

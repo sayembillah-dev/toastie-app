@@ -2,12 +2,16 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
+import { ThrottlerModule } from '@nestjs/throttler';
 
 import { AccessModule, ContextGuard, PermissionGuard } from '@/access';
 
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { ClientIpThrottlerGuard } from './guards/client-ip-throttler.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { OtpService } from './otp.service';
+import { PasswordResetService } from './password-reset.service';
 import { TokenService } from './token.service';
 
 /** Registers the three global guards in the order they must run:
@@ -28,16 +32,23 @@ import { TokenService } from './token.service';
         secret: config.get<string>('JWT_ACCESS_SECRET'),
       }),
     }),
+    // Storage for `ClientIpThrottlerGuard`. Not an APP_GUARD: only the public
+    // auth routes opt in, each with its own `@Throttle` limit. This default
+    // applies to a route that uses the guard without one.
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 10 }]),
   ],
   controllers: [AuthController],
   providers: [
     AuthService,
     TokenService,
+    OtpService,
+    PasswordResetService,
+    ClientIpThrottlerGuard,
     JwtAuthGuard,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useExisting: ContextGuard },
     { provide: APP_GUARD, useExisting: PermissionGuard },
   ],
-  exports: [AuthService, TokenService, JwtAuthGuard],
+  exports: [AuthService, TokenService, OtpService, JwtAuthGuard],
 })
 export class AuthModule {}

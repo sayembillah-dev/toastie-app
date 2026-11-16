@@ -22,6 +22,7 @@ import { InventoryModule } from './inventory';
 import { InvitesModule } from './invites';
 import { JoinRequestsModule } from './join-requests';
 import { LibraryModule } from './library';
+import { MailModule } from './mail';
 import { MeetingsModule } from './meetings';
 import { MembershipsModule } from './memberships';
 import { OrgModule } from './org';
@@ -65,6 +66,8 @@ import { WhatsappModule } from './whatsapp';
     // Global: the single writer of the Person identity table — every module
     // that records a phone number injects IdentityService.
     IdentityModule,
+    // Global: the single way to send email — see src/mail.
+    MailModule,
     AccessModule,
     ActivityModule,
     AuthModule,

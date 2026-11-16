@@ -32,6 +32,19 @@ export enum FileStorageProvider {
   S3 = 's3',
 }
 
+/** How outgoing email leaves the API (see src/mail). `console` writes each
+ * message to the log instead of sending it — the default, so a fresh clone
+ * and CI need no AWS account. In production the console provider logs only
+ * that a send was skipped, never the body, so one-time codes cannot end up in
+ * the PM2 logs. `ses` sends through Amazon SES with the shared AWS key pair. */
+export enum MailProvider {
+  Console = 'console',
+  Ses = 'ses',
+}
+
+const usesAwsKeys = (env: EnvironmentVariables) =>
+  env.FILE_STORAGE_PROVIDER === FileStorageProvider.S3 || env.MAIL_PROVIDER === MailProvider.Ses;
+
 /** Placeholder values shipped in `.env.example`. Booting production with one of
  * these still "works" — which is exactly why it has to be a hard failure. */
 const PLACEHOLDER_SECRETS = new Set(['change-me-in-.env', 'change-me-in-.env-too']);
@@ -153,14 +166,18 @@ class EnvironmentVariables {
   @IsNotEmpty({ message: 'AWS_S3_BUCKET is required when FILE_STORAGE_PROVIDER=s3' })
   AWS_S3_BUCKET?: string;
 
-  @ValidateIf((env: EnvironmentVariables) => env.FILE_STORAGE_PROVIDER === FileStorageProvider.S3)
+  @ValidateIf(usesAwsKeys)
   @IsString()
-  @IsNotEmpty({ message: 'AWS_ACCESS_KEY_ID is required when FILE_STORAGE_PROVIDER=s3' })
+  @IsNotEmpty({
+    message: 'AWS_ACCESS_KEY_ID is required when FILE_STORAGE_PROVIDER=s3 or MAIL_PROVIDER=ses',
+  })
   AWS_ACCESS_KEY_ID?: string;
 
-  @ValidateIf((env: EnvironmentVariables) => env.FILE_STORAGE_PROVIDER === FileStorageProvider.S3)
+  @ValidateIf(usesAwsKeys)
   @IsString()
-  @IsNotEmpty({ message: 'AWS_SECRET_ACCESS_KEY is required when FILE_STORAGE_PROVIDER=s3' })
+  @IsNotEmpty({
+    message: 'AWS_SECRET_ACCESS_KEY is required when FILE_STORAGE_PROVIDER=s3 or MAIL_PROVIDER=ses',
+  })
   AWS_SECRET_ACCESS_KEY?: string;
 
   // How long a minted GET signature stays valid. Read URLs are embedded in API
@@ -176,6 +193,25 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   S3_SIGNED_PUT_TTL_SECONDS?: string;
+
+  // Outgoing email (see src/mail). Defaults to `console`; the SES settings
+  // are demanded only once someone opts into `ses`, together with the AWS key
+  // pair above (shared with S3). SES_REGION is separate from AWS_REGION so the
+  // bucket and the sending identity can live in different regions.
+  @IsOptional()
+  @IsEnum(MailProvider, { message: 'MAIL_PROVIDER must be either "console" or "ses"' })
+  MAIL_PROVIDER: MailProvider = MailProvider.Console;
+
+  @ValidateIf((env: EnvironmentVariables) => env.MAIL_PROVIDER === MailProvider.Ses)
+  @IsString()
+  @IsNotEmpty({ message: 'SES_REGION is required when MAIL_PROVIDER=ses' })
+  SES_REGION?: string;
+
+  // The verified sender, e.g. `Openfloor <no-reply@openfloor.club>`.
+  @ValidateIf((env: EnvironmentVariables) => env.MAIL_PROVIDER === MailProvider.Ses)
+  @IsString()
+  @IsNotEmpty({ message: 'MAIL_FROM is required when MAIL_PROVIDER=ses' })
+  MAIL_FROM?: string;
 }
 
 /** Wired into `ConfigModule.forRoot({ validate })`, so it runs once at boot and
