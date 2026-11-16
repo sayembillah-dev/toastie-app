@@ -218,17 +218,18 @@ String railDate(DateTime instant) {
   return '${_fullMonths[w.month - 1]} ${w.day}, ${w.year}';
 }
 
-/// Fonts and banner image, inlined as data URIs so the page renders complete
-/// the moment it loads — no network, no file access.
-///
-/// No Toastmasters International logo: the app is not licensed to ship TI's
-/// marks. A club that wants its own logo on the sheet puts it in its banner.
+/// Fonts, Toastmasters logo and banner image, inlined as data URIs so the
+/// page renders complete the moment it loads — no network, no file access.
 class SheetAssets {
-  const SheetAssets({required this.fontFaces, this.bannerImage});
+  const SheetAssets({required this.fontFaces, this.logo, this.bannerImage});
   final String fontFaces;
+
+  /// The three-colour Toastmasters logo (SVG), drawn on the banner's left.
+  final String? logo;
   final String? bannerImage;
 
   static String? _fonts;
+  static String? _logo;
 
   static Future<SheetAssets> load({String? bannerImageUrl}) async {
     _fonts ??= [
@@ -241,7 +242,9 @@ class SheetAssets {
         "@font-face{font-family:'Arimo';font-style:$style;font-weight:$weight;"
             "src:url(data:font/ttf;base64,${base64Encode((await rootBundle.load('assets/agenda/$file')).buffer.asUint8List())}) format('truetype');}",
     ].join();
-    return SheetAssets(fontFaces: _fonts!, bannerImage: await _fetchImage(bannerImageUrl));
+    _logo ??= 'data:image/svg+xml;base64,'
+        '${base64Encode((await rootBundle.load('assets/agenda/toastmasters-logo.svg')).buffer.asUint8List())}';
+    return SheetAssets(fontFaces: _fonts!, logo: _logo, bannerImage: await _fetchImage(bannerImageUrl));
   }
 
   static Future<String?> _fetchImage(String? url) async {
@@ -261,6 +264,15 @@ class SheetAssets {
   }
 }
 
+/// Banner strip height — matches `AGENDA_BANNER_HEIGHT` on the web, which the
+/// club-settings image drag frame also uses.
+const _bannerHeight = 80.0;
+
+/// The logo keeps its SVG proportions (434.58 × 360.06) at 60px tall, leaving
+/// 10px of banner above and below.
+const _logoHeight = 60.0;
+const _logoWidth = 72.0;
+
 String _e(String s) => const HtmlEscape(HtmlEscapeMode.element).convert(s);
 
 String _num(double v) => v == v.roundToDouble() ? v.toInt().toString() : v.toString();
@@ -272,12 +284,11 @@ String _num(double v) => v == v.roundToDouble() ? v.toInt().toString() : v.toStr
 /// fixed page height so the content's natural height can be read off.
 String agendaSheetHtml(AgendaData a, List<SheetRow> rows, SheetAssets assets, {double scale = 1, bool measure = false}) {
   final theme = a.theme;
-  final themeLine = theme.trim();
   final banner = StringBuffer('background-color:${_e(a.bannerColorCss?.trim().isNotEmpty == true ? a.bannerColorCss!.trim() : _defaultBannerColor)};');
   if (assets.bannerImage != null) {
     final pos = a.bannerImagePos ?? (x: 50.0, y: 50.0, zoom: 1.0, aspect: null);
     final zoom = pos.zoom < 1 ? 1.0 : pos.zoom;
-    const stripAspect = 794 / 96;
+    const stripAspect = 794 / _bannerHeight;
     final size = pos.aspect == null
         ? 'cover'
         : pos.aspect! >= stripAspect
@@ -311,13 +322,19 @@ String agendaSheetHtml(AgendaData a, List<SheetRow> rows, SheetAssets assets, {d
         '${scale < 1 ? 'transform:scale(${_num(scale)});' : ''}transform-origin:0 0;display:flex;flex-direction:column;'
         "font-family:'Arimo', Arial, Helvetica, sans-serif;color:#111827;-webkit-text-size-adjust:100%;text-size-adjust:100%\">");
 
-  // ── Header: banner strip + info bar ──
+  // ── Header: banner strip (logo left, club right) + info bar ──
+  out.write('<div style="${banner}position:relative;overflow:hidden;height:${_num(_bannerHeight)}px;display:flex;align-items:center">');
+  if (assets.logo != null) {
+    out.write('<div style="position:relative;z-index:1;flex-shrink:0;padding-left:16px;display:flex;align-items:center">'
+        '<img alt="Toastmasters logo" width="${_num(_logoWidth)}" height="${_num(_logoHeight)}" src="${assets.logo}" '
+        'style="width:${_num(_logoWidth)}px;height:${_num(_logoHeight)}px;object-fit:contain"></div>');
+  }
   out
-    ..write('<div style="${banner}position:relative;overflow:hidden;height:96px;display:flex;align-items:center">')
     ..write('<div style="flex:1 1 0%;text-align:right;padding-right:20px;position:relative;z-index:1">')
     ..write('<div style="font-size:20px;font-weight:bold;color:white;letter-spacing:0.5px">${_e(a.clubName)}</div>');
-  if (themeLine.isNotEmpty) {
-    out.write('<div style="font-size:11px;color:rgba(255, 255, 255, 0.8);letter-spacing:1px;margin-top:2px">${_e(themeLine)}</div>');
+  final lineage = a.clubLineage?.trim() ?? '';
+  if (lineage.isNotEmpty) {
+    out.write('<div style="font-size:10px;font-weight:bold;color:rgba(255, 255, 255, 0.9);letter-spacing:1.2px;margin-top:2px">${_e(lineage)}</div>');
   }
   out
     ..write('</div></div>')

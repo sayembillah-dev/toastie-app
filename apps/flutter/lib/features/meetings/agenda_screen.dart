@@ -35,6 +35,7 @@ class AgendaData {
     this.bannerColorCss,
     this.bannerImageUrl,
     this.bannerImagePos,
+    this.clubLineage,
     this.officers,
     this.isPublished = true,
   });
@@ -56,6 +57,10 @@ class AgendaData {
   final String? bannerColorCss;
   final String? bannerImageUrl;
   final ({double x, double y, double zoom, double? aspect})? bannerImagePos;
+
+  /// `Area 3 · Division F · District 41`, printed under the club name in the
+  /// banner. Null when the club isn't placed in the org tree.
+  final String? clubLineage;
 
   /// Active roster members by officer role (`President`, `VPE`, …) for the
   /// printed sheet's rail. Null when the roster isn't readable (signed out).
@@ -83,6 +88,10 @@ final _clubAgendaProvider = FutureProvider.family<AgendaData, String>((ref, id) 
     bannerColorCss: club.bannerColor,
     bannerImageUrl: club.bannerImageUrl,
     bannerImagePos: club.bannerImagePos,
+    clubLineage: switch ([club.areaName, club.divisionName, club.districtName].whereType<String>().join(' · ')) {
+      '' => null,
+      final s => s,
+    },
     officers: {
       for (final o in officerPrintOrder)
         o.role: [

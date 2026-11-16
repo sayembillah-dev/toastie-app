@@ -3,10 +3,11 @@ import type { CSSProperties } from 'react';
 import type { ClubBannerPos } from './club-profile';
 
 /** The printed banner strip bleeds to the full 210mm page width (≈794px at
- * 96dpi) and stands 96px tall. The settings drag frame uses this same aspect
- * so the crop the admin sees is exactly the crop the PDF prints. */
+ * 96dpi) and stands 80px tall. The settings drag frame uses this same aspect
+ * so the crop the admin sees is exactly the crop the PDF prints. The Flutter
+ * sheet (agenda_sheet.dart `_bannerHeight`) must match. */
 export const AGENDA_BANNER_WIDTH = 794;
-export const AGENDA_BANNER_HEIGHT = 96;
+export const AGENDA_BANNER_HEIGHT = 80;
 export const AGENDA_BANNER_ASPECT = AGENDA_BANNER_WIDTH / AGENDA_BANNER_HEIGHT;
 
 /** Toastmasters International's official maroon — the strip colour when a

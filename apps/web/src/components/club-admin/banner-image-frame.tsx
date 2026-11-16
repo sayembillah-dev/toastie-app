@@ -32,7 +32,7 @@ interface DragState {
 }
 
 /** Live preview of the printed agenda banner strip — same aspect as the PDF
- * (full A4 width × 96px) and the same background CSS, so the crop the admin
+ * (full A4 width × 80px) and the same background CSS, so the crop the admin
  * drags into place here is the crop that prints. Dragging pans the image
  * (like grabbing the picture itself); the slider zooms past the cover fit. */
 export function BannerImageFrame({ src, pos, onChange, disabled }: BannerImageFrameProps) {

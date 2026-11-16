@@ -3,6 +3,7 @@
 import { DownloadSimple } from '@phosphor-icons/react/dist/ssr';
 import { Button, Popover } from 'antd';
 import { Arimo } from 'next/font/google';
+import Image from 'next/image';
 import {
   Fragment,
   useEffect,
@@ -15,7 +16,7 @@ import {
 import { createPortal } from 'react-dom';
 
 import { PersonAvatar } from '@/components/ui/person-avatar';
-import { bannerImageCss, DEFAULT_BANNER_COLOR } from '@/lib/club/banner';
+import { AGENDA_BANNER_HEIGHT, bannerImageCss, DEFAULT_BANNER_COLOR } from '@/lib/club/banner';
 import type { ClubBannerPos } from '@/lib/club/club-profile';
 import { getInitials, type OfficerRole } from '@/lib/education/members';
 import type { AgendaPerson, AgendaRow } from '@/lib/meetings/agenda';
@@ -28,6 +29,7 @@ import { useGetClubProfileQuery, useGetGuestsQuery, useGetMembersQuery } from '@
 import { useAppSelector } from '@/store/hooks';
 import { selectMeetingDraft } from '@/store/meeting-draft-slice';
 
+import tmLogo from '../../../assets/toastmasters-logo.svg';
 import { useMemberOf, useNameOf } from './use-name-of';
 
 /* The printed agenda is its own visual language — Toastmasters maroon branding
@@ -80,9 +82,13 @@ function formatRailDate(date: Date): string {
 function SheetHeader({ meeting, theme }: { meeting: Meeting; theme: string }) {
   // Banner identity comes from the club profile (name + banner colour/image);
   // the hard-coded CLUB name only covers the loading splash. The sub-line
-  // under the club name carries the meeting theme.
+  // under the club name carries its area, division and district; the meeting
+  // theme lives in the info bar below.
   const { data: club } = useGetClubProfileQuery();
-  const themeLine = theme.trim();
+  // e.g. "Area 3 · Division F · District 41" — same join as the club profile.
+  const lineage = [club?.areaName, club?.divisionName, club?.districtName]
+    .filter(Boolean)
+    .join(' · ');
 
   /* Banner background precedence: a custom image (positioned exactly as the
    * admin dragged it in club settings) wins over the picked colour, which
@@ -107,11 +113,32 @@ function SheetHeader({ meeting, theme }: { meeting: Meeting; theme: string }) {
           ...bannerBackground,
           position: 'relative',
           overflow: 'hidden',
-          height: 96,
+          height: AGENDA_BANNER_HEIGHT,
           display: 'flex',
           alignItems: 'center',
         }}
       >
+        <div
+          style={{
+            position: 'relative',
+            zIndex: 1,
+            flexShrink: 0,
+            paddingLeft: 16,
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
+          {/* 60px tall at the SVG's own 434.58 × 360.06 proportions. */}
+          <Image
+            src={tmLogo}
+            alt="Toastmasters logo"
+            width={72}
+            height={60}
+            priority
+            unoptimized
+            style={{ width: 72, height: 60, objectFit: 'contain' }}
+          />
+        </div>
         <div
           style={{
             flex: '1 1 0%',
@@ -124,16 +151,17 @@ function SheetHeader({ meeting, theme }: { meeting: Meeting; theme: string }) {
           <div style={{ fontSize: 20, fontWeight: 'bold', color: 'white', letterSpacing: 0.5 }}>
             {club?.name ?? CLUB.name}
           </div>
-          {themeLine ? (
+          {lineage ? (
             <div
               style={{
-                fontSize: 11,
-                color: 'rgba(255, 255, 255, 0.8)',
-                letterSpacing: 1,
+                fontSize: 10,
+                fontWeight: 'bold',
+                color: 'rgba(255, 255, 255, 0.9)',
+                letterSpacing: 1.2,
                 marginTop: 2,
               }}
             >
-              {themeLine}
+              {lineage}
             </div>
           ) : null}
         </div>
