@@ -34,6 +34,7 @@ import '../features/me/delete_account_screen.dart';
 import '../features/me/edit_profile_screen.dart';
 import '../features/me/me_screen.dart';
 import '../features/me/my_speeches_screen.dart';
+import '../features/onboarding/onboarding_screen.dart';
 import '../features/people/guest_logs_screens.dart';
 import '../features/people/guest_profile_screen.dart';
 import '../features/people/people_screen.dart';
@@ -52,7 +53,10 @@ class _AuthListenable extends ChangeNotifier {
 
 final _rootKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 
-const _publicPrefixes = ['/sign-in', '/register', '/agenda/', '/invite/'];
+const _publicPrefixes = ['/welcome', '/sign-in', '/register', '/agenda/', '/invite/'];
+
+/// Shared links open straight to their target, even on a first launch.
+const _deepLinkPrefixes = ['/agenda/', '/invite/'];
 
 final routerProvider = Provider<GoRouter>((ref) {
   final refresh = _AuthListenable(ref);
@@ -68,10 +72,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isPublic = _publicPrefixes.any(loc.startsWith);
 
       if (auth is SignedOut) {
+        final seenIntro = ref.read(onboardingSeenProvider);
+        if (!seenIntro && loc != '/welcome' && !_deepLinkPrefixes.any(loc.startsWith)) return '/welcome';
+        if (seenIntro && loc == '/welcome') return '/sign-in';
         return isPublic ? null : '/sign-in';
       }
       final s = auth as SignedIn;
-      if (loc == '/sign-in' || loc == '/register') {
+      if (loc == '/sign-in' || loc == '/register' || loc == '/welcome') {
         final from = state.uri.queryParameters['from'];
         return from != null && from.startsWith('/') ? from : '/';
       }
@@ -86,6 +93,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      GoRoute(path: '/welcome', builder: (_, _) => const OnboardingScreen()),
       GoRoute(path: '/sign-in', builder: (_, _) => const SignInScreen()),
       GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
       GoRoute(path: '/join', builder: (_, _) => const JoinClubScreen()),

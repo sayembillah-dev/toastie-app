@@ -11,6 +11,7 @@ import 'core/api/api_client.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_mode.dart';
 import 'data/toastie_api.dart';
+import 'features/onboarding/onboarding_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +26,7 @@ Future<void> main() async {
   final client = ApiClient(tokens);
   final initial = await AuthController.bootstrap(tokens, ToastieApi(client));
   final themeMode = await loadThemeMode();
+  final onboardingSeen = await loadOnboardingSeen();
 
   runApp(ProviderScope(
     overrides: [
@@ -32,6 +34,7 @@ Future<void> main() async {
       apiClientProvider.overrideWithValue(client),
       initialAuthProvider.overrideWithValue(initial),
       initialThemeModeProvider.overrideWithValue(themeMode),
+      initialOnboardingSeenProvider.overrideWithValue(onboardingSeen),
     ],
     // API errors are shown with a Retry button; never retry silently.
     retry: (_, _) => null,

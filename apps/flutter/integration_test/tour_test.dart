@@ -36,6 +36,13 @@ void main() {
     expect(_phone.isNotEmpty && _password.isNotEmpty, isTrue, reason: 'pass TOUR_PHONE / TOUR_PASSWORD');
     app.main();
     await wait(t, 4000);
+
+    // First launch on a fresh install shows the intro; capture it, then skip.
+    if (find.text('Skip').evaluate().isNotEmpty) {
+      await shot('00-onboarding');
+      await t.tap(find.text('Skip'));
+      await wait(t, 1500);
+    }
     await shot('01-sign-in');
 
     // A previous run may have left a session in the keychain — that's the
