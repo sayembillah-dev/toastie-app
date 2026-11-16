@@ -2,6 +2,7 @@ import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsEmail,
   IsIn,
   IsOptional,
   IsString,
@@ -62,8 +63,10 @@ export class UpdateProfileDto {
   @MaxLength(80)
   lastName?: string;
 
+  /** Can be changed but not cleared — it is the sign-in identifier. */
   @IsOptional()
-  @IsString()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
+  @IsEmail({}, { message: 'Enter a valid email address' })
   @MaxLength(255)
   email?: string;
 

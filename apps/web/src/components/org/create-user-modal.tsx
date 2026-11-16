@@ -45,7 +45,7 @@ const MEMBER_TYPE_OPTIONS = MEMBER_TYPES.map((type) => ({
 
 interface FormValues {
   fullName: string;
-  email?: string;
+  email: string;
   phone: string;
   tiMemberNumber?: string;
   password: string;
@@ -66,7 +66,7 @@ interface CreateUserModalProps {
 
 /** Super Admin's direct-provision flow. Unlike `InviteModal` (which just
  * records a pending invite for a Club Admin to close by hand later), this
- * creates the account outright — phone + password the SA sets, and
+ * creates the account outright — email, phone and password the SA sets, and
  * optionally a club placement + role assigned in the same step — and hands
  * back a copyable credentials card. There's no email/SMS infrastructure in
  * this app, so "send an invitation" means the SA copies this card and
@@ -207,7 +207,7 @@ function ModalBody({ onClose }: { onClose: () => void }) {
         password: values.password.trim(),
         // The API splits the single full-name input on the first space.
         name: values.fullName.trim(),
-        email: values.email?.trim() || undefined,
+        email: values.email.trim(),
         tiMemberNumber: values.tiMemberNumber?.trim() || undefined,
         clubId: values.assignOrgRole ? values.clubId : undefined,
         roles: values.assignOrgRole && values.clubId ? values.roles : undefined,
@@ -289,7 +289,12 @@ function ModalBody({ onClose }: { onClose: () => void }) {
       </Form.Item>
 
       <div className="grid grid-cols-2 gap-3">
-        <Form.Item label="Email (optional)" name="email" rules={emailRules()} className="!mb-0">
+        <Form.Item
+          label="Email"
+          name="email"
+          rules={emailRules({ required: true })}
+          className="!mb-0"
+        >
           <Input
             id="cu-email"
             type="email"
@@ -480,6 +485,7 @@ function CredentialsCard({
   const summaryLines = [
     `${result.firstName} ${result.lastName}`,
     `Sign in at: ${loginUrl}`,
+    result.email ? `Email: ${result.email}` : null,
     `Mobile: ${result.phone}`,
     `Password: ${password}`,
     result.tiMemberNumber ? `TI member #: ${result.tiMemberNumber}` : null,

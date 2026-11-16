@@ -4,6 +4,7 @@ import {
   ArrayMinSize,
   IsArray,
   IsBoolean,
+  IsEmail,
   IsEnum,
   IsIn,
   IsInt,
@@ -20,6 +21,9 @@ import { normalizePhone, PHONE_REGEX } from '@/common';
 import { MEMBER_TYPES, type MemberType, OFFICER_ROLES, type OfficerRole } from '@/memberships';
 
 const USER_STATUSES = ['active', 'suspended'] as const;
+
+const normaliseEmail = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim().toLowerCase() : value;
 
 export class ListUsersQueryDto {
   @IsOptional()
@@ -85,8 +89,13 @@ export class UpdateUserDto {
   @MaxLength(80)
   lastName?: string;
 
+  /** Sign-in email. Can be changed but not cleared — an account with no
+   * email cannot sign in once phone sign-in goes away. A change is saved
+   * unverified: the member must prove the inbox at the "verify your email"
+   * gate. */
   @IsOptional()
-  @IsString()
+  @Transform(normaliseEmail)
+  @IsEmail({}, { message: 'Enter a valid email address' })
   @MaxLength(255)
   email?: string;
 
@@ -116,7 +125,7 @@ export class SetUserPasswordDto {
 /** Super Admin's direct-provision flow — creates the `User` row and,
  * optionally in the same transaction, a `Membership` claimed by that user
  * immediately (no separate accept-invite step). Phone validation mirrors
- * `RegisterDto`; `password` is SA-supplied so it can be handed to the
+ * `RegisterDto`; `email` is required (the sign-in identifier); `password` is SA-supplied so it can be handed to the
  * person out of band (the credentials card the client renders on
  * success), never emailed or stored in plaintext past this request. */
 export class CreateUserDto {
@@ -154,10 +163,13 @@ export class CreateUserDto {
   @MaxLength(80)
   lastName?: string;
 
-  @IsOptional()
-  @IsString()
+  /** Required: the member signs in with it. Saved unverified — the admin
+   * cannot prove the member reads this inbox, so the member proves it at
+   * the "verify your email" gate after the first sign-in. */
+  @Transform(normaliseEmail)
+  @IsEmail({}, { message: 'Enter a valid email address' })
   @MaxLength(255)
-  email?: string;
+  email!: string;
 
   /** Toastmasters International member number — a person-level identifier,
    * independent of any club placement below. */

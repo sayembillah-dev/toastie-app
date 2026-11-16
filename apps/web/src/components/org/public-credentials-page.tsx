@@ -31,9 +31,12 @@ export function PublicCredentialsPage({ userId, token }: PublicCredentialsPagePr
     if (!data) return;
     const summary = [
       `${data.firstName} ${data.lastName}`,
+      data.email ? `Email: ${data.email}` : null,
       `Mobile: ${data.phone}`,
       `Password: ${data.password}`,
-    ].join('\n');
+    ]
+      .filter((line): line is string => line !== null)
+      .join('\n');
     try {
       await navigator.clipboard.writeText(summary);
       message.success('Copied');
@@ -79,6 +82,12 @@ export function PublicCredentialsPage({ userId, token }: PublicCredentialsPagePr
         </p>
 
         <dl className="mt-4 flex flex-col gap-3">
+          {data.email ? (
+            <div>
+              <dt className="text-xs font-medium uppercase tracking-wide text-ink-muted">Email</dt>
+              <dd className="mt-0.5 break-all text-sm font-medium text-ink">{data.email}</dd>
+            </div>
+          ) : null}
           <div>
             <dt className="text-xs font-medium uppercase tracking-wide text-ink-muted">
               Mobile number

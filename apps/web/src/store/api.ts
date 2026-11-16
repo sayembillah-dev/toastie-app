@@ -2735,6 +2735,8 @@ export interface ChangePasswordInput {
 export interface CredentialShare {
   firstName: string;
   lastName: string;
+  /** The sign-in email. Null on links made before it was required. */
+  email: string | null;
   phone: string;
   password: string;
 }

@@ -284,6 +284,8 @@ model CredentialShare {
   firstName      String
   lastName       String
   phone          String
+  /// Null on links made before email became the sign-in identifier.
+  email          String?
   createdAt      DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

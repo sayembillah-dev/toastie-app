@@ -6,11 +6,13 @@ import { PrismaService } from '@/prisma';
 import { hashShareToken, openCredential } from './credential-share';
 
 /** Wire shape returned by `/public/users/:userId/credentials` — exactly
- * what the handoff page renders, nothing more (no email, no role, no
- * account id beyond what's already in the URL). */
+ * what the handoff page renders, nothing more (no role, no account id
+ * beyond what's already in the URL). `email` is the sign-in identifier;
+ * null on links made before it was required. */
 export interface CredentialShareWire {
   firstName: string;
   lastName: string;
+  email: string | null;
   phone: string;
   password: string;
 }
@@ -44,12 +46,18 @@ export class PublicUsersController {
     }
     const row = await this.prisma.credentialShare.findFirst({
       where: { userId, tokenHash: hashShareToken(token), expiresAt: { gt: new Date() } },
-      select: { firstName: true, lastName: true, phone: true, passwordCipher: true },
+      select: { firstName: true, lastName: true, email: true, phone: true, passwordCipher: true },
     });
     const password = row?.passwordCipher ? openCredential(token, row.passwordCipher) : null;
     if (!row || password === null) {
       throw new NotFoundException('No credentials match that link');
     }
-    return { firstName: row.firstName, lastName: row.lastName, phone: row.phone, password };
+    return {
+      firstName: row.firstName,
+      lastName: row.lastName,
+      email: row.email,
+      phone: row.phone,
+      password,
+    };
   }
 }

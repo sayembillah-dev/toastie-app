@@ -182,7 +182,9 @@ export class UsersService {
     }
 
     const phone = dto.phone;
-    const email = dto.email?.trim().toLowerCase() || null;
+    // Saved unverified (`emailVerifiedAt` stays null): the member proves it
+    // at the "verify your email" gate after the first sign-in.
+    const email = dto.email;
     const passwordHash = await this.tokens.hashPassword(dto.password);
     // Single `name` input or the legacy first/last pair — one must resolve.
     const names = resolveNames(dto);
@@ -259,6 +261,7 @@ export class UsersService {
             firstName,
             lastName,
             phone,
+            email,
           },
         });
         return created;
@@ -295,7 +298,7 @@ export class UsersService {
     if (namePatch.firstName !== undefined) data.firstName = namePatch.firstName;
     if (namePatch.lastName !== undefined) data.lastName = namePatch.lastName;
     if (dto.email !== undefined) {
-      data.email = dto.email.trim().toLowerCase() || null;
+      data.email = dto.email;
       // An admin can type an email but cannot prove the member reads it.
       if (emailChanged(current.email, data.email)) data.emailVerifiedAt = null;
     }
@@ -454,7 +457,7 @@ export class UsersService {
     if (namePatch.firstName !== undefined) data.firstName = namePatch.firstName;
     if (namePatch.lastName !== undefined) data.lastName = namePatch.lastName;
     if (dto.email !== undefined) {
-      data.email = dto.email.trim().toLowerCase() || null;
+      data.email = dto.email;
       // A new address is unproven until it goes through `/auth/email/*`.
       if (emailChanged(user.email, data.email)) data.emailVerifiedAt = null;
     }
