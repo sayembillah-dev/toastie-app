@@ -1,6 +1,6 @@
 import { Body, Controller, Post } from '@nestjs/common';
 
-import { type AuthenticatedUser, CurrentUser } from '@/auth';
+import { AllowUnverifiedEmail, type AuthenticatedUser, CurrentUser } from '@/auth';
 
 import { SubscribePushDto, UnsubscribePushDto } from './dto/push.dto';
 import { PushService } from './push.service';
@@ -9,6 +9,8 @@ import { PushService } from './push.service';
  * `ProfileController`: no `@Requires(...)`, any signed-in user manages their
  * own device subscriptions. */
 @Controller('push')
+// Device clean-up runs during sign-out, so it must work behind the email gate.
+@AllowUnverifiedEmail()
 export class PushController {
   constructor(private readonly push: PushService) {}
 

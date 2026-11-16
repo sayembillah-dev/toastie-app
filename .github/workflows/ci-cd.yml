@@ -301,6 +301,9 @@ jobs:
           MAIL_PROVIDER: ${{ vars.MAIL_PROVIDER || 'console' }}
           SES_REGION: ${{ vars.SES_REGION }}
           MAIL_FROM: ${{ vars.MAIL_FROM }}
+          # The "verify your email" gate. Off until the gate screens ship in
+          # the web and Flutter apps — see env.validation.ts.
+          EMAIL_VERIFICATION_ENFORCED: ${{ vars.EMAIL_VERIFICATION_ENFORCED || 'false' }}
         run: |
           set -euo pipefail
           # Secrets go over stdin, never as argv: process arguments are visible
@@ -337,6 +340,7 @@ jobs:
             # ("Openfloor <no-reply@openfloor.club>"). Both the ecosystem
             # parser and dotenv strip one layer of matching quotes.
             if [ -n "${MAIL_FROM:-}" ]; then echo "MAIL_FROM=\"$MAIL_FROM\""; fi
+            echo "EMAIL_VERIFICATION_ENFORCED=$EMAIL_VERIFICATION_ENFORCED"
           } | ssh deploy-target '
             set -euo pipefail
             umask 077

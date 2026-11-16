@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type {
   ActiveContextKey,
   Assignment,
@@ -27,10 +28,18 @@ import { StorageService } from '@/storage/storage.service';
  */
 @Injectable()
 export class SubjectFactory {
+  /** `EMAIL_VERIFICATION_ENFORCED`, read once. `mustVerifyEmail` is derived
+   * here and nowhere else, so the session the client sees and the
+   * `EmailVerifiedGuard` (which reads the same session) cannot disagree. */
+  private readonly emailVerificationEnforced: boolean;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
-  ) {}
+    config: ConfigService,
+  ) {
+    this.emailVerificationEnforced = config.get<string>('EMAIL_VERIFICATION_ENFORCED') === 'true';
+  }
 
   async loadSession(userId: string, now: number): Promise<SessionResponse | null> {
     const user = await this.prisma.user.findUnique({
@@ -44,6 +53,7 @@ export class SubjectFactory {
         avatarUrl: true,
         isSuperAdmin: true,
         mustChangePassword: true,
+        emailVerifiedAt: true,
         status: true,
       },
     });
@@ -153,6 +163,7 @@ export class SubjectFactory {
         avatarUrl: await this.storage.resolveOptional(user.avatarUrl),
         isSuperAdmin: user.isSuperAdmin,
         mustChangePassword: user.mustChangePassword,
+        mustVerifyEmail: this.emailVerificationEnforced && user.emailVerifiedAt === null,
       },
       memberships,
       orgAssignments,

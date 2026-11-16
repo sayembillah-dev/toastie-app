@@ -13,9 +13,9 @@ export const OTP_MAX_ATTEMPTS = 5;
 /** Minimum gap between two codes for the same target and purpose. */
 export const OTP_RESEND_COOLDOWN_SECONDS = 60;
 
-/** Per-target send limits, counted from `OtpCode` rows in the database — the
- * primary abuse control. They hold across both PM2 workers and whatever IP
- * the requests come from. WhatsApp is stricter: every message spends the
+/** Send limits per account-and-target pair (see `OtpService`), counted from
+ * `OtpCode` rows in the database — the primary abuse control. They hold
+ * across both PM2 workers and whatever IP the requests come from. WhatsApp is stricter: every message spends the
  * reputation of one real SIM, and an unofficial client gets banned for
  * volume. */
 const SEND_LIMITS: Record<OtpChannel, { max: number; windowMs: number }> = {
@@ -34,7 +34,7 @@ export interface IssueOtpInput {
 export type IssueOtpResult =
   | { ok: true; code: string }
   /** `cooldown`: a code went out less than a minute ago. `limit`: the
-   * per-target window is full. Callers on public routes must not reveal
+   * send window for this account and target is full. Callers on public routes must not reveal
    * either to the client — both look exactly like success. */
   | { ok: false; reason: 'cooldown' | 'limit' };
 
@@ -43,6 +43,10 @@ export interface VerifyOtpInput {
   target: string;
   purpose: OtpPurpose;
   code: string;
+  /** When set, only a code issued to this account can match. Another
+   * account's attempt then finds no row, so it can neither use nor burn the
+   * code. */
+  userId?: string;
 }
 
 /** `userId` is the account the code was issued for (null for sign-up). */
@@ -55,8 +59,13 @@ export type VerifyOtpResult = { ok: true; userId: string | null } | { ok: false 
  *   is derived from `JWT_ACCESS_SECRET` with a fixed label, so no new secret
  *   has to be provisioned; binding target and purpose into the input means a
  *   code can never verify for another address or another flow.
- * - Issuing a new code retires every older live code for the same target and
- *   purpose (only the newest code works).
+ * - Codes live in "slots": one slot per target + purpose + account
+ *   (`userId`, or null for sign-up). Issuing a new code retires the older
+ *   live code in the same slot only, and the cooldown and send limit count
+ *   per slot. So when another member asks for a code to YOUR address, your
+ *   code keeps working and your limits are untouched. Inbox flooding across
+ *   accounts is capped by the callers (for example, 10 verify codes per
+ *   account per hour in `EmailVerificationService`).
  * - A code dies after `OTP_MAX_ATTEMPTS` verify attempts, after
  *   `OTP_TTL_MINUTES`, or on first successful use. */
 @Injectable()
@@ -74,11 +83,11 @@ export class OtpService {
   async issue(input: IssueOtpInput, now = new Date()): Promise<IssueOtpResult> {
     const target = normaliseTarget(input.channel, input.target);
     const limit = SEND_LIMITS[input.channel];
+    const slot = { target, purpose: input.purpose, userId: input.userId ?? null };
 
     const recent = await this.prisma.otpCode.findMany({
       where: {
-        target,
-        purpose: input.purpose,
+        ...slot,
         createdAt: { gt: new Date(now.getTime() - limit.windowMs) },
       },
       select: { createdAt: true },
@@ -97,15 +106,13 @@ export class OtpService {
       // Retire older live codes. `expiresAt` is pulled back rather than the
       // row deleted, so it still counts towards the send limit above.
       this.prisma.otpCode.updateMany({
-        where: { target, purpose: input.purpose, consumedAt: null, expiresAt: { gt: now } },
+        where: { ...slot, consumedAt: null, expiresAt: { gt: now } },
         data: { expiresAt: now },
       }),
       this.prisma.otpCode.create({
         data: {
           channel: input.channel,
-          target,
-          purpose: input.purpose,
-          userId: input.userId ?? null,
+          ...slot,
           codeHash: this.hash(input.channel, input.purpose, target, code),
           expiresAt: new Date(now.getTime() + OTP_TTL_MINUTES * 60_000),
         },
@@ -125,6 +132,7 @@ export class OtpService {
         channel: input.channel,
         target,
         purpose: input.purpose,
+        ...(input.userId !== undefined ? { userId: input.userId } : {}),
         consumedAt: null,
         expiresAt: { gt: now },
       },

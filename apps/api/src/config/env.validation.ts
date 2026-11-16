@@ -1,6 +1,7 @@
 import { plainToInstance } from 'class-transformer';
 import {
   IsEnum,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -212,6 +213,15 @@ class EnvironmentVariables {
   @IsString()
   @IsNotEmpty({ message: 'MAIL_FROM is required when MAIL_PROVIDER=ses' })
   MAIL_FROM?: string;
+
+  // The "verify your email" gate (see auth/guards/email-verified.guard.ts).
+  // Off by default: app builds already in people's hands have no gate screen,
+  // so turning it on before they update would lock them out. Switch it on
+  // once the web and Flutter gate screens are live. Kept as the strings
+  // "true"/"false" — implicit conversion would turn "false" into `true`.
+  @IsOptional()
+  @IsIn(['true', 'false'], { message: 'EMAIL_VERIFICATION_ENFORCED must be "true" or "false"' })
+  EMAIL_VERIFICATION_ENFORCED: 'true' | 'false' = 'false';
 }
 
 /** Wired into `ConfigModule.forRoot({ validate })`, so it runs once at boot and

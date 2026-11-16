@@ -288,13 +288,17 @@ export class UsersService {
         action: 'update',
       });
     }
-    await this.loadWithCounts(userId);
+    const current = await this.loadWithCounts(userId);
 
     const data: Prisma.UserUpdateInput = {};
     const namePatch = resolveNamePatch(dto);
     if (namePatch.firstName !== undefined) data.firstName = namePatch.firstName;
     if (namePatch.lastName !== undefined) data.lastName = namePatch.lastName;
-    if (dto.email !== undefined) data.email = dto.email.trim().toLowerCase() || null;
+    if (dto.email !== undefined) {
+      data.email = dto.email.trim().toLowerCase() || null;
+      // An admin can type an email but cannot prove the member reads it.
+      if (emailChanged(current.email, data.email)) data.emailVerifiedAt = null;
+    }
     if (dto.phone !== undefined) data.phone = dto.phone;
     if (dto.tiMemberNumber !== undefined) data.tiMemberNumber = dto.tiMemberNumber.trim() || null;
 
@@ -449,7 +453,11 @@ export class UsersService {
     const namePatch = resolveNamePatch(dto);
     if (namePatch.firstName !== undefined) data.firstName = namePatch.firstName;
     if (namePatch.lastName !== undefined) data.lastName = namePatch.lastName;
-    if (dto.email !== undefined) data.email = dto.email.trim().toLowerCase() || null;
+    if (dto.email !== undefined) {
+      data.email = dto.email.trim().toLowerCase() || null;
+      // A new address is unproven until it goes through `/auth/email/*`.
+      if (emailChanged(user.email, data.email)) data.emailVerifiedAt = null;
+    }
     if (dto.phone !== undefined) data.phone = dto.phone;
     if (dto.bio !== undefined) data.bio = dto.bio.trim() || null;
     if (dto.avatarUrl !== undefined) {
@@ -769,4 +777,10 @@ export class UsersService {
     }
     return err instanceof Error ? err : new Error(String(err));
   }
+}
+
+/** `User.email` is CITEXT, so a change of letter case only is not a change —
+ * it must not throw away a verification. */
+function emailChanged(before: string | null, after: string | null): boolean {
+  return (before?.toLowerCase() ?? null) !== (after?.toLowerCase() ?? null);
 }

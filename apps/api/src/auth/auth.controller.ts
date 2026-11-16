@@ -14,12 +14,15 @@ import type { SessionResponse } from '@toastly/access';
 import { Public } from '@/access';
 
 import { type AuthResult, AuthService } from './auth.service';
+import { AllowUnverifiedEmail } from './decorators/allow-unverified-email.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { SendEmailCodeDto, VerifyEmailDto } from './dto/email-verification.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto, ResetPasswordDto } from './dto/password-reset.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { RegisterDto } from './dto/register.dto';
+import { EmailVerificationService } from './email-verification.service';
 import { ClientIpThrottlerGuard } from './guards/client-ip-throttler.guard';
 import type { AuthenticatedUser } from './guards/jwt-auth.guard';
 import { PasswordResetService } from './password-reset.service';
@@ -29,6 +32,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly passwordReset: PasswordResetService,
+    private readonly emailVerification: EmailVerificationService,
   ) {}
 
   /** Public — no auth header expected. Returns the same shape as `login`
@@ -62,6 +66,7 @@ export class AuthController {
    * refresh token the client hands back so a user can sign out one device
    * without killing the others. */
   @Post('logout')
+  @AllowUnverifiedEmail()
   @HttpCode(HttpStatus.NO_CONTENT)
   async logout(@Body() dto: RefreshDto): Promise<void> {
     await this.authService.logout(dto.refreshToken);
@@ -71,6 +76,7 @@ export class AuthController {
    * mount). Requires auth; no explicit `@Requires` because *any* signed-in
    * user is allowed to inspect their own session. */
   @Get('session')
+  @AllowUnverifiedEmail()
   session(@CurrentUser() user: AuthenticatedUser): Promise<SessionResponse> {
     return this.authService.loadSession(user.id);
   }
@@ -78,6 +84,7 @@ export class AuthController {
   /** Self-service rotation — see `AuthService.changePassword` for how this
    * differs from the admin-driven `POST /users/:userId/password`. */
   @Patch('password')
+  @AllowUnverifiedEmail()
   @HttpCode(HttpStatus.NO_CONTENT)
   changePassword(
     @CurrentUser() user: AuthenticatedUser,
@@ -109,5 +116,38 @@ export class AuthController {
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   resetPassword(@Body() dto: ResetPasswordDto): Promise<void> {
     return this.passwordReset.reset(dto);
+  }
+
+  /** Signed-in. Emails a 6-digit code to `email`; nothing on the account
+   * changes yet. `202` on success. Errors: `401 INVALID_CREDENTIALS`,
+   * `409 EMAIL_TAKEN` / `EMAIL_ALREADY_VERIFIED`, `429 OTP_COOLDOWN` /
+   * `OTP_LIMIT`, `502 MAIL_SEND_FAILED`. Allowed through the email gate —
+   * this is how a gated account gets out of it. */
+  @Post('email/send-code')
+  @AllowUnverifiedEmail()
+  @HttpCode(HttpStatus.ACCEPTED)
+  @UseGuards(ClientIpThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async sendEmailCode(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: SendEmailCodeDto,
+  ): Promise<{ ok: true }> {
+    await this.emailVerification.sendCode(user.id, dto);
+    return { ok: true };
+  }
+
+  /** Signed-in. Checks the code, then makes `email` the account's verified
+   * sign-in email. Returns the fresh session (`mustVerifyEmail: false`).
+   * Errors: `400 OTP_INVALID`, `409 EMAIL_TAKEN`. */
+  @Post('email/verify')
+  @AllowUnverifiedEmail()
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ClientIpThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  verifyEmail(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: VerifyEmailDto,
+  ): Promise<SessionResponse> {
+    return this.emailVerification.verify(user.id, dto);
   }
 }

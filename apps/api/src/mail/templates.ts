@@ -49,6 +49,47 @@ export function passwordChangedEmail(): Content {
   return { subject, text, html };
 }
 
+/** The code that proves the account holder reads this inbox. */
+export function emailVerificationCodeEmail(code: string, minutes: number): Content {
+  const subject = `${code} is your ${BRAND} verification code`;
+  const text = [
+    `Use this code to verify your email address on ${BRAND}:`,
+    '',
+    code,
+    '',
+    `It expires in ${minutes} minutes. Do not share this code with anyone.`,
+    '',
+    `If you did not ask for this code, ignore this email. Nothing changes until someone types this code.`,
+  ].join('\n');
+  const html = layout(`
+    <p style="margin:0 0 16px">Use this code to verify your email address on ${BRAND}:</p>
+    <p style="margin:0 0 16px;font-size:32px;font-weight:700;letter-spacing:6px">${code}</p>
+    <p style="margin:0 0 16px">It expires in ${minutes} minutes. Do not share this code with anyone.</p>
+    <p style="margin:0;color:#6b6b6b">If you did not ask for this code, ignore this email. Nothing changes until someone types this code.</p>
+  `);
+  return { subject, text, html };
+}
+
+/** Sent to the OLD address after the sign-in email moves to a new one. The
+ * new address is masked: this mail goes to an inbox that may no longer
+ * belong to the account holder. */
+export function emailChangedEmail(maskedNewEmail: string): Content {
+  const subject = `Your ${BRAND} sign-in email was changed`;
+  const text = [
+    `The sign-in email of your ${BRAND} account was changed to ${maskedNewEmail}.`,
+    '',
+    `If you did this, you do not need to do anything.`,
+    '',
+    `If you did not do this, tell your club officer now.`,
+  ].join('\n');
+  const html = layout(`
+    <p style="margin:0 0 16px">The sign-in email of your ${BRAND} account was changed to <strong>${maskedNewEmail}</strong>.</p>
+    <p style="margin:0 0 16px">If you did this, you do not need to do anything.</p>
+    <p style="margin:0">If you did not do this, tell your club officer now.</p>
+  `);
+  return { subject, text, html };
+}
+
 function layout(body: string): string {
   return `<!doctype html>
 <html>

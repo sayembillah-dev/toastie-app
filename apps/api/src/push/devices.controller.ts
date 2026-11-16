@@ -1,12 +1,14 @@
 import { Body, Controller, Delete, HttpCode, Param, Post } from '@nestjs/common';
 
-import { type AuthenticatedUser, CurrentUser } from '@/auth';
+import { AllowUnverifiedEmail, type AuthenticatedUser, CurrentUser } from '@/auth';
 
 import { RegisterDeviceDto } from './dto/devices.dto';
 import { NativePushService } from './native-push.service';
 
 /** Native app installs. Account-scoped like `/push/*` — no club context. */
 @Controller('devices')
+// Device clean-up runs during sign-out, so it must work behind the email gate.
+@AllowUnverifiedEmail()
 export class DevicesController {
   constructor(private readonly push: NativePushService) {}
 

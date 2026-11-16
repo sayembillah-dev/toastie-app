@@ -3,12 +3,12 @@ import type { Lineage } from './subject';
 
 export interface SessionUser {
   id: string;
-  /** Primary auth credential — every user has one. Format is captured
-   * verbatim from the register form; normalisation lives at the DB
-   * boundary if/when it becomes necessary. */
+  /** Required contact number — every user has one. Sign-in is moving to
+   * email; phone sign-in stays only for accounts with no verified email. */
   phone: string;
-  /** Optional contact channel — `null` on accounts that only ever set a
-   * phone (the common case). Never used for sign-in. */
+  /** The sign-in email. `null` on older phone-only accounts. May be set but
+   * not yet verified (for example, typed in by an admin) — see
+   * `mustVerifyEmail`. */
   email: string | null;
   firstName: string;
   lastName: string;
@@ -19,6 +19,13 @@ export interface SessionUser {
    * password (creation, admin-driven reset). Drives a post-login "set your
    * own password" nudge — skippable, not an access gate. */
   mustChangePassword: boolean;
+  /** True when the account has no verified email AND the server enforces
+   * verification (`EMAIL_VERIFICATION_ENFORCED`). Unlike
+   * `mustChangePassword` this IS an access gate: the API answers
+   * `403 EMAIL_VERIFICATION_REQUIRED` on every route except the session,
+   * sign-out, password and `/auth/email/*` routes until the account holder
+   * verifies an email. Clients show the gate after the password nudge. */
+  mustVerifyEmail: boolean;
 }
 
 export interface SessionMembership {
