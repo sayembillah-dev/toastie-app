@@ -5,6 +5,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ThrottlerModule } from '@nestjs/throttler';
 
 import { AccessModule, ContextGuard, PermissionGuard } from '@/access';
+import { WhatsappModule } from '@/whatsapp';
 
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -15,6 +16,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { OtpService } from './otp.service';
 import { PasswordResetService } from './password-reset.service';
 import { TokenService } from './token.service';
+import { WhatsappRecoveryService } from './whatsapp-recovery.service';
 
 /** Registers the four global guards in the order they must run:
  *   1. `JwtAuthGuard`  — validates the bearer token, sets `req.user`
@@ -29,6 +31,7 @@ import { TokenService } from './token.service';
 @Module({
   imports: [
     AccessModule,
+    WhatsappModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -48,6 +51,7 @@ import { TokenService } from './token.service';
     OtpService,
     PasswordResetService,
     EmailVerificationService,
+    WhatsappRecoveryService,
     ClientIpThrottlerGuard,
     JwtAuthGuard,
     { provide: APP_GUARD, useClass: JwtAuthGuard },

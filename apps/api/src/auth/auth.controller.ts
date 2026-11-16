@@ -22,10 +22,12 @@ import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto, ResetPasswordDto } from './dto/password-reset.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { RegisterDto } from './dto/register.dto';
+import { WhatsappRecoveryRequestDto, WhatsappRecoveryResetDto } from './dto/whatsapp-recovery.dto';
 import { EmailVerificationService } from './email-verification.service';
 import { ClientIpThrottlerGuard } from './guards/client-ip-throttler.guard';
 import type { AuthenticatedUser } from './guards/jwt-auth.guard';
 import { PasswordResetService } from './password-reset.service';
+import { WhatsappRecoveryService } from './whatsapp-recovery.service';
 
 @Controller('auth')
 export class AuthController {
@@ -33,6 +35,7 @@ export class AuthController {
     private readonly authService: AuthService,
     private readonly passwordReset: PasswordResetService,
     private readonly emailVerification: EmailVerificationService,
+    private readonly whatsappRecovery: WhatsappRecoveryService,
   ) {}
 
   /** Public — no auth header expected. Returns the same shape as `login`
@@ -149,5 +152,32 @@ export class AuthController {
     @Body() dto: VerifyEmailDto,
   ): Promise<SessionResponse> {
     return this.emailVerification.verify(user.id, dto);
+  }
+
+  /** Public. Password recovery for accounts with no verified email: sends a
+   * code to the phone on WhatsApp. Always `202` with the same body, whether
+   * or not the number has an account that may use it (see
+   * `WhatsappRecoveryService`). */
+  @Public()
+  @Post('recovery/whatsapp/request')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @UseGuards(ClientIpThrottlerGuard)
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  requestWhatsappRecovery(@Body() dto: WhatsappRecoveryRequestDto): { ok: true } {
+    this.whatsappRecovery.requestCode(dto.phone);
+    return { ok: true };
+  }
+
+  /** Public. Checks the WhatsApp code, sets the new password, signs out every
+   * other device and signs this one in — same response as `login`. `400
+   * OTP_INVALID` for every failure. With the email gate on, the session that
+   * comes back asks for an email next. */
+  @Public()
+  @Post('recovery/whatsapp/reset')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ClientIpThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  resetWithWhatsapp(@Body() dto: WhatsappRecoveryResetDto): Promise<AuthResult> {
+    return this.whatsappRecovery.reset(dto);
   }
 }
