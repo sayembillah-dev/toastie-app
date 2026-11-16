@@ -23,6 +23,7 @@ class SessionUser {
     this.avatarUrl,
     this.isSuperAdmin = false,
     this.mustChangePassword = false,
+    this.mustVerifyEmail = false,
   });
   final String id;
   final String phone;
@@ -32,6 +33,9 @@ class SessionUser {
   final String? avatarUrl;
   final bool isSuperAdmin;
   final bool mustChangePassword;
+
+  /// The account must verify an email before using the app (the email gate).
+  final bool mustVerifyEmail;
 
   String get name => fullName(firstName, lastName);
 
@@ -44,6 +48,7 @@ class SessionUser {
         avatarUrl: _so(j['avatarUrl']),
         isSuperAdmin: j['isSuperAdmin'] == true,
         mustChangePassword: j['mustChangePassword'] == true,
+        mustVerifyEmail: j['mustVerifyEmail'] == true,
       );
 }
 

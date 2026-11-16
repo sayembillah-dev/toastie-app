@@ -12,16 +12,57 @@ class ToastieApi {
   final ApiClient http;
 
   // ── Auth ──
-  Future<Json> login(String phone, String password) async =>
-      _map(await http.post('auth/login', body: {'phone': phone, 'password': password}, anonymous: true));
+  /// Sign in with exactly one of [email] or [phone].
+  Future<Json> login({String? email, String? phone, required String password}) async =>
+      _map(await http.post('auth/login', body: {
+        'email': ?email,
+        'phone': ?phone,
+        'password': password,
+      }, anonymous: true));
 
-  Future<Json> register({required String name, required String phone, required String password, String? email}) async =>
+  /// Final sign-up step; [signupToken] comes from [verifySignupCode].
+  Future<Json> register({
+    required String signupToken,
+    required String name,
+    required String phone,
+    required String password,
+  }) async =>
       _map(await http.post('auth/register', body: {
+        'signupToken': signupToken,
         'name': name,
         'phone': phone,
         'password': password,
-        if (email != null && email.isNotEmpty) 'email': email,
       }, anonymous: true));
+
+  Future<void> sendSignupCode(String email) =>
+      http.post('auth/signup/email/send-code', body: {'email': email}, anonymous: true);
+
+  Future<String> verifySignupCode(String email, String code) async =>
+      _map(await http.post('auth/signup/email/verify', body: {'email': email, 'code': code}, anonymous: true))[
+          'signupToken'] as String;
+
+  Future<void> forgotPassword(String email) =>
+      http.post('auth/password/forgot', body: {'email': email}, anonymous: true);
+
+  Future<void> resetPassword({required String email, required String code, required String newPassword}) =>
+      http.post('auth/password/reset',
+          body: {'email': email, 'code': code, 'newPassword': newPassword}, anonymous: true);
+
+  Future<void> requestWhatsappCode(String phone) =>
+      http.post('auth/recovery/whatsapp/request', body: {'phone': phone}, anonymous: true);
+
+  /// Signs in on success — same response as [login].
+  Future<Json> resetWithWhatsapp({required String phone, required String code, required String newPassword}) async =>
+      _map(await http.post('auth/recovery/whatsapp/reset',
+          body: {'phone': phone, 'code': code, 'newPassword': newPassword}, anonymous: true));
+
+  /// Signed in: email a code to [email] to make it the sign-in email.
+  Future<void> sendEmailCode(String email, String currentPassword) =>
+      http.post('auth/email/send-code', body: {'email': email, 'currentPassword': currentPassword});
+
+  /// Returns the fresh session (`mustVerifyEmail: false`).
+  Future<Json> verifyEmail(String email, String code) async =>
+      _map(await http.post('auth/email/verify', body: {'email': email, 'code': code}));
 
   Future<Json> sessionRaw() async => _map(await http.get('auth/session', cache: false));
 

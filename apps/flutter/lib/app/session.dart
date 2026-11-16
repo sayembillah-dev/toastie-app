@@ -53,6 +53,7 @@ class AuthController extends Notifier<AuthState> {
         state = const SignedOut(message: 'Your session expired. Please sign in again.');
       }
     };
+    client.onEmailVerificationRequired = _onEmailGate;
     return ref.read(initialAuthProvider);
   }
 
@@ -121,14 +122,43 @@ class AuthController extends Notifier<AuthState> {
     }
   }
 
-  Future<void> signIn(String phone, String password) async {
-    final res = await _api.login(phone, password);
+  /// Sign in with exactly one of [email] or [phone].
+  Future<void> signIn({String? email, String? phone, required String password}) async {
+    final res = await _api.login(email: email, phone: phone, password: password);
     await _applyAuthResult(res);
   }
 
-  Future<void> register({required String name, required String phone, required String password, String? email}) async {
-    final res = await _api.register(name: name, phone: phone, password: password, email: email);
+  /// Final step of the email-first sign-up.
+  Future<void> register({
+    required String signupToken,
+    required String name,
+    required String phone,
+    required String password,
+  }) async {
+    final res = await _api.register(signupToken: signupToken, name: name, phone: phone, password: password);
     await _applyAuthResult(res);
+  }
+
+  /// WhatsApp password recovery — signs in like [signIn].
+  Future<void> resetWithWhatsapp({required String phone, required String code, required String newPassword}) async {
+    final res = await _api.resetWithWhatsapp(phone: phone, code: code, newPassword: newPassword);
+    await _applyAuthResult(res);
+  }
+
+  /// Confirm the gate's email code and adopt the fresh session it returns.
+  Future<void> verifyEmail(String email, String code) async {
+    final raw = await _api.verifyEmail(email, code);
+    await _applySession(raw);
+  }
+
+  Future<void>? _gateCheck;
+
+  /// A request came back `403 EMAIL_VERIFICATION_REQUIRED`: re-read the
+  /// session so `mustVerifyEmail` turns on and the router shows the gate.
+  void _onEmailGate() {
+    final s = state;
+    if (s is! SignedIn || s.session.user.mustVerifyEmail) return;
+    _gateCheck ??= refreshSession().catchError((_) {}).whenComplete(() => _gateCheck = null);
   }
 
   Future<void> _applyAuthResult(Json res) async {
@@ -145,8 +175,12 @@ class AuthController extends Notifier<AuthState> {
   /// profile change, or a password change) and keep the current context if
   /// it is still held.
   Future<void> refreshSession() async {
-    final current = state;
     final raw = await _api.sessionRaw();
+    await _applySession(raw);
+  }
+
+  Future<void> _applySession(Json raw) async {
+    final current = state;
     await _cacheSessionRaw(raw);
     final session = Session.fromJson(raw);
     final ctx = _pickContext(session, current is SignedIn ? current.context?.key : _tokens.contextKey);

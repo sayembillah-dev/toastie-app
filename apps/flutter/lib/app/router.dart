@@ -7,10 +7,13 @@ import '../features/admin/club_profile_screen.dart';
 import '../features/admin/members_admin_screen.dart';
 import '../features/admin/permissions_screen.dart';
 import '../features/auth/change_password_screen.dart';
+import '../features/auth/forgot_password_screen.dart';
 import '../features/auth/invite_screen.dart';
 import '../features/auth/join_club_screen.dart';
 import '../features/auth/register_screen.dart';
 import '../features/auth/sign_in_screen.dart';
+import '../features/auth/verify_email_screen.dart';
+import '../features/auth/whatsapp_recovery_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/learn/learn_screen.dart';
 import '../features/learn/member_pathway_screen.dart';
@@ -53,7 +56,18 @@ class _AuthListenable extends ChangeNotifier {
 
 final _rootKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 
-const _publicPrefixes = ['/welcome', '/sign-in', '/register', '/agenda/', '/invite/'];
+const _publicPrefixes = [
+  '/welcome',
+  '/sign-in',
+  '/register',
+  '/forgot-password',
+  '/recover-whatsapp',
+  '/agenda/',
+  '/invite/',
+];
+
+/// Signed-out-only pages: a signed-in user is sent on from these.
+const _signedOutOnly = ['/welcome', '/sign-in', '/register', '/forgot-password', '/recover-whatsapp'];
 
 /// Shared links open straight to their target, even on a first launch.
 const _deepLinkPrefixes = ['/agenda/', '/invite/'];
@@ -78,13 +92,17 @@ final routerProvider = Provider<GoRouter>((ref) {
         return isPublic ? null : '/sign-in';
       }
       final s = auth as SignedIn;
-      if (loc == '/sign-in' || loc == '/register' || loc == '/welcome') {
+      if (_signedOutOnly.contains(loc)) {
         final from = state.uri.queryParameters['from'];
         return from != null && from.startsWith('/') ? from : '/';
       }
-      if (s.session.user.mustChangePassword && !s.skippedPasswordChange && loc != '/change-password') {
-        return '/change-password';
+      // Gates, in order: a temporary password first, then the email gate.
+      final user = s.session.user;
+      if (user.mustChangePassword && !s.skippedPasswordChange) {
+        return loc == '/change-password' ? null : '/change-password';
       }
+      if (user.mustVerifyEmail) return loc == '/verify-email' ? null : '/verify-email';
+      if (loc == '/verify-email') return '/';
       if (s.context == null && !loc.startsWith('/join') && !loc.startsWith('/invite/') &&
           !loc.startsWith('/agenda/') && !loc.startsWith('/me') && loc != '/change-password') {
         return '/join';
@@ -94,8 +112,14 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(path: '/welcome', builder: (_, _) => const OnboardingScreen()),
-      GoRoute(path: '/sign-in', builder: (_, _) => const SignInScreen()),
+      GoRoute(
+        path: '/sign-in',
+        builder: (_, s) => SignInScreen(args: s.extra is SignInArgs ? s.extra as SignInArgs : null),
+      ),
       GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
+      GoRoute(path: '/forgot-password', builder: (_, _) => const ForgotPasswordScreen()),
+      GoRoute(path: '/recover-whatsapp', builder: (_, _) => const WhatsappRecoveryScreen()),
+      GoRoute(path: '/verify-email', builder: (_, _) => const VerifyEmailScreen()),
       GoRoute(path: '/join', builder: (_, _) => const JoinClubScreen()),
       GoRoute(path: '/change-password', builder: (_, _) => const ChangePasswordScreen(forced: true)),
       GoRoute(path: '/invite/:token', builder: (_, s) => InviteScreen(token: s.pathParameters['token']!)),

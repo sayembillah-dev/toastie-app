@@ -140,6 +140,11 @@ class ApiClient {
       },
       onError: (err, handler) async {
         final req = err.requestOptions;
+        final body = err.response?.data;
+        if (err.response?.statusCode == 403 && body is Map && body['code'] == 'EMAIL_VERIFICATION_REQUIRED') {
+          onEmailVerificationRequired?.call();
+          return handler.next(err);
+        }
         final is401 = err.response?.statusCode == 401;
         final canRefresh = is401 &&
             req.extra['anonymous'] != true &&
@@ -184,6 +189,10 @@ class ApiClient {
 
   /// Called when refresh fails — the session controller signs the user out.
   VoidCallback? onSessionExpired;
+
+  /// Called on `403 EMAIL_VERIFICATION_REQUIRED` — the session controller
+  /// re-reads the session so the router can show the verify-email gate.
+  VoidCallback? onEmailVerificationRequired;
 
   /// True while the app is serving cached data because the network failed.
   final ValueNotifier<bool> offline = ValueNotifier(false);

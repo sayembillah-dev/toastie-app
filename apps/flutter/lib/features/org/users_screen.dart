@@ -14,6 +14,7 @@ import '../../data/toastie_api_admin.dart';
 import '../../ui/icons.dart';
 import '../../ui/widgets.dart';
 import '../admin/members_admin_screen.dart' show RolePicker;
+import '../auth/auth_widgets.dart' show validateEmail;
 import '../meetings/meeting_common.dart';
 import 'org_tree_screen.dart';
 
@@ -238,7 +239,11 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
             SelectableText(pw, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: 2)),
           ]),
           actions: [
-            TextButton(onPressed: () => copyText(ctx, 'Phone: ${_u.phone}\nPassword: $pw', 'Copied'), child: const Text('Copy')),
+            TextButton(onPressed: () => copyText(
+                  ctx,
+                  [if (_u.email != null && _u.email!.isNotEmpty) 'Email: ${_u.email}', 'Phone: ${_u.phone}', 'Password: $pw']
+                      .join('\n'),
+                  'Copied'), child: const Text('Copy')),
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Done')),
           ],
         ),
@@ -662,7 +667,7 @@ class _CreateUserScreenState extends ConsumerState<CreateUserScreen> {
         'name': _name.text.trim(),
         'phone': _phone.text.trim(),
         'password': _password.text,
-        if (_email.text.trim().isNotEmpty) 'email': _email.text.trim(),
+        'email': _email.text.trim(),
         if (_ti.text.trim().isNotEmpty) 'tiMemberNumber': _ti.text.trim(),
         if (_clubId != null) ...{'clubId': _clubId, 'roles': _roles.toList(), 'isClubAdmin': _admin, 'memberType': _type},
       });
@@ -681,7 +686,8 @@ class _CreateUserScreenState extends ConsumerState<CreateUserScreen> {
     if (_result != null) {
       final token = (_result!['credentialShare'] as Map?)?['token'];
       final link = token == null ? null : '${AppConfig.webOrigin}/credentials/${_result!['id']}?t=$token';
-      final creds = 'Openfloor sign-in\nPhone: ${_phone.text.trim()}\nPassword: ${_password.text}';
+      final creds =
+          'Openfloor sign-in\nEmail: ${_email.text.trim()}\nPhone: ${_phone.text.trim()}\nPassword: ${_password.text}';
       return Scaffold(
         appBar: AppBar(title: const Text('Account created'), automaticallyImplyLeading: false),
         body: ListView(padding: const EdgeInsets.all(20), children: [
@@ -729,8 +735,14 @@ class _CreateUserScreenState extends ConsumerState<CreateUserScreen> {
             inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(11)],
             validator: validatePhone,
           ),
-          const FieldLabel('Email', optional: true),
-          TextFormField(controller: _email, keyboardType: TextInputType.emailAddress),
+          const FieldLabel('Email'),
+          TextFormField(
+            controller: _email,
+            keyboardType: TextInputType.emailAddress,
+            autocorrect: false,
+            validator: (v) => validateEmail(v, empty: 'Enter an email'),
+            decoration: const InputDecoration(helperText: 'They sign in with this email.'),
+          ),
           const FieldLabel('TI member number', optional: true),
           TextFormField(controller: _ti, maxLength: 40, decoration: const InputDecoration(counterText: '')),
           const FieldLabel('Password'),
