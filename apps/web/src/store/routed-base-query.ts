@@ -1,10 +1,10 @@
-import type { BaseQueryFn, FetchArgs } from '@reduxjs/toolkit/query';
+import type { BaseQueryApi, BaseQueryFn, FetchArgs } from '@reduxjs/toolkit/query';
 import { fetchBaseQuery } from '@reduxjs/toolkit/query';
 
 import { refreshSession } from '@/lib/auth/refresh';
 import { clearAuthStorage, readAccessToken, readStoredContext } from '@/lib/auth/token-storage';
 
-import { sessionUnauthenticated } from './session-slice';
+import { emailVerificationRequired, sessionUnauthenticated } from './session-slice';
 
 /** RTK Query baseQuery for `toastlyApi`. Attaches the JWT and the active
  * context on every request, and on 401 tries a rotating-refresh dance once
@@ -68,5 +68,37 @@ export const routedBaseQuery: BaseQueryFn<string | FetchArgs, unknown, unknown> 
     // `unavailable`: leave the session alone and let this request fail like
     // any other network error — a blip or a deploy is not a sign-out.
   }
+  if (result.error && isEmailVerificationRequired(result.error)) {
+    handleEmailVerificationRequired(api);
+  }
   return result;
 };
+
+/** `403 EMAIL_VERIFICATION_REQUIRED` — matched on the code, not the status:
+ * login's `403 PHONE_LOGIN_DISABLED` is a different thing entirely. */
+function isEmailVerificationRequired(error: { status: unknown; data?: unknown }): boolean {
+  if (error.status !== 403) return false;
+  const data = error.data;
+  if (typeof data !== 'object' || data === null) return false;
+  return (data as { code?: unknown }).code === 'EMAIL_VERIFICATION_REQUIRED';
+}
+
+/** Inside the app shell the session is loaded, so flipping
+ * `mustVerifyEmail` is enough — `AppFrame` swaps in the gate in place. A
+ * public page (an invite accept, say) never loads the session slice, so
+ * send the browser into the app, where `SessionProvider` loads the gated
+ * session and the gate takes over. */
+function handleEmailVerificationRequired(api: BaseQueryApi): void {
+  const state = api.getState() as { session?: { user: unknown } };
+  if (state.session?.user) {
+    api.dispatch(emailVerificationRequired());
+    return;
+  }
+  if (typeof window !== 'undefined') {
+    // Runs in the RTK Query base query, outside React, so `useRouter` is not
+    // available — and a full load is wanted here, so the app re-reads the
+    // session from scratch.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.assign('/');
+  }
+}

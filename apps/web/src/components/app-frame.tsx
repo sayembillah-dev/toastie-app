@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
 import { AppShell } from '@/components/app-shell';
+import { VerifyEmailGate } from '@/components/auth/verify-email-gate';
 import { OnboardingScreen } from '@/components/onboarding/onboarding-screen';
 import { useAppSelector } from '@/store/hooks';
 import {
@@ -68,6 +69,24 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
 
   if (status === 'unauthenticated') {
     return null;
+  }
+
+  /* The verify-email gate, rendered in place on whatever page the user is
+   * on (the flag is set by the session, or flipped by `routedBaseQuery` on a
+   * `403 EMAIL_VERIFICATION_REQUIRED`). The temporary-password prompt comes
+   * first: login sends that user to `/change-password`, which renders
+   * without the shell (its sidebar data would 403); Skip or a successful
+   * change then lands on the gate. Checked before onboarding, whose join
+   * call would 403 too. */
+  if (status === 'ready' && user?.mustVerifyEmail) {
+    if (pathname === '/change-password' && user.mustChangePassword) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-canvas p-6">
+          {children}
+        </div>
+      );
+    }
+    return <VerifyEmailGate />;
   }
 
   if (isOnboarding) return <OnboardingScreen />;

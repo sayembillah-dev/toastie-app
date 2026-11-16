@@ -157,14 +157,16 @@ export interface AuthResponse {
   session: SessionResponse;
 }
 
-export interface LoginInput {
-  phone: string;
-  password: string;
-}
+/** Exactly one of `email` / `phone` — phone sign-in is kept for older
+ * accounts that have no verified email yet. */
+export type LoginInput = { email: string; password: string } | { phone: string; password: string };
 
 export interface RegisterInput {
   phone: string;
   password: string;
+  /** From `authSignupVerify` — proof of the email. The email then comes from
+   * the token and any `email` in the body is ignored. */
+  signupToken?: string;
   /** Single "Full name" input — the API splits it on the first space. */
   name?: string;
   /** Legacy pair — `name` wins server-side when both are sent. */
@@ -2384,6 +2386,48 @@ export const toastlyApi = createApi({
     authRegister: build.mutation<AuthResponse, RegisterInput>({
       query: (body) => ({ url: '/auth/register', method: 'POST', body }),
     }),
+    /* Sign-up step 1. Always 202 — an address that already has an account
+     * gets a notice email instead of a code, and the response can't tell. */
+    authSignupSendCode: build.mutation<{ ok: true }, { email: string }>({
+      query: (body) => ({ url: '/auth/signup/email/send-code', method: 'POST', body }),
+    }),
+    /* Sign-up step 2: trades the emailed code for a 30-minute `signupToken`
+     * that `authRegister` accepts. */
+    authSignupVerify: build.mutation<{ signupToken: string }, { email: string; code: string }>({
+      query: (body) => ({ url: '/auth/signup/email/verify', method: 'POST', body }),
+    }),
+    /* Forgot password. Always 202 — never reveals whether the email has an
+     * account. */
+    authForgotPassword: build.mutation<{ ok: true }, { email: string }>({
+      query: (body) => ({ url: '/auth/password/forgot', method: 'POST', body }),
+    }),
+    /* 204 on success; does NOT sign in (every session was revoked). */
+    authResetPassword: build.mutation<void, { email: string; code: string; newPassword: string }>({
+      query: (body) => ({ url: '/auth/password/reset', method: 'POST', body }),
+    }),
+    /* Recovery for older accounts with no verified email — the code goes to
+     * the phone on WhatsApp. Always 202. */
+    authWhatsappRecoveryRequest: build.mutation<{ ok: true }, { phone: string }>({
+      query: (body) => ({ url: '/auth/recovery/whatsapp/request', method: 'POST', body }),
+    }),
+    /* Sets the new password and signs this device in — same shape as login. */
+    authWhatsappRecoveryReset: build.mutation<
+      AuthResponse,
+      { phone: string; code: string; newPassword: string }
+    >({
+      query: (body) => ({ url: '/auth/recovery/whatsapp/reset', method: 'POST', body }),
+    }),
+    /* Signed-in, allowed through the email gate: emails a code to `email`.
+     * The password is required because the email becomes a sign-in
+     * credential. */
+    authEmailSendCode: build.mutation<{ ok: true }, { email: string; currentPassword: string }>({
+      query: (body) => ({ url: '/auth/email/send-code', method: 'POST', body }),
+    }),
+    /* Makes `email` the verified sign-in email; returns the fresh session
+     * (`mustVerifyEmail: false`). */
+    authEmailVerify: build.mutation<SessionResponse, { email: string; code: string }>({
+      query: (body) => ({ url: '/auth/email/verify', method: 'POST', body }),
+    }),
     authLogout: build.mutation<void, { refreshToken: string }>({
       query: (body) => ({ url: '/auth/logout', method: 'POST', body }),
     }),
@@ -2980,6 +3024,14 @@ export const {
   useJoinClubByCodeMutation,
   useAuthLoginMutation,
   useAuthRegisterMutation,
+  useAuthSignupSendCodeMutation,
+  useAuthSignupVerifyMutation,
+  useAuthForgotPasswordMutation,
+  useAuthResetPasswordMutation,
+  useAuthWhatsappRecoveryRequestMutation,
+  useAuthWhatsappRecoveryResetMutation,
+  useAuthEmailSendCodeMutation,
+  useAuthEmailVerifyMutation,
   useAuthLogoutMutation,
   useGetAuthSessionQuery,
   useLazyGetAuthSessionQuery,

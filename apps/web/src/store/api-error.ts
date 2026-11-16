@@ -60,3 +60,26 @@ export function isNotFoundError(error: unknown): boolean {
     (error as { status: unknown }).status === 404
   );
 }
+
+/** The API's machine-readable error code (`{ code: 'OTP_INVALID' }`), or
+ * `null` when the error carries none — a network failure, or the rate
+ * limiter's plain 429. */
+export function getErrorCode(error: unknown): string | null {
+  if (typeof error !== 'object' || error === null || !('data' in error)) return null;
+  const { data } = error as { data: unknown };
+  if (typeof data !== 'object' || data === null) return null;
+  const { code } = data as { code?: unknown };
+  return typeof code === 'string' ? code : null;
+}
+
+/** The HTTP status of a failed request, or `null` for a network failure. */
+export function getErrorStatus(error: unknown): number | null {
+  if (typeof error !== 'object' || error === null || !('status' in error)) return null;
+  const { status } = error as { status: unknown };
+  return typeof status === 'number' ? status : null;
+}
+
+/** True when the API (or its rate limiter) asked the caller to slow down. */
+export function isRateLimited(error: unknown): boolean {
+  return getErrorStatus(error) === 429;
+}

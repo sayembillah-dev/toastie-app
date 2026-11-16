@@ -64,6 +64,13 @@ export const sessionSlice = createSlice({
     passwordChanged(state) {
       if (state.user) state.user.mustChangePassword = false;
     },
+    /** A request came back `403 EMAIL_VERIFICATION_REQUIRED` — the server
+     * now gates this account (say, its email changed since the session
+     * loaded). Flipping the flag makes `AppFrame` swap in the verify-email
+     * gate wherever the user is. */
+    emailVerificationRequired(state) {
+      if (state.user) state.user.mustVerifyEmail = true;
+    },
     /** Patches the identity fields the profile page can edit straight onto
      * the session, mirroring `passwordChanged` — the mutation already
      * returns the fresh values, so a full session reload would be waste. */
@@ -94,6 +101,7 @@ export const {
   sessionUnauthenticated,
   contextChanged,
   passwordChanged,
+  emailVerificationRequired,
   profileUpdated,
   sessionCleared,
 } = sessionSlice.actions;

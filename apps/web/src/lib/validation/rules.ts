@@ -125,6 +125,14 @@ export function passwordRules({ label = 'Password' }: { label?: string } = {}): 
   ];
 }
 
+/** The 6-digit one-time code emailed (or sent on WhatsApp) for sign-up,
+ * password reset and email verification. Mirrors the API's `/^\d{6}$/`. */
+export const OTP_LENGTH = 6;
+
+export function codeRules(): Rule[] {
+  return [requiredText('Enter the code'), { pattern: /^\d{6}$/, message: 'The code is 6 digits' }];
+}
+
 /** Confirm-password rule — pair with `dependencies={[matchField]}`. */
 export function confirmPasswordRule(matchField: string, label = 'Passwords'): Rule {
   return ({ getFieldValue }) => ({

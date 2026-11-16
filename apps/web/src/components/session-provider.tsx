@@ -60,7 +60,7 @@ async function fetchLiveSession(): Promise<LiveSession> {
 /** Applies a freshly-fetched session payload the same way on every call
  * site: validate any stored context against it, persist the resolved
  * context, and dispatch `sessionLoaded`. */
-function applySessionPayload(
+export function applySessionPayload(
   dispatch: ReturnType<typeof useAppDispatch>,
   payload: SessionResponse,
 ): void {

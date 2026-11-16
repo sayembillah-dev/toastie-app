@@ -1,6 +1,6 @@
 'use client';
 
-import { LockKey, Phone, SignIn } from '@phosphor-icons/react/dist/ssr';
+import { EnvelopeSimple, LockKey, Phone, SignIn } from '@phosphor-icons/react/dist/ssr';
 import { Alert, Button, Form, Input } from 'antd';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -9,66 +9,66 @@ import { Suspense, useState } from 'react';
 import { AuthCard } from '@/components/auth/auth-card';
 import { AuthShell } from '@/components/auth/auth-shell';
 import { RouteFallback } from '@/components/route-fallback';
-import { safeNextPath } from '@/lib/auth/next-path';
-import { writeAccessToken, writeRefreshToken, writeStoredContext } from '@/lib/auth/token-storage';
-import { normalizePhone, phoneRules } from '@/lib/validation/rules';
+import { completeSignIn } from '@/lib/auth/complete-sign-in';
+import { emailRules, normalizePhone, phoneRules } from '@/lib/validation/rules';
 import { useAuthLoginMutation } from '@/store/api';
-import { getFieldErrors } from '@/store/api-error';
+import { getErrorCode, getFieldErrors, isRateLimited } from '@/store/api-error';
 import { useAppDispatch } from '@/store/hooks';
-import { defaultRouteForContext, isContextKeyValid, sessionLoaded } from '@/store/session-slice';
+
+type Mode = 'email' | 'phone';
 
 interface FormValues {
-  phone: string;
+  email?: string;
+  phone?: string;
   password: string;
 }
 
 /** Login page. Public route — `(public)/layout.tsx` renders no shell.
  *
- * Sign-in is phone + password (email is a contact field, not a credential
- * — see project_phone_auth memory). On success writes the token pair to
- * localStorage, hydrates the session slice, and pushes straight to the
- * caller's default context's own dashboard (`/super-admin` for a Super
- * Admin, `/area` etc. for a Director, `/` for a club member) — `/` itself
- * has no built surface outside a club context, so routing everyone
- * through it first would flash a blank page. */
+ * Sign-in is email + password. Phone + password stays behind a toggle for
+ * older accounts with no verified email; the API answers
+ * `403 PHONE_LOGIN_DISABLED` (with the masked email) once an account has
+ * one, and this page flips back to email mode with that hint.
+ *
+ * `?reset=1` is where the forgot-password flow lands after a successful
+ * reset. */
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
   const [login, { isLoading }] = useAuthLoginMutation();
+  const [mode, setMode] = useState<Mode>('email');
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(
+    searchParams.get('reset') === '1' ? 'Password updated. Sign in with your new password.' : null,
+  );
   const [form] = Form.useForm<FormValues>();
+
+  const nextParam = searchParams.get('next');
+  const withNext = (path: string) =>
+    nextParam ? `${path}?next=${encodeURIComponent(nextParam)}` : path;
+
+  function switchMode(to: Mode) {
+    setMode(to);
+    setError(null);
+    form.setFields([
+      { name: 'email', errors: [] },
+      { name: 'phone', errors: [] },
+    ]);
+  }
 
   async function onSubmit(values: FormValues) {
     setError(null);
+    setNotice(null);
     try {
-      const res = await login({
-        phone: normalizePhone(values.phone),
-        password: values.password,
-      }).unwrap();
-
-      writeAccessToken(res.tokens.accessToken);
-      writeRefreshToken(res.tokens.refreshToken);
-
-      const contextKey = isContextKeyValid(res.session.defaultContextKey, res.session)
-        ? res.session.defaultContextKey
-        : null;
-      if (contextKey) writeStoredContext(contextKey);
-
-      dispatch(sessionLoaded({ payload: res.session, contextKey }));
-      // `next` (e.g. `/invite/:token/accept`) wins over the caller's own
-      // context default — an invite link takes someone straight to the
-      // accept page regardless of what club they'd otherwise land on.
-      const next = safeNextPath(searchParams.get('next'));
-      const destination = next ?? (contextKey ? defaultRouteForContext(contextKey) : '/');
-      // A temporary (admin-set) password — land on the "set your own"
-      // prompt instead, carrying the real destination through so Skip (or
-      // a successful change) still lands them where they were headed.
-      router.replace(
-        res.session.user.mustChangePassword
-          ? `/change-password?next=${encodeURIComponent(destination)}`
-          : destination,
-      );
+      // Built from the mode, not the raw values: antd keeps a hidden field's
+      // value, and sending both identifiers is a 400.
+      const body =
+        mode === 'email'
+          ? { email: (values.email ?? '').trim().toLowerCase(), password: values.password }
+          : { phone: normalizePhone(values.phone ?? ''), password: values.password };
+      const res = await login(body).unwrap();
+      router.replace(completeSignIn(dispatch, res, nextParam));
     } catch (err) {
       const fieldErrors = getFieldErrors(err);
       if (fieldErrors) {
@@ -80,8 +80,22 @@ function LoginPageContent() {
         );
         return;
       }
-      const code = extractErrorCode(err);
-      setError(messageForCode(code));
+      const code = getErrorCode(err);
+      if (code === 'PHONE_LOGIN_DISABLED') {
+        const masked = maskedEmailFrom(err);
+        setMode('email');
+        setNotice(
+          masked
+            ? `Sign in with your email (${masked}) instead.`
+            : 'Sign in with your email instead.',
+        );
+        return;
+      }
+      if (isRateLimited(err)) {
+        setError('Too many attempts. Wait a minute and try again.');
+        return;
+      }
+      setError(messageForCode(code, mode));
     }
   }
 
@@ -93,10 +107,11 @@ function LoginPageContent() {
         subtitle="Welcome back — enter your details to continue."
         footer={
           <>
-            New to Openfloor? <Link href="/register">Create an account</Link>
+            New to Openfloor? <Link href={withNext('/register')}>Create account</Link>
           </>
         }
       >
+        {notice ? <Alert type="info" showIcon className="mb-4" message={notice} /> : null}
         {error ? <Alert type="error" showIcon className="mb-4" message={error} /> : null}
 
         <Form<FormValues>
@@ -106,21 +121,34 @@ function LoginPageContent() {
           autoComplete="on"
           disabled={isLoading}
         >
-          <Form.Item label="Mobile number" name="phone" rules={phoneRules()}>
-            <Input
-              type="tel"
-              autoComplete="tel"
-              inputMode="tel"
-              size="large"
-              placeholder="01568286512"
-              prefix={<Phone size={16} className="text-ink-muted" />}
-            />
-          </Form.Item>
+          {mode === 'email' ? (
+            <Form.Item label="Email" name="email" rules={emailRules({ required: true })}>
+              <Input
+                type="email"
+                autoComplete="email"
+                size="large"
+                placeholder="name@example.com"
+                prefix={<EnvelopeSimple size={16} className="text-ink-muted" />}
+              />
+            </Form.Item>
+          ) : (
+            <Form.Item label="Mobile number" name="phone" rules={phoneRules()}>
+              <Input
+                type="tel"
+                autoComplete="tel"
+                inputMode="tel"
+                size="large"
+                placeholder="01568286512"
+                prefix={<Phone size={16} className="text-ink-muted" />}
+              />
+            </Form.Item>
+          )}
 
           <Form.Item
             label="Password"
             name="password"
             rules={[{ required: true, message: 'Enter your password' }]}
+            className="!mb-2"
           >
             <Input.Password
               autoComplete="current-password"
@@ -129,11 +157,25 @@ function LoginPageContent() {
             />
           </Form.Item>
 
-          <Form.Item className="!mb-0">
+          <div className="mb-5 text-right text-xs">
+            <Link href="/forgot-password" className="font-medium text-ink-soft hover:text-ink">
+              Forgot password?
+            </Link>
+          </div>
+
+          <Form.Item className="!mb-3">
             <Button type="primary" htmlType="submit" block size="large" loading={isLoading}>
               Sign in
             </Button>
           </Form.Item>
+
+          <button
+            type="button"
+            onClick={() => switchMode(mode === 'email' ? 'phone' : 'email')}
+            className="w-full text-center text-xs font-medium text-ink-muted hover:text-ink"
+          >
+            {mode === 'email' ? 'Use phone number instead' : 'Use email instead'}
+          </button>
         </Form>
       </AuthCard>
     </AuthShell>
@@ -151,18 +193,22 @@ export default function LoginPage() {
   );
 }
 
-function extractErrorCode(err: unknown): string | null {
+/** The masked address (`j***@example.com`) that rides along with
+ * `403 PHONE_LOGIN_DISABLED`. */
+function maskedEmailFrom(err: unknown): string | null {
   if (!err || typeof err !== 'object') return null;
   const data = (err as { data?: unknown }).data;
   if (!data || typeof data !== 'object') return null;
-  const code = (data as { code?: unknown }).code;
-  return typeof code === 'string' ? code : null;
+  const email = (data as { email?: unknown }).email;
+  return typeof email === 'string' ? email : null;
 }
 
-function messageForCode(code: string | null): string {
+function messageForCode(code: string | null, mode: Mode): string {
   switch (code) {
     case 'INVALID_CREDENTIALS':
-      return 'Mobile number or password is incorrect.';
+      return mode === 'email'
+        ? 'Email or password is incorrect.'
+        : 'Mobile number or password is incorrect.';
     case 'USER_SUSPENDED':
       return 'This account is suspended. Contact an admin.';
     default:

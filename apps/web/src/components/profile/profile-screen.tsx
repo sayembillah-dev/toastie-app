@@ -14,6 +14,7 @@ import { App, Button, Form, Input, Select, Space, Upload } from 'antd';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { PushNotificationToggle } from '@/components/push/push-notification-toggle';
+import { useSessionRefresh } from '@/components/session-provider';
 import { PersonAvatar } from '@/components/ui/person-avatar';
 import {
   getProfileInitials,
@@ -193,6 +194,7 @@ function ProfileForm({ profile }: { profile: Profile }) {
   const [form] = Form.useForm<FormValues>();
   const [updateProfile, { isLoading }] = useUpdateMyProfileMutation();
   const dispatch = useAppDispatch();
+  const refreshSession = useSessionRefresh();
 
   const initialValues = useMemo(() => deserialize(profile), [profile]);
 
@@ -275,6 +277,9 @@ function ProfileForm({ profile }: { profile: Profile }) {
       setAvatarPending(null);
       setAvatarCleared(false);
       message.success('Profile saved');
+      // A new email starts unverified — reload the session so the
+      // verify-email gate shows now rather than on the next blocked request.
+      if (emailChanged) await refreshSession();
     } catch (err) {
       const code = extractErrorCode(err);
       if (code === 'INVALID_CREDENTIALS') {
@@ -346,7 +351,16 @@ function ProfileForm({ profile }: { profile: Profile }) {
             <Input placeholder="e.g. Sayem Billah" autoComplete="name" />
           </Form.Item>
 
-          <Form.Item label="Email" name="email" rules={emailRules()}>
+          <Form.Item
+            label="Email"
+            name="email"
+            rules={emailRules()}
+            extra={
+              emailChanged
+                ? "You sign in with this email. We'll ask you to verify the new one."
+                : undefined
+            }
+          >
             <Input placeholder="name@example.com" type="email" />
           </Form.Item>
 
