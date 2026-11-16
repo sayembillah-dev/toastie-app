@@ -22,11 +22,13 @@ import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto, ResetPasswordDto } from './dto/password-reset.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { RegisterDto } from './dto/register.dto';
+import { SignupSendCodeDto, SignupVerifyDto } from './dto/signup.dto';
 import { WhatsappRecoveryRequestDto, WhatsappRecoveryResetDto } from './dto/whatsapp-recovery.dto';
 import { EmailVerificationService } from './email-verification.service';
 import { ClientIpThrottlerGuard } from './guards/client-ip-throttler.guard';
 import type { AuthenticatedUser } from './guards/jwt-auth.guard';
 import { PasswordResetService } from './password-reset.service';
+import { SignupService } from './signup.service';
 import { WhatsappRecoveryService } from './whatsapp-recovery.service';
 
 @Controller('auth')
@@ -36,6 +38,7 @@ export class AuthController {
     private readonly passwordReset: PasswordResetService,
     private readonly emailVerification: EmailVerificationService,
     private readonly whatsappRecovery: WhatsappRecoveryService,
+    private readonly signup: SignupService,
   ) {}
 
   /** Public — no auth header expected. Returns the same shape as `login`
@@ -43,6 +46,8 @@ export class AuthController {
    * follow-up request. */
   @Public()
   @Post('register')
+  @UseGuards(ClientIpThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   register(@Body() dto: RegisterDto): Promise<AuthResult> {
     return this.authService.register(dto);
   }
@@ -183,5 +188,30 @@ export class AuthController {
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   resetWithWhatsapp(@Body() dto: WhatsappRecoveryResetDto): Promise<AuthResult> {
     return this.whatsappRecovery.reset(dto);
+  }
+
+  /** Public. Sign-up step 1: emails a code to a new address, or a "you
+   * already have an account" notice to a taken one. Always `202` with the
+   * same body (see `SignupService`). */
+  @Public()
+  @Post('signup/email/send-code')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @UseGuards(ClientIpThrottlerGuard)
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  sendSignupCode(@Body() dto: SignupSendCodeDto): { ok: true } {
+    this.signup.requestCode(dto.email);
+    return { ok: true };
+  }
+
+  /** Public. Sign-up step 2: checks the code and returns `{ signupToken }`,
+   * valid for 30 minutes, for `POST /auth/register`. `400 OTP_INVALID` for
+   * every failure. */
+  @Public()
+  @Post('signup/email/verify')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ClientIpThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  verifySignupCode(@Body() dto: SignupVerifyDto): Promise<{ signupToken: string }> {
+    return this.signup.verify(dto.email, dto.code);
   }
 }

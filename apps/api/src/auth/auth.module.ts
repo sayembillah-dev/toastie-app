@@ -15,6 +15,7 @@ import { EmailVerifiedGuard } from './guards/email-verified.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { OtpService } from './otp.service';
 import { PasswordResetService } from './password-reset.service';
+import { SignupService } from './signup.service';
 import { TokenService } from './token.service';
 import { WhatsappRecoveryService } from './whatsapp-recovery.service';
 
@@ -52,6 +53,7 @@ import { WhatsappRecoveryService } from './whatsapp-recovery.service';
     PasswordResetService,
     EmailVerificationService,
     WhatsappRecoveryService,
+    SignupService,
     ClientIpThrottlerGuard,
     JwtAuthGuard,
     { provide: APP_GUARD, useClass: JwtAuthGuard },

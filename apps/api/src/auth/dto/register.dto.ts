@@ -3,9 +3,13 @@ import { IsOptional, IsString, Length, Matches, MaxLength, MinLength } from 'cla
 
 import { normalizePhone, PHONE_REGEX } from '@/common';
 
-/** Phone-based registration DTO. Phone is the login credential; email
- * is optional contact info. Local Bangladeshi format only — exactly 11
- * digits after stripping spaces/dashes/country-code prefix. */
+/** Registration. The email-first way sends `signupToken` (from
+ * `POST /auth/signup/email/verify`): the email then comes from the token,
+ * already verified, and any `email` in the body is ignored. The older way
+ * (no token, optional unverified `email`) works only while
+ * `EMAIL_VERIFICATION_ENFORCED` is off, for app builds that predate it.
+ * Phone is always required: local Bangladeshi format, exactly 11 digits
+ * after stripping spaces/dashes/country-code prefix. */
 export class RegisterDto {
   @IsString()
   @Transform(({ value }) => normalizePhone(value))
@@ -40,9 +44,16 @@ export class RegisterDto {
   @MaxLength(200)
   password!: string;
 
-  /** Optional — not required to sign up, never used for login. */
+  /** Older sign-up only: an optional, UNVERIFIED email. Ignored when a
+   * `signupToken` is sent. */
   @IsOptional()
   @IsString()
   @MaxLength(255)
   email?: string;
+
+  /** Proof of the email, from `POST /auth/signup/email/verify`. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  signupToken?: string;
 }

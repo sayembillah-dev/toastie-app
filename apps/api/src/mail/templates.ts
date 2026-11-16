@@ -90,6 +90,47 @@ export function emailChangedEmail(maskedNewEmail: string): Content {
   return { subject, text, html };
 }
 
+/** The first step of sign-up: proves the new member reads this inbox. */
+export function signupCodeEmail(code: string, minutes: number): Content {
+  const subject = `${code} is your ${BRAND} sign-up code`;
+  const text = [
+    `Use this code to create your ${BRAND} account:`,
+    '',
+    code,
+    '',
+    `It expires in ${minutes} minutes. Do not share this code with anyone.`,
+    '',
+    `If you did not try to sign up, ignore this email. No account is created without this code.`,
+  ].join('\n');
+  const html = layout(`
+    <p style="margin:0 0 16px">Use this code to create your ${BRAND} account:</p>
+    <p style="margin:0 0 16px;font-size:32px;font-weight:700;letter-spacing:6px">${code}</p>
+    <p style="margin:0 0 16px">It expires in ${minutes} minutes. Do not share this code with anyone.</p>
+    <p style="margin:0;color:#6b6b6b">If you did not try to sign up, ignore this email. No account is created without this code.</p>
+  `);
+  return { subject, text, html };
+}
+
+/** Sent instead of a sign-up code when the address already has an account.
+ * The sign-up screen looks the same either way, so it cannot be used to find
+ * out who has an account — only the inbox owner learns it, here. */
+export function signupExistingAccountEmail(): Content {
+  const subject = `You already have an ${BRAND} account`;
+  const text = [
+    `Someone tried to create an ${BRAND} account with this email address, but an account already uses it.`,
+    '',
+    `If this was you, sign in instead. If you forgot your password, use "Forgot password" on the sign-in page.`,
+    '',
+    `If this was not you, ignore this email. Nothing changed on your account.`,
+  ].join('\n');
+  const html = layout(`
+    <p style="margin:0 0 16px">Someone tried to create an ${BRAND} account with this email address, but an account already uses it.</p>
+    <p style="margin:0 0 16px">If this was you, sign in instead. If you forgot your password, use <strong>Forgot password</strong> on the sign-in page.</p>
+    <p style="margin:0;color:#6b6b6b">If this was not you, ignore this email. Nothing changed on your account.</p>
+  `);
+  return { subject, text, html };
+}
+
 function layout(body: string): string {
   return `<!doctype html>
 <html>

@@ -5,4 +5,6 @@ export {
   emailVerificationCodeEmail,
   passwordChangedEmail,
   passwordResetCodeEmail,
+  signupCodeEmail,
+  signupExistingAccountEmail,
 } from './templates';

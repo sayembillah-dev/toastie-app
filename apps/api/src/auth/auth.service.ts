@@ -18,6 +18,7 @@ import { PrismaService } from '@/prisma';
 import type { ChangePasswordDto } from './dto/change-password.dto';
 import type { LoginDto } from './dto/login.dto';
 import type { RegisterDto } from './dto/register.dto';
+import { SignupService } from './signup.service';
 import { type IssuedTokens, TokenService } from './token.service';
 
 export interface AuthResult {
@@ -29,20 +30,39 @@ export interface AuthResult {
 export class AuthService {
   /** `PHONE_LOGIN_RESTRICTED`, read once. See `login`. */
   private readonly phoneLoginRestricted: boolean;
+  /** `EMAIL_VERIFICATION_ENFORCED`, read once. With it on, sign-up must go
+   * through the email code (`signupToken`). See `register`. */
+  private readonly emailVerificationEnforced: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly tokens: TokenService,
     private readonly subjectFactory: SubjectFactory,
     private readonly identity: IdentityService,
+    private readonly signup: SignupService,
     config: ConfigService,
   ) {
     this.phoneLoginRestricted = config.get<string>('PHONE_LOGIN_RESTRICTED') === 'true';
+    this.emailVerificationEnforced = config.get<string>('EMAIL_VERIFICATION_ENFORCED') === 'true';
   }
 
   async register(dto: RegisterDto): Promise<AuthResult> {
     const phone = dto.phone;
-    const email = dto.email ? dto.email.trim().toLowerCase() : null;
+    let email: string | null;
+    let emailVerifiedAt: Date | null = null;
+    if (dto.signupToken) {
+      // Email-first sign-up: the email was proven by a code.
+      email = await this.signup.emailFromToken(dto.signupToken);
+      emailVerifiedAt = new Date();
+    } else if (this.emailVerificationEnforced) {
+      throw new BadRequestException({
+        code: 'SIGNUP_TOKEN_REQUIRED',
+        message: 'Verify your email address first.',
+      });
+    } else {
+      // Older app builds: optional email, not verified.
+      email = dto.email ? dto.email.trim().toLowerCase() : null;
+    }
     const passwordHash = await this.tokens.hashPassword(dto.password);
     // Single `name` input or the legacy first/last pair — one of them must
     // produce at least a first name.
@@ -60,6 +80,7 @@ export class AuthService {
         data: {
           phone,
           email,
+          emailVerifiedAt,
           passwordHash,
           firstName: names.firstName,
           lastName: names.lastName,
