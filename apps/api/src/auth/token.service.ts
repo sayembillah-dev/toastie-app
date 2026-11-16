@@ -58,6 +58,19 @@ export class TokenService {
     }
   }
 
+  /** Runs a full argon2 check that always fails. Call it when a sign-in
+   * names no account, so "no such account" takes as long as "wrong
+   * password" and the response time does not reveal which emails and phones
+   * have accounts. The dummy hash is made once, with the same settings as
+   * real hashes, so both checks cost the same. */
+  async verifyAgainstDummy(plain: string): Promise<false> {
+    this.dummyHash ??= this.hashPassword(createId());
+    await this.verifyPassword(await this.dummyHash, plain);
+    return false;
+  }
+
+  private dummyHash?: Promise<string>;
+
   async issueTokens(userId: string, now: Date): Promise<IssuedTokens> {
     const minted = await this.mint(userId, createId(), now);
     return minted.tokens;

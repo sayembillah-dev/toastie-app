@@ -304,6 +304,9 @@ jobs:
           # The "verify your email" gate. Off until the gate screens ship in
           # the web and Flutter apps — see env.validation.ts.
           EMAIL_VERIFICATION_ENFORCED: ${{ vars.EMAIL_VERIFICATION_ENFORCED || 'false' }}
+          # Phone sign-in off for accounts with a verified email. Turn on last,
+          # once app builds that only send a phone number are gone.
+          PHONE_LOGIN_RESTRICTED: ${{ vars.PHONE_LOGIN_RESTRICTED || 'false' }}
         run: |
           set -euo pipefail
           # Secrets go over stdin, never as argv: process arguments are visible
@@ -341,6 +344,7 @@ jobs:
             # parser and dotenv strip one layer of matching quotes.
             if [ -n "${MAIL_FROM:-}" ]; then echo "MAIL_FROM=\"$MAIL_FROM\""; fi
             echo "EMAIL_VERIFICATION_ENFORCED=$EMAIL_VERIFICATION_ENFORCED"
+            echo "PHONE_LOGIN_RESTRICTED=$PHONE_LOGIN_RESTRICTED"
           } | ssh deploy-target '
             set -euo pipefail
             umask 077

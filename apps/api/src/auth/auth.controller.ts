@@ -47,9 +47,13 @@ export class AuthController {
     return this.authService.register(dto);
   }
 
+  /** Public. `{ email, password }` or `{ phone, password }` — see
+   * `AuthService.login` for the error order. */
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(ClientIpThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   login(@Body() dto: LoginDto): Promise<AuthResult> {
     return this.authService.login(dto);
   }

@@ -1,15 +1,18 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import type { SessionResponse } from '@toastly/access';
 
 import { SubjectFactory } from '@/access';
 import { resolveNames } from '@/common';
 import { IdentityService } from '@/identity';
+import { maskEmail } from '@/mail';
 import { PrismaService } from '@/prisma';
 
 import type { ChangePasswordDto } from './dto/change-password.dto';
@@ -24,12 +27,18 @@ export interface AuthResult {
 
 @Injectable()
 export class AuthService {
+  /** `PHONE_LOGIN_RESTRICTED`, read once. See `login`. */
+  private readonly phoneLoginRestricted: boolean;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly tokens: TokenService,
     private readonly subjectFactory: SubjectFactory,
     private readonly identity: IdentityService,
-  ) {}
+    config: ConfigService,
+  ) {
+    this.phoneLoginRestricted = config.get<string>('PHONE_LOGIN_RESTRICTED') === 'true';
+  }
 
   async register(dto: RegisterDto): Promise<AuthResult> {
     const phone = dto.phone;
@@ -109,21 +118,44 @@ export class AuthService {
     return { tokens, session };
   }
 
+  /** Sign-in by email (the new way) or phone. The checks run in a fixed
+   * order so no answer reveals more than the caller has proven:
+   *
+   *   1. Find the account. None found → still run a full password check
+   *      against a dummy hash, so the timing matches a wrong password.
+   *   2. Wrong password → `401 INVALID_CREDENTIALS` (same as no account).
+   *   3. Suspended → `401 USER_SUSPENDED` (only after a correct password).
+   *   4. Phone sign-in on an account with a verified email, while
+   *      `PHONE_LOGIN_RESTRICTED` is on → `403 PHONE_LOGIN_DISABLED` with the
+   *      masked email to use instead. 403, not 401: clients read 401 as an
+   *      expired session. */
   async login(dto: LoginDto): Promise<AuthResult> {
-    const phone = dto.phone;
-    const user = await this.prisma.user.findUnique({
-      where: { phone },
-      select: { id: true, passwordHash: true, status: true },
-    });
-    if (!user) {
-      throw new UnauthorizedException({ code: 'INVALID_CREDENTIALS' });
+    if ((dto.email === undefined) === (dto.phone === undefined)) {
+      throw new BadRequestException({
+        code: 'LOGIN_IDENTIFIER_REQUIRED',
+        message: 'Sign in with either your email or your phone number.',
+      });
     }
-    const passwordOk = await this.tokens.verifyPassword(user.passwordHash, dto.password);
-    if (!passwordOk) {
+    const byEmail = dto.email !== undefined;
+    const user = await this.prisma.user.findUnique({
+      where: byEmail ? { email: dto.email } : { phone: dto.phone },
+      select: { id: true, passwordHash: true, status: true, email: true, emailVerifiedAt: true },
+    });
+    const passwordOk = user
+      ? await this.tokens.verifyPassword(user.passwordHash, dto.password)
+      : await this.tokens.verifyAgainstDummy(dto.password);
+    if (!user || !passwordOk) {
       throw new UnauthorizedException({ code: 'INVALID_CREDENTIALS' });
     }
     if (user.status !== 'active') {
       throw new UnauthorizedException({ code: 'USER_SUSPENDED' });
+    }
+    if (!byEmail && this.phoneLoginRestricted && user.emailVerifiedAt && user.email) {
+      throw new ForbiddenException({
+        code: 'PHONE_LOGIN_DISABLED',
+        message: 'Sign in with your email address instead.',
+        email: maskEmail(user.email),
+      });
     }
 
     // Consume the credential-handoff link (if one exists) the moment the

@@ -222,6 +222,15 @@ class EnvironmentVariables {
   @IsOptional()
   @IsIn(['true', 'false'], { message: 'EMAIL_VERIFICATION_ENFORCED must be "true" or "false"' })
   EMAIL_VERIFICATION_ENFORCED: 'true' | 'false' = 'false';
+
+  // "true": an account with a verified email can no longer sign in with its
+  // phone number — `POST /auth/login` answers 403 PHONE_LOGIN_DISABLED (after
+  // the password check) and names the masked email to use. Separate from the
+  // gate above on purpose: app builds already in people's hands send only
+  // the phone, so this goes on last, once those builds are gone.
+  @IsOptional()
+  @IsIn(['true', 'false'], { message: 'PHONE_LOGIN_RESTRICTED must be "true" or "false"' })
+  PHONE_LOGIN_RESTRICTED: 'true' | 'false' = 'false';
 }
 
 /** Wired into `ConfigModule.forRoot({ validate })`, so it runs once at boot and
