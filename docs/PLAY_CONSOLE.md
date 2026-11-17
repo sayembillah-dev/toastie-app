@@ -81,31 +81,29 @@ by those rows.
 ## Release build
 
 - Signed with the **upload key** from `apps/flutter/android/key.properties`
-  (git-ignored), which points at `~/keystores/openfloor-upload.jks` outside
-  the repo. A release build without that file fails rather than falling back
-  to the debug key. Enrol in **Play App Signing** on first upload; Google then
-  holds the app signing key and this is only the upload key.
+  (git-ignored). The upload key is the one EAS generated for the legacy Expo
+  app: download it from expo.dev → nifty-developers → Toastie → Credentials →
+  Android → `com.toastie.app`, and keep it outside the repo. A release build
+  without `key.properties` fails rather than falling back to the debug key.
+  Play App Signing holds the app signing key.
+- Upload certificate SHA-1: `00:8D:55:C5:38:FD:92:27:FC:14:2D:78:B2:20:A1:1A:27:AA:A7:0A`
 - Upload certificate SHA-256:
-  `09:2B:96:CC:C6:AE:45:1B:FB:B0:DD:80:B4:65:EC:7A:D6:37:30:DE:94:6E:60:E9:F7:62:3E:DF:AF:B5:D2:50`
+  `86:E8:B9:0C:D7:E6:A8:A6:AF:2D:B1:CC:8C:F4:69:33:56:E8:21:EA:CF:67:28:A6:D3:D8:BA:42:18:FC:8A:B4`
+- Application ID stays **`com.toastie.app`**: the Play listing already has
+  releases under it (versions 3–6, Aug–Sep 2026), and Play never allows the ID
+  to change. Users only see the name Openfloor.
+- Every upload needs a higher `versionCode` (the `+N` in `pubspec.yaml`) than
+  the last one in Play.
 - Release manifest as built: targetSdk 36, minSdk 24; permissions INTERNET and
   VIBRATE only (no media or storage permissions).
 - 16 KB page size: every `arm64-v8a` library in the bundle has LOAD segments
   aligned to 0x4000 or more (checked with NDK `llvm-readelf -l`).
-- **Before the first upload:** EAS built a store-signed `com.toastie.app`
-  bundle from the legacy Expo app on 31 Aug 2026, signed with a key EAS
-  manages. If that bundle was ever uploaded, Play already expects EAS's upload
-  key and will reject this one. Either download EAS's keystore
-  (expo.dev → project Toastie → Credentials → Android; keep that EAS
-  project until this is settled — deleting it deletes the key) and point `key.properties`
-  at it, or ask Play for an upload-key reset using this key's certificate.
 
 ## Still open before production
 
 1. Personal developer accounts: 12 testers × 14 days in a closed test before
    production.
 2. A reviewer demo account (see App access above).
-3. Decide the permanent application ID (`com.toastie.app` today) before the
-   first upload.
-4. After every environment has booted the credential-encryption release, drop
+3. After every environment has booted the credential-encryption release, drop
    the legacy `CredentialShare.token` / `password` columns and make
    `tokenHash`, `passwordCipher` and `expiresAt` required.

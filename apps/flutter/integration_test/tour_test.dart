@@ -68,6 +68,12 @@ void main() {
     await wait(t, 4000);
     await shot('05-meetings');
 
+    // A club with nothing scheduled still has history: tour a past meeting.
+    if (find.byType(MeetingCard).evaluate().isEmpty) {
+      await t.tap(find.textContaining('Past (').last);
+      await wait(t, 4000);
+      await shot('05b-meetings-past');
+    }
     await t.tap(find.byType(MeetingCard).first);
     await wait(t, 5000);
     await shot('06-meeting-hub');
