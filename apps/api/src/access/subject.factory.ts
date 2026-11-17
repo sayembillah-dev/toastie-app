@@ -163,6 +163,7 @@ export class SubjectFactory {
         avatarUrl: await this.storage.resolveOptional(user.avatarUrl),
         isSuperAdmin: user.isSuperAdmin,
         mustChangePassword: user.mustChangePassword,
+        emailVerified: user.emailVerifiedAt !== null,
         mustVerifyEmail: this.emailVerificationEnforced && user.emailVerifiedAt === null,
       },
       memberships,

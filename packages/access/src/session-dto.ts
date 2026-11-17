@@ -8,8 +8,12 @@ export interface SessionUser {
   phone: string;
   /** The sign-in email. `null` on older phone-only accounts. May be set but
    * not yet verified (for example, typed in by an admin) — see
-   * `mustVerifyEmail`. */
+   * `emailVerified`. */
   email: string | null;
+  /** True once the account holder proved they read `email`. Independent of
+   * any server switch: clients show the "add / verify your email" prompt,
+   * which cannot be dismissed, whenever this is false. */
+  emailVerified: boolean;
   firstName: string;
   lastName: string;
   /** Data-URL or absolute image URL, self-service via `PATCH /profile`. */
@@ -22,9 +26,10 @@ export interface SessionUser {
   /** True when the account has no verified email AND the server enforces
    * verification (`EMAIL_VERIFICATION_ENFORCED`). Unlike
    * `mustChangePassword` this IS an access gate: the API answers
-   * `403 EMAIL_VERIFICATION_REQUIRED` on every route except the session,
-   * sign-out, password and `/auth/email/*` routes until the account holder
-   * verifies an email. Clients show the gate after the password nudge. */
+   * `403 EMAIL_VERIFICATION_REQUIRED` on every change (any method but GET)
+   * except the sign-out, password and `/auth/email/*` routes until the
+   * account holder verifies an email. Reads still work, so the app can draw
+   * the dashboard behind the email prompt. */
   mustVerifyEmail: boolean;
 }
 

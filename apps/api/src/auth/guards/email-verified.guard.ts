@@ -11,14 +11,19 @@ import { PUBLIC_METADATA } from '@/access';
 
 import { ALLOW_UNVERIFIED_EMAIL_METADATA } from '../decorators/allow-unverified-email.decorator';
 
+const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
 /** The server half of the "verify your email" gate. Runs after
  * `ContextGuard`, so it reads the session that guard already loaded — no
  * extra query. `session.user.mustVerifyEmail` is false whenever
  * `EMAIL_VERIFICATION_ENFORCED` is off, so with the switch off this guard
  * never blocks anything.
  *
- * Routes marked `@AllowUnverifiedEmail()` pass, so a gated client can still
- * load its session, verify an email, change its password and sign out. */
+ * Reads (GET, HEAD, OPTIONS) always pass: the apps draw the dashboard
+ * behind the "verify your email" prompt, which cannot be dismissed, so a
+ * gated account may look but not change anything. Routes marked
+ * `@AllowUnverifiedEmail()` pass too, so a gated client can still verify an
+ * email, change its password and sign out. */
 @Injectable()
 export class EmailVerifiedGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
@@ -31,6 +36,7 @@ export class EmailVerifiedGuard implements CanActivate {
     }
 
     const req = execCtx.switchToHttp().getRequest<Request>();
+    if (READ_METHODS.has(req.method)) return true;
     if (req.ctx?.session.user.mustVerifyEmail) {
       throw new ForbiddenException({
         code: 'EMAIL_VERIFICATION_REQUIRED',
