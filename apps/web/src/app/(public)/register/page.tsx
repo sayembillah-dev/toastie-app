@@ -249,7 +249,7 @@ function RegisterPageContent() {
             onFinish={onCode}
             disabled={isVerifying}
           >
-            <CodeField />
+            <CodeField autoSubmit />
             <Form.Item className="!mb-3">
               <Button type="primary" htmlType="submit" block size="large" loading={isVerifying}>
                 Continue

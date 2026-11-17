@@ -249,13 +249,13 @@ function VerifyEmailBody({ titleId, onVerified }: { titleId: string; onVerified:
         <p className="mx-auto mt-1.5 max-w-xs text-center text-sm leading-relaxed text-ink-soft">
           {step === 'code' ? (
             <>
-              Enter the 6-digit code we sent to{' '}
-              <span className="font-medium break-all text-ink">{email}</span>.
+              Enter the 6-digit code we sent to
+              <span className="block font-medium [overflow-wrap:anywhere] text-ink">{email}</span>
             </>
           ) : step === 'done' ? (
             <>
-              <span className="font-medium break-all text-ink">{email}</span> is now your sign-in
-              email.
+              <span className="block font-medium [overflow-wrap:anywhere] text-ink">{email}</span>
+              is now your sign-in email.
             </>
           ) : (
             header.subtitle
@@ -339,7 +339,7 @@ function VerifyEmailBody({ titleId, onVerified }: { titleId: string; onVerified:
                   requiredMark={false}
                 >
                   <div className="flex justify-center">
-                    <CodeField label="" />
+                    <CodeField label="" autoSubmit />
                   </div>
                   <Form.Item className="!mb-3">
                     <Button
