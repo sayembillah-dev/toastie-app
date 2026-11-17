@@ -24,6 +24,7 @@ class SessionUser {
     this.isSuperAdmin = false,
     this.mustChangePassword = false,
     this.mustVerifyEmail = false,
+    this.emailVerified = true,
   });
   final String id;
   final String phone;
@@ -37,6 +38,11 @@ class SessionUser {
   /// The account must verify an email before using the app (the email gate).
   final bool mustVerifyEmail;
 
+  /// Whether the account's email is confirmed. Older API responses don't
+  /// send it, so a missing value counts as verified rather than trapping the
+  /// user behind the email prompt.
+  final bool emailVerified;
+
   String get name => fullName(firstName, lastName);
 
   factory SessionUser.fromJson(Json j) => SessionUser(
@@ -49,6 +55,7 @@ class SessionUser {
         isSuperAdmin: j['isSuperAdmin'] == true,
         mustChangePassword: j['mustChangePassword'] == true,
         mustVerifyEmail: j['mustVerifyEmail'] == true,
+        emailVerified: j['emailVerified'] != false,
       );
 }
 

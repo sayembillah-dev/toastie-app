@@ -97,6 +97,14 @@ String initials(String name) {
 
 final RegExp bdPhoneRegex = RegExp(r'^01\d{9}$');
 
+/// Typed phone → "01XXXXXXXXX": drops spaces, dashes and brackets, and a
+/// leading "+88" / "88" country code. Validate the result with [validatePhone].
+String normalizePhone(String raw) {
+  final s = raw.trim().replaceAll(RegExp(r'[\s\-()]'), '');
+  final m = RegExp(r'^\+?88(01\d{9})$').firstMatch(s);
+  return m == null ? s : m.group(1)!;
+}
+
 String? validatePhone(String? v, {bool required = true}) {
   final s = (v ?? '').trim();
   if (s.isEmpty) return required ? 'Enter a mobile number' : null;

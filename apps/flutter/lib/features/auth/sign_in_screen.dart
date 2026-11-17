@@ -27,10 +27,8 @@ class SignInScreen extends ConsumerStatefulWidget {
 
 class _SignInScreenState extends ConsumerState<SignInScreen> {
   final _form = GlobalKey<FormState>();
-  final _email = TextEditingController();
-  final _phone = TextEditingController();
+  final _id = TextEditingController();
   final _password = TextEditingController();
-  bool _usePhone = false;
   bool _busy = false;
   String? _error;
   String? _notice;
@@ -41,24 +39,23 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     final s = ref.read(authProvider);
     if (s is SignedOut) _error = s.message;
     _notice = widget.args?.notice;
-    _email.text = widget.args?.email ?? '';
+    _id.text = widget.args?.email ?? '';
   }
 
   @override
   void dispose() {
-    _email.dispose();
-    _phone.dispose();
+    _id.dispose();
     _password.dispose();
     super.dispose();
   }
 
-  void _toggleMode() {
-    setState(() {
-      _usePhone = !_usePhone;
-      _error = null;
-      _notice = null;
-    });
-    _form.currentState?.reset();
+  /// One field takes either: anything with an "@" is an email, the rest a phone.
+  static bool _isEmail(String v) => v.trim().contains('@');
+
+  static String? _validateId(String? v) {
+    final s = (v ?? '').trim();
+    final ok = _isEmail(s) ? validateEmail(s) == null : validatePhone(normalizePhone(s)) == null;
+    return ok ? null : 'Enter your email or phone number';
   }
 
   Future<void> _submit() async {
@@ -70,17 +67,19 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       _notice = null;
     });
     try {
+      final id = _id.text.trim();
+      final email = _isEmail(id);
       await ref.read(authProvider.notifier).signIn(
-            email: _usePhone ? null : _email.text.trim(),
-            phone: _usePhone ? _phone.text.trim() : null,
+            email: email ? id.toLowerCase() : null,
+            phone: email ? null : normalizePhone(id),
             password: _password.text,
           );
       TextInput.finishAutofillContext();
     } on ApiError catch (e) {
       if (e.code == 'PHONE_LOGIN_DISABLED') {
         final masked = e.body is Map ? (e.body as Map)['email'] as String? : null;
+        _id.clear();
         setState(() {
-          _usePhone = false;
           _error = masked == null
               ? 'This account signs in with email now. Use your email address.'
               : 'This account signs in with email now. Use $masked.';
@@ -88,9 +87,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         return;
       }
       setState(() => _error = switch (e.code) {
-            'INVALID_CREDENTIALS' => _usePhone
-                ? 'That phone number and password do not match.'
-                : 'That email and password do not match.',
+            'INVALID_CREDENTIALS' => 'Email/phone or password is incorrect',
             _ => authErrorText(e),
           });
     } finally {
@@ -111,33 +108,18 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               if (_notice != null) AuthBanner(_notice!, success: true),
               if (_error != null) AuthBanner(_error!),
-              if (_usePhone) ...[
-                const FieldLabel('Mobile number'),
-                TextFormField(
-                  key: const ValueKey('phone'),
-                  controller: _phone,
-                  keyboardType: TextInputType.phone,
-                  textInputAction: TextInputAction.next,
-                  autofillHints: const [AutofillHints.telephoneNumber],
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(11)],
-                  validator: validatePhone,
-                  decoration:
-                      const InputDecoration(hintText: '01XXXXXXXXX', prefixIcon: Icon(Icons.phone_outlined, size: 20)),
-                ),
-              ] else ...[
-                const FieldLabel('Email'),
-                TextFormField(
-                  key: const ValueKey('email'),
-                  controller: _email,
-                  keyboardType: TextInputType.emailAddress,
-                  textInputAction: TextInputAction.next,
-                  autocorrect: false,
-                  autofillHints: const [AutofillHints.email, AutofillHints.username],
-                  validator: validateEmail,
-                  decoration: const InputDecoration(
-                      hintText: 'name@example.com', prefixIcon: Icon(Icons.mail_outline, size: 20)),
-                ),
-              ],
+              const FieldLabel('Email or phone'),
+              TextFormField(
+                controller: _id,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                autocorrect: false,
+                enableSuggestions: false,
+                autofillHints: const [AutofillHints.username, AutofillHints.email],
+                validator: _validateId,
+                decoration: const InputDecoration(
+                    hintText: 'name@example.com or 01XXXXXXXXX', prefixIcon: Icon(Icons.person_outline, size: 20)),
+              ),
               const FieldLabel('Password'),
               PasswordField(
                 controller: _password,
@@ -153,11 +135,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               ),
               const SizedBox(height: 8),
               SubmitButton(label: 'Sign in', busy: _busy, onPressed: _submit),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: _busy ? null : _toggleMode,
-                child: Text(_usePhone ? 'Use email instead' : 'Use phone number instead'),
-              ),
               const SizedBox(height: 8),
               Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 Text('New to Openfloor?', style: TextStyle(color: c.inkMuted)),

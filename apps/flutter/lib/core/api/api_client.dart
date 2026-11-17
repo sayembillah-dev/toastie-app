@@ -191,7 +191,7 @@ class ApiClient {
   VoidCallback? onSessionExpired;
 
   /// Called on `403 EMAIL_VERIFICATION_REQUIRED` — the session controller
-  /// re-reads the session so the router can show the verify-email gate.
+  /// re-reads the session so the app can open the verify-email prompt.
   VoidCallback? onEmailVerificationRequired;
 
   /// True while the app is serving cached data because the network failed.

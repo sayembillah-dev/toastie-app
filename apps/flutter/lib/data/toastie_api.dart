@@ -57,8 +57,7 @@ class ToastieApi {
           body: {'phone': phone, 'code': code, 'newPassword': newPassword}, anonymous: true));
 
   /// Signed in: email a code to [email] to make it the sign-in email.
-  Future<void> sendEmailCode(String email, String currentPassword) =>
-      http.post('auth/email/send-code', body: {'email': email, 'currentPassword': currentPassword});
+  Future<void> sendEmailCode(String email) => http.post('auth/email/send-code', body: {'email': email});
 
   /// Returns the fresh session (`mustVerifyEmail: false`).
   Future<Json> verifyEmail(String email, String code) async =>

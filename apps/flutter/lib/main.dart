@@ -4,6 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+import 'app/email_gate.dart';
 import 'app/router.dart';
 import 'app/splash.dart';
 import 'app/session.dart';
@@ -62,7 +63,8 @@ class ToastieApp extends ConsumerWidget {
         final mq = MediaQuery.of(context);
         return MediaQuery(
           data: mq.copyWith(textScaler: mq.textScaler.clamp(maxScaleFactor: 1.6)),
-          child: IntroSplash(child: child!),
+          // The email prompt sits over the navigator; the intro plays over both.
+          child: IntroSplash(child: EmailGate(child: child!)),
         );
       },
     );

@@ -151,10 +151,14 @@ class AuthController extends Notifier<AuthState> {
     await _applySession(raw);
   }
 
+  /// Adopt a session the caller already fetched — the email prompt shows its
+  /// "verified" state first, then hands over the session from the verify call.
+  Future<void> adoptSession(Json raw) => _applySession(raw);
+
   Future<void>? _gateCheck;
 
   /// A request came back `403 EMAIL_VERIFICATION_REQUIRED`: re-read the
-  /// session so `mustVerifyEmail` turns on and the router shows the gate.
+  /// session so `mustVerifyEmail` turns on and the email prompt opens.
   void _onEmailGate() {
     final s = state;
     if (s is! SignedIn || s.session.user.mustVerifyEmail) return;

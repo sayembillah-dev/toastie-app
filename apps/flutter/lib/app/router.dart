@@ -12,7 +12,6 @@ import '../features/auth/invite_screen.dart';
 import '../features/auth/join_club_screen.dart';
 import '../features/auth/register_screen.dart';
 import '../features/auth/sign_in_screen.dart';
-import '../features/auth/verify_email_screen.dart';
 import '../features/auth/whatsapp_recovery_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/learn/learn_screen.dart';
@@ -56,7 +55,8 @@ class _AuthListenable extends ChangeNotifier {
 
 final _rootKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 
-const _publicPrefixes = [
+/// Pages anyone can open signed out. The email prompt stays off these too.
+const publicRoutePrefixes = [
   '/welcome',
   '/sign-in',
   '/register',
@@ -83,7 +83,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final auth = ref.read(authProvider);
       final loc = state.matchedLocation;
-      final isPublic = _publicPrefixes.any(loc.startsWith);
+      final isPublic = publicRoutePrefixes.any(loc.startsWith);
 
       if (auth is SignedOut) {
         final seenIntro = ref.read(onboardingSeenProvider);
@@ -96,13 +96,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         final from = state.uri.queryParameters['from'];
         return from != null && from.startsWith('/') ? from : '/';
       }
-      // Gates, in order: a temporary password first, then the email gate.
+      // A temporary password is changed first. The email prompt is not a
+      // route: EmailGate draws it over whatever screen this lands on.
       final user = s.session.user;
       if (user.mustChangePassword && !s.skippedPasswordChange) {
         return loc == '/change-password' ? null : '/change-password';
       }
-      if (user.mustVerifyEmail) return loc == '/verify-email' ? null : '/verify-email';
-      if (loc == '/verify-email') return '/';
       if (s.context == null && !loc.startsWith('/join') && !loc.startsWith('/invite/') &&
           !loc.startsWith('/agenda/') && !loc.startsWith('/me') && loc != '/change-password') {
         return '/join';
@@ -119,7 +118,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
       GoRoute(path: '/forgot-password', builder: (_, _) => const ForgotPasswordScreen()),
       GoRoute(path: '/recover-whatsapp', builder: (_, _) => const WhatsappRecoveryScreen()),
-      GoRoute(path: '/verify-email', builder: (_, _) => const VerifyEmailScreen()),
       GoRoute(path: '/join', builder: (_, _) => const JoinClubScreen()),
       GoRoute(path: '/change-password', builder: (_, _) => const ChangePasswordScreen(forced: true)),
       GoRoute(path: '/invite/:token', builder: (_, s) => InviteScreen(token: s.pathParameters['token']!)),
