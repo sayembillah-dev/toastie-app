@@ -4,7 +4,9 @@ import Image from 'next/image';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
-import openfloorLogo from '../../../assets/openfloor.svg';
+// The standard mark's outline is the same navy as this backdrop; the light
+// variant swaps it for white so the whole mark reads.
+import openfloorLogo from '../../../assets/openfloor-light.svg';
 
 /** Full-bleed backdrop shared by every unauthenticated, credential-adjacent
  * screen (sign in, sign up, invite landing/accept) — a dawn-sky gradient
@@ -50,7 +52,9 @@ export function AuthShell({ children }: { children: ReactNode }) {
           className="h-7 w-auto drop-shadow-sm"
           priority
         />
-        <span className="text-sm font-semibold tracking-wide">Openfloor</span>
+        {/* Colour on the span, not the link: antd's `.ant-app a` rule is
+         * unlayered, so it beats Tailwind's `text-white` on the <a>. */}
+        <span className="text-sm font-semibold tracking-wide text-white">Openfloor</span>
       </Link>
 
       <div className="relative z-10 w-full max-w-sm">{children}</div>
