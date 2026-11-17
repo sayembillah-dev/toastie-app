@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsEmail, IsString, Matches, MaxLength } from 'class-validator';
+import { IsEmail, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 
 const normaliseEmail = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim().toLowerCase() : value;
@@ -10,12 +10,14 @@ export class SendEmailCodeDto {
   @MaxLength(255)
   email!: string;
 
-  /** The email becomes the sign-in credential, so binding one needs the
-   * password too — a stolen access token alone must not be enough to take
-   * the account over through "forgot password". */
+  /** Ignored. Older app builds still send it; a signed-in session is
+   * enough to add, change or verify the email (product decision,
+   * 2026-11-17). The old verified address still gets an "email changed"
+   * notice when the address moves. */
+  @IsOptional()
   @IsString()
   @MaxLength(200)
-  currentPassword!: string;
+  currentPassword?: string;
 }
 
 export class VerifyEmailDto {

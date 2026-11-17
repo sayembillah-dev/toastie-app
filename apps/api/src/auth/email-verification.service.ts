@@ -18,7 +18,6 @@ import { PrismaService } from '@/prisma';
 
 import type { SendEmailCodeDto, VerifyEmailDto } from './dto/email-verification.dto';
 import { OTP_TTL_MINUTES, OtpService } from './otp.service';
-import { TokenService } from './token.service';
 
 /** Codes one account may request per hour, across every address it tries.
  * `OtpService` limits per address; this limits per account, so one signed-in
@@ -29,7 +28,7 @@ const MAX_CODES_PER_USER_PER_HOUR = 10;
 /** A signed-in account holder proves they read an inbox, and that address
  * becomes their verified sign-in email:
  *
- *   1. `sendCode` — checks the password, then emails a code to the address.
+ *   1. `sendCode` — emails a code to the address (the signed-in session is enough).
  *      The address is NOT written to the account yet, so a typo or a
  *      half-finished attempt never replaces a working email.
  *   2. `verify` — checks the code, then writes the address and
@@ -45,7 +44,6 @@ export class EmailVerificationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly otp: OtpService,
-    private readonly tokens: TokenService,
     private readonly mail: MailService,
     private readonly identity: IdentityService,
     private readonly subjectFactory: SubjectFactory,
@@ -54,12 +52,9 @@ export class EmailVerificationService {
   async sendCode(userId: string, dto: SendEmailCodeDto): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { passwordHash: true, email: true, emailVerifiedAt: true },
+      select: { email: true, emailVerifiedAt: true },
     });
     if (!user) throw new UnauthorizedException({ code: 'SESSION_INVALID' });
-
-    const passwordOk = await this.tokens.verifyPassword(user.passwordHash, dto.currentPassword);
-    if (!passwordOk) throw new UnauthorizedException({ code: 'INVALID_CREDENTIALS' });
 
     if (user.emailVerifiedAt && user.email?.toLowerCase() === dto.email) {
       throw new ConflictException({

@@ -5,7 +5,6 @@ import {
   CheckCircle,
   EnvelopeSimple,
   EnvelopeSimpleOpen,
-  LockKey,
   PencilSimple,
   SealCheck,
   SignOut,
@@ -77,7 +76,6 @@ type Step = 'email' | 'code' | 'done';
 
 interface SendValues {
   email?: string;
-  currentPassword: string;
 }
 
 interface CodeValues {
@@ -101,7 +99,6 @@ function VerifyEmailBody({ titleId, onVerified }: { titleId: string; onVerified:
   /** Editing a typed address rather than confirming the one on file. */
   const [editing, setEditing] = useState(isAdding);
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [sendForm] = Form.useForm<SendValues>();
   const [codeForm] = Form.useForm<CodeValues>();
@@ -118,24 +115,15 @@ function VerifyEmailBody({ titleId, onVerified }: { titleId: string; onVerified:
 
   /** Returns true when a code went out. Errors land on the send form's
    * fields when they're showing, otherwise in the alert. */
-  async function requestCode(address: string, currentPassword: string): Promise<boolean> {
+  async function requestCode(address: string): Promise<boolean> {
     setError(null);
     try {
-      await sendCode({ email: address, currentPassword }).unwrap();
+      await sendCode({ email: address }).unwrap();
       cooldown.start();
       return true;
     } catch (err) {
       const code = getErrorCode(err);
       const onForm = step === 'email';
-      if (code === 'INVALID_CREDENTIALS') {
-        if (onForm) {
-          sendForm.setFields([{ name: 'currentPassword', errors: ['Password is incorrect'] }]);
-        } else {
-          setStep('email');
-          setError('Your password has changed. Enter it again to get a new code.');
-        }
-        return false;
-      }
       if (code === 'EMAIL_TAKEN') {
         if (onForm && editing) {
           sendForm.setFields([
@@ -167,9 +155,7 @@ function VerifyEmailBody({ titleId, onVerified }: { titleId: string; onVerified:
       }
       const fieldErrors = getFieldErrors(err);
       if (fieldErrors && onForm) {
-        const shown = Object.entries(fieldErrors).filter(
-          ([name]) => name === 'currentPassword' || (name === 'email' && editing),
-        );
+        const shown = Object.entries(fieldErrors).filter(([name]) => name === 'email' && editing);
         if (shown.length > 0) {
           sendForm.setFields(
             shown.map(([name, errors]) => ({ name: name as keyof SendValues, errors })),
@@ -190,23 +176,21 @@ function VerifyEmailBody({ titleId, onVerified }: { titleId: string; onVerified:
 
   async function onSend(values: SendValues) {
     const address = (editing ? (values.email ?? '') : (savedEmail ?? '')).trim().toLowerCase();
-    if (await requestCode(address, values.currentPassword)) {
+    if (await requestCode(address)) {
       setEmail(address);
-      setPassword(values.currentPassword);
       codeForm.resetFields();
       setStep('code');
     }
   }
 
   async function onResend() {
-    if (await requestCode(email, password)) message.success('Code sent');
+    if (await requestCode(email)) message.success('Code sent');
   }
 
   async function onVerify(values: CodeValues) {
     setError(null);
     try {
       const session = await verify({ email, code: values.code }).unwrap();
-      setPassword('');
       setStep('done');
       onVerified();
       // Anything that 403'd while gated is cached as an error — start clean.
@@ -322,20 +306,6 @@ function VerifyEmailBody({ titleId, onVerified }: { titleId: string; onVerified:
                     disabled={isSending}
                   />
                 )}
-
-                <Form.Item
-                  label="Current password"
-                  name="currentPassword"
-                  rules={[{ required: true, message: 'Enter your password' }]}
-                  extra="We ask for it because this email will sign you in."
-                >
-                  <Input.Password
-                    autoComplete="current-password"
-                    size="large"
-                    autoFocus={!editing}
-                    prefix={<LockKey size={16} className="text-ink-muted" />}
-                  />
-                </Form.Item>
 
                 <Form.Item className="!mb-0">
                   <Button type="primary" htmlType="submit" block size="large" loading={isSending}>

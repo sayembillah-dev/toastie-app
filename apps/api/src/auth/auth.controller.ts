@@ -131,7 +131,8 @@ export class AuthController {
   }
 
   /** Signed-in. Emails a 6-digit code to `email`; nothing on the account
-   * changes yet. `202` on success. Errors: `401 INVALID_CREDENTIALS`,
+   * changes yet. `202` on success. No password: the signed-in session is
+   * enough (`currentPassword` from older builds is ignored). Errors:
    * `409 EMAIL_TAKEN` / `EMAIL_ALREADY_VERIFIED`, `429 OTP_COOLDOWN` /
    * `OTP_LIMIT`, `502 MAIL_SEND_FAILED`. Allowed through the email gate —
    * this is how a gated account gets out of it. */

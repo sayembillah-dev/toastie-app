@@ -2420,7 +2420,7 @@ export const toastlyApi = createApi({
     /* Signed-in, allowed through the email gate: emails a code to `email`.
      * The password is required because the email becomes a sign-in
      * credential. */
-    authEmailSendCode: build.mutation<{ ok: true }, { email: string; currentPassword: string }>({
+    authEmailSendCode: build.mutation<{ ok: true }, { email: string }>({
       query: (body) => ({ url: '/auth/email/send-code', method: 'POST', body }),
     }),
     /* Makes `email` the verified sign-in email; returns the fresh session
