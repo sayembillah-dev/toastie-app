@@ -149,7 +149,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           success: true,
         ),
         const FieldLabel('Code'),
-        CodeField(controller: _code, errorText: _fieldErrors['code'], onSubmitted: (_) => _verify()),
+        CodeField(
+          controller: _code,
+          errorText: _fieldErrors['code'],
+          onSubmitted: (_) => _verify(),
+          onCompleted: (_) {
+            if (!_busy) _verify();
+          },
+        ),
         const SizedBox(height: 24),
         SubmitButton(label: 'Continue', busy: _busy, onPressed: _verify),
         const SizedBox(height: 8),

@@ -326,7 +326,14 @@ class _VerifyEmailCardState extends ConsumerState<VerifyEmailCard> {
     const SizedBox(height: 18),
     _AddressTile(email: _sentTo, caption: 'Code sent to'),
     const FieldLabel('Code'),
-    CodeField(controller: _code, errorText: _fieldErrors['code'], onSubmitted: (_) => _verify()),
+    CodeField(
+      controller: _code,
+      errorText: _fieldErrors['code'],
+      onSubmitted: (_) => _verify(),
+      onCompleted: (_) {
+        if (!_busy) _verify();
+      },
+    ),
     const SizedBox(height: 20),
     SubmitButton(label: 'Verify', busy: _busy, onPressed: _verify),
     const SizedBox(height: 4),
