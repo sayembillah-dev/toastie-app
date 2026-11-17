@@ -1,7 +1,8 @@
 'use client';
 
-import { EnvelopeSimple, LockKey, Phone, SignIn } from '@phosphor-icons/react/dist/ssr';
+import { LockKey, SignIn, UserCircle } from '@phosphor-icons/react/dist/ssr';
 import { Alert, Button, Form, Input } from 'antd';
+import type { Rule } from 'antd/es/form';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
@@ -10,25 +11,40 @@ import { AuthCard } from '@/components/auth/auth-card';
 import { AuthShell } from '@/components/auth/auth-shell';
 import { RouteFallback } from '@/components/route-fallback';
 import { completeSignIn } from '@/lib/auth/complete-sign-in';
-import { emailRules, normalizePhone, phoneRules } from '@/lib/validation/rules';
+import { EMAIL_MAX, normalizePhone, PHONE_REGEX } from '@/lib/validation/rules';
 import { useAuthLoginMutation } from '@/store/api';
 import { getErrorCode, getFieldErrors, isRateLimited } from '@/store/api-error';
 import { useAppDispatch } from '@/store/hooks';
 
-type Mode = 'email' | 'phone';
-
 interface FormValues {
-  email?: string;
-  phone?: string;
+  identifier: string;
   password: string;
 }
 
+/** Same loose shape antd's `type: 'email'` rule accepts closely enough for a
+ * pre-flight check — the API has the final say. */
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const IDENTIFIER_RULES: Rule[] = [
+  {
+    validator(_, value) {
+      const text = typeof value === 'string' ? value.trim() : '';
+      if (text === '') return Promise.reject(new Error('Enter your email or phone number'));
+      const ok = text.includes('@')
+        ? EMAIL_SHAPE.test(text) && text.length <= EMAIL_MAX
+        : PHONE_REGEX.test(normalizePhone(text));
+      return ok ? Promise.resolve() : Promise.reject(new Error('Enter your email or phone number'));
+    },
+  },
+];
+
 /** Login page. Public route — `(public)/layout.tsx` renders no shell.
  *
- * Sign-in is email + password. Phone + password stays behind a toggle for
- * older accounts with no verified email; the API answers
- * `403 PHONE_LOGIN_DISABLED` (with the masked email) once an account has
- * one, and this page flips back to email mode with that hint.
+ * One "Email or phone" field: a value with an `@` signs in by email,
+ * anything else is normalised as a local mobile number. Accounts that have
+ * a verified email can't use their phone any more — the API answers
+ * `403 PHONE_LOGIN_DISABLED` with the masked address, and this page names
+ * it and clears the field for the email.
  *
  * `?reset=1` is where the forgot-password flow lands after a successful
  * reset. */
@@ -37,7 +53,6 @@ function LoginPageContent() {
   const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
   const [login, { isLoading }] = useAuthLoginMutation();
-  const [mode, setMode] = useState<Mode>('email');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(
     searchParams.get('reset') === '1' ? 'Password updated. Sign in with your new password.' : null,
@@ -48,46 +63,43 @@ function LoginPageContent() {
   const withNext = (path: string) =>
     nextParam ? `${path}?next=${encodeURIComponent(nextParam)}` : path;
 
-  function switchMode(to: Mode) {
-    setMode(to);
-    setError(null);
-    form.setFields([
-      { name: 'email', errors: [] },
-      { name: 'phone', errors: [] },
-    ]);
-  }
-
   async function onSubmit(values: FormValues) {
     setError(null);
     setNotice(null);
+    const identifier = values.identifier.trim();
     try {
-      // Built from the mode, not the raw values: antd keeps a hidden field's
-      // value, and sending both identifiers is a 400.
-      const body =
-        mode === 'email'
-          ? { email: (values.email ?? '').trim().toLowerCase(), password: values.password }
-          : { phone: normalizePhone(values.phone ?? ''), password: values.password };
+      const body = identifier.includes('@')
+        ? { email: identifier.toLowerCase(), password: values.password }
+        : { phone: normalizePhone(identifier), password: values.password };
       const res = await login(body).unwrap();
       router.replace(completeSignIn(dispatch, res, nextParam));
     } catch (err) {
       const fieldErrors = getFieldErrors(err);
       if (fieldErrors) {
-        form.setFields(
-          Object.entries(fieldErrors).map(([name, errors]) => ({
-            name: name as keyof FormValues,
-            errors,
-          })),
-        );
+        // The API names the field it got (`email` or `phone`); both live in
+        // the one identifier input here.
+        const identifierErrors = [...(fieldErrors.email ?? []), ...(fieldErrors.phone ?? [])];
+        form.setFields([
+          ...(identifierErrors.length > 0
+            ? [{ name: 'identifier' as const, errors: identifierErrors }]
+            : []),
+          ...(fieldErrors.password
+            ? [{ name: 'password' as const, errors: fieldErrors.password }]
+            : []),
+        ]);
+        if (identifierErrors.length === 0 && !fieldErrors.password) {
+          setError(Object.values(fieldErrors).flat()[0] ?? 'Check your details and try again.');
+        }
         return;
       }
       const code = getErrorCode(err);
       if (code === 'PHONE_LOGIN_DISABLED') {
         const masked = maskedEmailFrom(err);
-        setMode('email');
+        form.setFieldValue('identifier', '');
         setNotice(
           masked
-            ? `Sign in with your email (${masked}) instead.`
-            : 'Sign in with your email instead.',
+            ? `This account signs in with email now. Use ${masked}.`
+            : 'This account signs in with email now. Use your email address.',
         );
         return;
       }
@@ -95,7 +107,7 @@ function LoginPageContent() {
         setError('Too many attempts. Wait a minute and try again.');
         return;
       }
-      setError(messageForCode(code, mode));
+      setError(messageForCode(code));
     }
   }
 
@@ -121,28 +133,18 @@ function LoginPageContent() {
           autoComplete="on"
           disabled={isLoading}
         >
-          {mode === 'email' ? (
-            <Form.Item label="Email" name="email" rules={emailRules({ required: true })}>
-              <Input
-                type="email"
-                autoComplete="email"
-                size="large"
-                placeholder="name@example.com"
-                prefix={<EnvelopeSimple size={16} className="text-ink-muted" />}
-              />
-            </Form.Item>
-          ) : (
-            <Form.Item label="Mobile number" name="phone" rules={phoneRules()}>
-              <Input
-                type="tel"
-                autoComplete="tel"
-                inputMode="tel"
-                size="large"
-                placeholder="01568286512"
-                prefix={<Phone size={16} className="text-ink-muted" />}
-              />
-            </Form.Item>
-          )}
+          <Form.Item label="Email or phone" name="identifier" rules={IDENTIFIER_RULES}>
+            <Input
+              type="text"
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              size="large"
+              placeholder="name@example.com or 01XXXXXXXXX"
+              prefix={<UserCircle size={16} className="text-ink-muted" />}
+            />
+          </Form.Item>
 
           <Form.Item
             label="Password"
@@ -163,19 +165,11 @@ function LoginPageContent() {
             </Link>
           </div>
 
-          <Form.Item className="!mb-3">
+          <Form.Item className="!mb-0">
             <Button type="primary" htmlType="submit" block size="large" loading={isLoading}>
               Sign in
             </Button>
           </Form.Item>
-
-          <button
-            type="button"
-            onClick={() => switchMode(mode === 'email' ? 'phone' : 'email')}
-            className="w-full text-center text-xs font-medium text-ink-muted hover:text-ink"
-          >
-            {mode === 'email' ? 'Use phone number instead' : 'Use email instead'}
-          </button>
         </Form>
       </AuthCard>
     </AuthShell>
@@ -203,12 +197,10 @@ function maskedEmailFrom(err: unknown): string | null {
   return typeof email === 'string' ? email : null;
 }
 
-function messageForCode(code: string | null, mode: Mode): string {
+function messageForCode(code: string | null): string {
   switch (code) {
     case 'INVALID_CREDENTIALS':
-      return mode === 'email'
-        ? 'Email or password is incorrect.'
-        : 'Mobile number or password is incorrect.';
+      return 'Email/phone or password is incorrect.';
     case 'USER_SUSPENDED':
       return 'This account is suspended. Contact an admin.';
     default:

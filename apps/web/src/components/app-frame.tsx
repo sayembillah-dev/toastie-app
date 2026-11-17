@@ -4,7 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
 import { AppShell } from '@/components/app-shell';
-import { VerifyEmailGate } from '@/components/auth/verify-email-gate';
+import { VerifyEmailModal } from '@/components/auth/verify-email-modal';
 import { OnboardingScreen } from '@/components/onboarding/onboarding-screen';
 import { useAppSelector } from '@/store/hooks';
 import {
@@ -71,24 +71,33 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  /* The verify-email gate, rendered in place on whatever page the user is
-   * on (the flag is set by the session, or flipped by `routedBaseQuery` on a
-   * `403 EMAIL_VERIFICATION_REQUIRED`). The temporary-password prompt comes
-   * first: login sends that user to `/change-password`, which renders
-   * without the shell (its sidebar data would 403); Skip or a successful
-   * change then lands on the gate. Checked before onboarding, whose join
-   * call would 403 too. */
-  if (status === 'ready' && user?.mustVerifyEmail) {
-    if (pathname === '/change-password' && user.mustChangePassword) {
-      return (
-        <div className="flex min-h-screen items-center justify-center bg-canvas p-6">
-          {children}
-        </div>
-      );
-    }
-    return <VerifyEmailGate />;
+  /* The temporary-password prompt comes first: login sends that user to
+   * `/change-password`, and the email prompt waits until that page is done
+   * (Skip or a successful change). While the server gates the account
+   * (`mustVerifyEmail`), that page renders without the shell, as before. */
+  const passwordFirst = pathname === '/change-password' && Boolean(user?.mustChangePassword);
+  if (status === 'ready' && user?.mustVerifyEmail && passwordFirst) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-canvas p-6">{children}</div>
+    );
   }
 
-  if (isOnboarding) return <OnboardingScreen />;
-  return <AppShell>{children}</AppShell>;
+  /* The email prompt: a modal that can't be dismissed, over the real
+   * dashboard (or onboarding). Shown whenever the account has no verified
+   * email — whatever the server's enforcement switch — or after a
+   * `403 EMAIL_VERIFICATION_REQUIRED` flipped `mustVerifyEmail`. Mounted for
+   * every ready session so its short success state outlives the fresh
+   * session that clears the flag. */
+  const needsEmail =
+    status === 'ready' &&
+    !passwordFirst &&
+    (user?.emailVerified === false || Boolean(user?.mustVerifyEmail));
+  const emailModal = status === 'ready' ? <VerifyEmailModal required={needsEmail} /> : null;
+
+  return (
+    <>
+      {isOnboarding ? <OnboardingScreen /> : <AppShell>{children}</AppShell>}
+      {emailModal}
+    </>
+  );
 }
