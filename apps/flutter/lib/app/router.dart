@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/notifications/notifications_screen.dart';
 import '../features/admin/club_admin_screen.dart';
 import '../features/admin/club_profile_screen.dart';
 import '../features/admin/members_admin_screen.dart';
@@ -103,7 +104,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         return loc == '/change-password' ? null : '/change-password';
       }
       if (s.context == null && !loc.startsWith('/join') && !loc.startsWith('/invite/') &&
-          !loc.startsWith('/agenda/') && !loc.startsWith('/me') && loc != '/change-password') {
+          !loc.startsWith('/agenda/') && !loc.startsWith('/me') && loc != '/change-password' &&
+          loc != '/notifications') {
         return '/join';
       }
       if (s.context != null && loc == '/join') return '/';
@@ -126,6 +128,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/agenda/:meetingId',
         builder: (_, s) => AgendaScreen(meetingId: s.pathParameters['meetingId']!, standalone: true),
       ),
+      // Account-wide, so it sits outside the tabs and works with no context.
+      GoRoute(path: '/notifications', builder: (_, _) => const NotificationsScreen()),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => AppShell(shell: shell),
         branches: [

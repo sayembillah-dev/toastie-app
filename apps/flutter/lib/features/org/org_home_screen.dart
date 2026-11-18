@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../notifications/notification_bell.dart';
 import '../../app/session.dart';
 import '../../core/bd_time.dart';
 import '../../core/theme/tokens.dart';
@@ -45,6 +46,7 @@ class OrgHomeScreen extends ConsumerWidget {
               ),
               const SizedBox(width: Space.md),
               const ContextChip(),
+              const NotificationBell(),
             ]),
           ),
           if (root != null) ...[

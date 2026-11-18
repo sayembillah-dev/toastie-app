@@ -193,4 +193,20 @@ class ToastieApi {
   Future<void> updateContactLog(String guestId, String id, Json body) =>
       http.patch('guests/$guestId/contact-logs/$id', body: body);
   Future<void> deleteContactLog(String guestId, String id) => http.delete('guests/$guestId/contact-logs/$id');
+
+  // ── Notifications ──
+  // Account-wide, not per club — never served from the per-context cache.
+  Future<NotificationPage> notifications({String? cursor, bool unreadOnly = false, int limit = 20}) async =>
+      NotificationPage.fromJson(_map(await http.get('notifications', cache: false, query: {
+        'limit': limit,
+        'cursor': ?cursor,
+        if (unreadOnly) 'unread': true,
+      })));
+  Future<int> unreadNotificationCount() async {
+    final count = _map(await http.get('notifications/unread-count', cache: false))['count'];
+    return count is num ? count.toInt() : 0;
+  }
+
+  Future<void> markNotificationRead(String id) => http.post('notifications/$id/read');
+  Future<void> markAllNotificationsRead() => http.post('notifications/read-all');
 }

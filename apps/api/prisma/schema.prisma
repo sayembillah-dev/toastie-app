@@ -218,6 +218,7 @@ model User {
   otpCodes          OtpCode[]
   pushSubscriptions PushSubscription[]
   deviceTokens      DeviceToken[]
+  notifications     Notification[]
   person            Person?
 }
 
@@ -375,6 +376,37 @@ model DeviceToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+/// One in-app notification for one account — the bell list on web and in
+/// the app. Written by the service that made the change, alongside any
+/// WhatsApp/push send, and never depends on those channels being set up.
+///
+/// `clubId` is the club the notification belongs to, so opening it can switch
+/// to that club first; null for account-level notices. `link` is the web path
+/// (e.g. `/meetings/abc?tab=roles`) and `appRoute` the Flutter route
+/// (e.g. `/meetings/abc/roles`) — kept apart because the two apps don't share
+/// a URL scheme. `appRoute` is null when the app has no matching screen.
+/// No FK on `clubId`, `entityId`: a deleted club or record must not delete
+/// someone's notification history, the link just stops resolving.
+model Notification {
+  id         String    @id @default(cuid())
+  userId     String
+  clubId     String?
+  type       String
+  title      String
+  body       String
+  link       String?
+  appRoute   String?
+  entityType String?
+  entityId   String?
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
 }
 
 // -------------------------------------------------------- org tree --
@@ -920,7 +952,7 @@ model MeetingGuestAttendance {
 /// snapshot so a roster rename mid-meeting doesn't rewrite the meaning of
 /// votes already cast.
 model MeetingVoteCandidate {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   clubId       String
   meetingId    String
   category     String
@@ -930,13 +962,13 @@ model MeetingVoteCandidate {
   guestId      String?
   /// `auto` (derived from meeting data by a sync) or `manual` (added by hand
   /// from the Voting tab). Informational only.
-  source       String   @default("auto")
+  source       String    @default("auto")
   /// Set when an officer takes the name off the ballot. The row stays so the
   /// automatic top-ups (Timer, attendance, "Sync from meeting data") know not
   /// to bring that person back; adding them again by hand clears it and
   /// restores any votes already cast for them.
   removedAt    DateTime?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
 
   meeting    Meeting     @relation("MeetingVoteCandidates", fields: [clubId, meetingId], references: [clubId, id], onDelete: Cascade)
   membership Membership? @relation(fields: [clubId, membershipId], references: [clubId, id], onDelete: Cascade)

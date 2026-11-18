@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/models.dart';
@@ -148,4 +150,14 @@ final peopleProvider = FutureProvider<People>((ref) async {
     guests = const [];
   }
   return People(members, guests);
+});
+
+/// Unread notifications for the bell badge. Account-wide, so it doesn't
+/// watch [contextKeyProvider]; re-checks every minute while something is
+/// listening, and is invalidated after a read.
+final unreadNotificationsProvider = FutureProvider<int>((ref) async {
+  if (ref.watch(signedInProvider) == null) return 0;
+  final timer = Timer(const Duration(minutes: 1), ref.invalidateSelf);
+  ref.onDispose(timer.cancel);
+  return ref.watch(apiProvider).unreadNotificationCount();
 });

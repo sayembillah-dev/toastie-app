@@ -34,8 +34,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Fragment, useMemo, useState } from 'react';
 
 import { useSignOut } from '@/lib/auth/use-sign-out';
+import { UNREAD_POLL_MS } from '@/lib/notifications/notifications';
 import { useCan } from '@/lib/permissions/use-can';
 import { useMobileTitle } from '@/lib/ui/mobile-title-slot';
+import { useGetUnreadNotificationCountQuery } from '@/store/api';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { selectActiveContextKey, selectSessionUser } from '@/store/session-slice';
 import {
@@ -49,6 +51,7 @@ import {
 } from '@/store/ui-slice';
 
 import openfloorLogo from '../../assets/openfloor.svg';
+import { NotificationBell } from './notifications/notification-bell';
 import { UnitSwitcher } from './unit-switcher';
 
 /* Only Sider comes from antd — the header and content live inside the content
@@ -347,6 +350,7 @@ function SidebarBody({
   showSearch = true,
   onLogout,
 }: SidebarBodyProps) {
+  const router = useRouter();
   /* Groups open themselves when you land on one of their pages (deep link,
    * breadcrumb, card click) and otherwise stay however the user left them.
    * Adjusted during render rather than in an effect so the group is already
@@ -446,6 +450,10 @@ function SidebarBody({
           Icon={Bell}
           label="Notifications"
           collapsed={collapsed}
+          onClick={() => {
+            router.push('/notifications');
+            onNavigate?.();
+          }}
           trailing={notificationCount > 0 ? <Badge count={notificationCount} size="small" /> : null}
         />
         {account ? (
@@ -473,10 +481,8 @@ function SidebarBody({
 
 interface AppShellProps {
   children?: React.ReactNode;
-  /** Right-aligned header controls. Defaults to a settings/overflow pair. */
+  /** Right-aligned header controls, after the notifications bell. */
   actions?: React.ReactNode;
-  /** Unread count on the notifications row; the badge is hidden at zero. */
-  notificationCount?: number;
 }
 
 /** Unit-switcher scopes with real, routed dashboards — everything under these
@@ -498,9 +504,16 @@ function isSuperAdminNavRoute(pathname: string): boolean {
   );
 }
 
-export function AppShell({ children, actions, notificationCount = 0 }: AppShellProps) {
+export function AppShell({ children, actions }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
+  /* One poll for the whole shell — the header bell and the sidebar row both
+   * read it. No `skipPollingIfUnfocused`: the store never calls
+   * `setupListeners`, so RTK's focus flag is frozen at load and a tab opened
+   * in the background would never poll. */
+  const { data: notificationCount = 0 } = useGetUnreadNotificationCountQuery(undefined, {
+    pollingInterval: UNREAD_POLL_MS,
+  });
   /* Held in the store rather than local state so the sidebar keeps its width
    * across route changes. */
   const collapsed = useAppSelector(selectSidebarCollapsed);
@@ -719,6 +732,7 @@ export function AppShell({ children, actions, notificationCount = 0 }: AppShellP
               <span className="hidden md:flex">
                 <UnitSwitcher />
               </span>
+              <NotificationBell unreadCount={notificationCount} />
               {actions ? (
                 <>
                   <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-line-strong" />

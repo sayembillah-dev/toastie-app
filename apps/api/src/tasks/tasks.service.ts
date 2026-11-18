@@ -7,6 +7,7 @@ import {
 import { can, type PermissionSubject } from '@toastly/access';
 
 import { ActivityService } from '@/activity';
+import { NotificationsService } from '@/notifications';
 import { PrismaService } from '@/prisma';
 import { PushService } from '@/push';
 
@@ -25,6 +26,7 @@ export class TasksService {
     private readonly prisma: PrismaService,
     private readonly activity: ActivityService,
     private readonly push: PushService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async listForClub(subject: PermissionSubject, clubId: string): Promise<TaskWire[]> {
@@ -362,11 +364,13 @@ export class TasksService {
       if (assignee.membershipId === actorMembershipId) continue; // don't notify yourself
       const userId = assignee.membership.userId;
       if (!userId) continue; // unclaimed membership — nobody to push to yet
-      void this.push.send(userId, {
+      const message = {
         title: 'New task assigned',
         body: `${creatorName} assigned you: ${row.title}`,
         url: '/tasks',
-      });
+      };
+      this.notifyInApp(userId, row, 'task.assigned', message);
+      void this.push.send(userId, message);
     }
   }
 
@@ -375,10 +379,32 @@ export class TasksService {
     const userId = row.createdBy.userId;
     if (!userId) return;
     const completerName = row.doneBy ? `${row.doneBy.firstName} ${row.doneBy.lastName}` : 'Someone';
-    void this.push.send(userId, {
+    const message = {
       title: 'Task completed',
       body: `${completerName} marked "${row.title}" as done`,
       url: '/tasks',
+    };
+    this.notifyInApp(userId, row, 'task.completed', message);
+    void this.push.send(userId, message);
+  }
+
+  /** The in-app copy of a task push. The app has no tasks screen yet, so
+   * there's no `appRoute` — it opens from the web only. */
+  private notifyInApp(
+    userId: string,
+    row: TaskRow,
+    type: string,
+    message: { title: string; body: string; url: string },
+  ): void {
+    this.notifications.notify({
+      userIds: [userId],
+      clubId: row.clubId,
+      type,
+      title: message.title,
+      body: message.body,
+      link: message.url,
+      entityType: 'task',
+      entityId: row.id,
     });
   }
 }

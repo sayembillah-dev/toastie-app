@@ -25,6 +25,7 @@ import { LibraryModule } from './library';
 import { MailModule } from './mail';
 import { MeetingsModule } from './meetings';
 import { MembershipsModule } from './memberships';
+import { NotificationsModule } from './notifications';
 import { OrgModule } from './org';
 import { OrgAssignmentsModule } from './org-assignments';
 import { PeopleModule } from './people';
@@ -68,6 +69,9 @@ import { WhatsappModule } from './whatsapp';
     IdentityModule,
     // Global: the single way to send email — see src/mail.
     MailModule,
+    // Global: in-app notifications — every feature that tells someone about a
+    // change injects NotificationsService.
+    NotificationsModule,
     AccessModule,
     ActivityModule,
     AuthModule,

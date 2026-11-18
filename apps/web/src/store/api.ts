@@ -104,6 +104,11 @@ import type {
   SubmitPublicVoteInput,
 } from '@/lib/meetings/voting';
 import type {
+  AppNotification,
+  NotificationFilters,
+  NotificationPage,
+} from '@/lib/notifications/notifications';
+import type {
   Area,
   CreateAreaInput,
   CreateDistrictInput,
@@ -226,6 +231,7 @@ export const toastlyApi = createApi({
     'ClubProfile',
     'ReceivedEvaluation',
     'WhatsappStatus',
+    'Notification',
   ],
   endpoints: (build) => ({
     /* `includeRemoved` opts into seeing soft-removed members — the Club Admin
@@ -2214,6 +2220,57 @@ export const toastlyApi = createApi({
       ],
     }),
 
+    /* ---------------------------------------------------- notifications -- */
+
+    /* The signed-in account's own notifications, across every club. Each
+     * page's `nextCursor` is the next page param; flipping the unread filter
+     * is a new query-arg, so it starts back at page one. */
+    listNotifications: build.infiniteQuery<NotificationPage, NotificationFilters, string | null>({
+      infiniteQueryOptions: {
+        initialPageParam: null,
+        getNextPageParam: (lastPage) => lastPage.nextCursor,
+      },
+      query: ({ queryArg, pageParam }) => ({
+        url: '/notifications',
+        method: 'GET',
+        params: {
+          limit: 20,
+          ...(pageParam ? { cursor: pageParam } : {}),
+          ...(queryArg.unreadOnly ? { unread: true } : {}),
+        },
+      }),
+      providesTags: [{ type: 'Notification', id: 'LIST' }],
+    }),
+
+    /* The newest few, for the header bell's dropdown. */
+    getRecentNotifications: build.query<AppNotification[], void>({
+      query: () => ({ url: '/notifications', method: 'GET', params: { limit: 8 } }),
+      transformResponse: (page: NotificationPage) => page.items,
+      providesTags: [{ type: 'Notification', id: 'LIST' }],
+    }),
+
+    getUnreadNotificationCount: build.query<number, void>({
+      query: () => ({ url: '/notifications/unread-count', method: 'GET' }),
+      transformResponse: (res: { count: number }) => res.count,
+      providesTags: [{ type: 'Notification', id: 'COUNT' }],
+    }),
+
+    markNotificationRead: build.mutation<void, string>({
+      query: (id) => ({ url: `/notifications/${id}/read`, method: 'POST' }),
+      invalidatesTags: [
+        { type: 'Notification', id: 'LIST' },
+        { type: 'Notification', id: 'COUNT' },
+      ],
+    }),
+
+    markAllNotificationsRead: build.mutation<void, void>({
+      query: () => ({ url: '/notifications/read-all', method: 'POST' }),
+      invalidatesTags: [
+        { type: 'Notification', id: 'LIST' },
+        { type: 'Notification', id: 'COUNT' },
+      ],
+    }),
+
     /* --------------------------------------------------------- org tree -- */
     /* District > Division > Area > Club — the unit-switcher dashboards.
      * Every list endpoint takes an optional parent id and every write also
@@ -3055,6 +3112,11 @@ export const {
   useRemovePlatformUserOrgAssignmentMutation,
   useSubscribeToPushMutation,
   useUnsubscribeFromPushMutation,
+  useListNotificationsInfiniteQuery,
+  useGetRecentNotificationsQuery,
+  useGetUnreadNotificationCountQuery,
+  useMarkNotificationReadMutation,
+  useMarkAllNotificationsReadMutation,
   useGetWhatsappStatusQuery,
   useConnectWhatsappMutation,
   useDisconnectWhatsappMutation,

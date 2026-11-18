@@ -1016,3 +1016,78 @@ class Assignee {
   final String name;
   final bool isGuest;
 }
+
+// ───────────────────────────── Notifications ─────────────────────────────
+
+/// One in-app notification. Mirrors `NotificationWire` in
+/// `apps/api/src/notifications/serializers.ts`.
+class AppNotification {
+  const AppNotification({
+    required this.id,
+    required this.type,
+    required this.title,
+    required this.body,
+    required this.read,
+    required this.createdAt,
+    this.clubId,
+    this.clubName,
+    this.link,
+    this.appRoute,
+  });
+  final String id;
+
+  /// The club it belongs to — opening it switches there first.
+  final String? clubId;
+  final String? clubName;
+
+  /// e.g. `meeting.role_assigned`, `task.completed`.
+  final String type;
+  final String title;
+  final String body;
+
+  /// Web path. The app opens [appRoute] instead.
+  final String? link;
+
+  /// The app route to open, e.g. `/meetings/abc/roles`. Null when the app has
+  /// no screen for it yet (tasks).
+  final String? appRoute;
+  final bool read;
+  final DateTime createdAt;
+
+  AppNotification copyWith({bool? read}) => AppNotification(
+    id: id,
+    type: type,
+    title: title,
+    body: body,
+    read: read ?? this.read,
+    createdAt: createdAt,
+    clubId: clubId,
+    clubName: clubName,
+    link: link,
+    appRoute: appRoute,
+  );
+
+  factory AppNotification.fromJson(Json j) => AppNotification(
+    id: _s(j['id']),
+    clubId: _so(j['clubId']),
+    clubName: _so(j['clubName']),
+    type: _s(j['type']),
+    title: _s(j['title']),
+    body: _s(j['body']),
+    link: _so(j['link']),
+    appRoute: _so(j['appRoute']),
+    read: j['read'] == true,
+    createdAt: DateTime.tryParse(_s(j['createdAt'])) ?? DateTime.now(),
+  );
+}
+
+class NotificationPage {
+  const NotificationPage({required this.items, this.nextCursor});
+  final List<AppNotification> items;
+
+  /// Pass back as `cursor` for the next page; null on the last page.
+  final String? nextCursor;
+
+  factory NotificationPage.fromJson(Json j) =>
+      NotificationPage(items: _list(j['items'], AppNotification.fromJson), nextCursor: _so(j['nextCursor']));
+}

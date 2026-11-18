@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../notifications/notification_bell.dart';
 import '../../ui/icons.dart';
 
 import '../../app/data.dart';
@@ -69,6 +70,7 @@ class HomeScreen extends ConsumerWidget {
                   ),
                   const SizedBox(width: Space.md),
                   const ContextChip(),
+                  const NotificationBell(),
                 ]),
               ),
             ),

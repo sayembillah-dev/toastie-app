@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import { APP_TIME_ZONE } from '@/common/time';
+import { NotificationsService } from '@/notifications';
 import { PrismaService } from '@/prisma';
 import { type NativePushMessage, NativePushService } from '@/push';
 import { toWhatsappNumber, WhatsappService } from '@/whatsapp';
@@ -43,6 +44,16 @@ interface OutboxItem {
   text: string;
   /** Told whether the send went through. Must not throw. */
   onSettled?: (ok: boolean) => void;
+}
+
+/** The in-app row that goes with a send — title/body come from the push. */
+interface InAppTarget {
+  clubId: string;
+  type: string;
+  /** Web path, e.g. `/meetings/abc?tab=roles`. */
+  link: string;
+  entityType: string;
+  entityId: string;
 }
 
 interface MeetingSummary {
@@ -91,9 +102,10 @@ const dateFormat = new Intl.DateTimeFormat('en-GB', {
 });
 
 /** Notifications about meetings: the club-wide "new meeting" announcement,
- * role added/removed, and a confirmed prepared speech. Each goes out over
- * WhatsApp (when the number is linked) and as a native app push to every
- * install the person is signed in on (when Firebase is configured).
+ * role added/removed, and a confirmed prepared speech. Each one is saved as
+ * an in-app notification for everyone with an account (always), goes out
+ * over WhatsApp (when the number is linked), and as a native app push to
+ * every install the person is signed in on (when Firebase is configured).
  *
  * Every public method is fire-and-forget — it returns immediately, and a
  * notification that fails (worker offline, bad number) is logged, never
@@ -120,6 +132,7 @@ export class MeetingNotificationsService {
     private readonly prisma: PrismaService,
     private readonly whatsapp: WhatsappService,
     private readonly push: NativePushService,
+    private readonly inApp: NotificationsService,
     config: ConfigService,
   ) {
     const origin =
@@ -170,11 +183,19 @@ export class MeetingNotificationsService {
           ].join('\n'),
         );
       }
-      await this.push.send(pushUsers, {
+      const message: NativePushMessage = {
         title: 'New meeting scheduled 📅',
         body: `${meeting.clubName} — Meeting #${meeting.meetingNumber}: ${meeting.theme} · ${formatDate(meeting.dateTime)}`,
         data: { route: `/meetings/${meeting.id}` },
+      };
+      await this.saveInApp(pushUsers, message, {
+        clubId: meeting.clubId,
+        type: 'meeting.published',
+        link: meetingPath(meeting.id),
+        entityType: 'meeting',
+        entityId: meeting.id,
       });
+      await this.push.send(pushUsers, message);
       this.logger.log(
         `Meeting #${meeting.meetingNumber} announcement: ${seen.size} WhatsApp queued, ${pushUsers.length} app users` +
           (noNumber.length ? `, no WhatsApp number: ${noNumber.join(', ')}` : ''),
@@ -212,6 +233,13 @@ export class MeetingNotificationsService {
             body: `Meeting #${meeting.meetingNumber} · ${meeting.theme} · ${formatDate(meeting.dateTime)}`,
             data: { route: `/meetings/${meeting.id}/roles` },
           },
+          {
+            clubId: meeting.clubId,
+            type: 'meeting.role_removed',
+            link: meetingPath(meeting.id, 'roles'),
+            entityType: 'meeting',
+            entityId: meeting.id,
+          },
         );
       }
       const added = await this.resolveHolder(meeting.clubId, next, actorMembershipId);
@@ -227,6 +255,13 @@ export class MeetingNotificationsService {
             title: `You're ${role} 🎤`,
             body: `Meeting #${meeting.meetingNumber} · ${meeting.theme} · ${formatDate(meeting.dateTime)}`,
             data: { route: `/meetings/${meeting.id}/roles` },
+          },
+          {
+            clubId: meeting.clubId,
+            type: 'meeting.role_assigned',
+            link: meetingPath(meeting.id, 'roles'),
+            entityType: 'meeting',
+            entityId: meeting.id,
           },
         );
       }
@@ -273,13 +308,24 @@ export class MeetingNotificationsService {
         lines.push(`Evaluator: ${`${evaluator.firstName} ${evaluator.lastName}`.trim()}`);
       }
       lines.push('', `Details: ${this.meetingLink(meeting, recipient, 'prepared-speakers')}`);
-      await this.notify(recipient, lines.join('\n'), {
-        title: `Your ${isKeynote ? 'keynote' : 'speech'} is confirmed ✅`,
-        body: [`Meeting #${meeting.meetingNumber}`, speaker.title, formatDate(meeting.dateTime)]
-          .filter(Boolean)
-          .join(' · '),
-        data: { route: `/meetings/${meeting.id}/speakers/${speakerId}` },
-      });
+      await this.notify(
+        recipient,
+        lines.join('\n'),
+        {
+          title: `Your ${isKeynote ? 'keynote' : 'speech'} is confirmed ✅`,
+          body: [`Meeting #${meeting.meetingNumber}`, speaker.title, formatDate(meeting.dateTime)]
+            .filter(Boolean)
+            .join(' · '),
+          data: { route: `/meetings/${meeting.id}/speakers/${speakerId}` },
+        },
+        {
+          clubId: meeting.clubId,
+          type: 'meeting.speech_confirmed',
+          link: meetingPath(meeting.id, 'prepared-speakers'),
+          entityType: 'meetingSpeaker',
+          entityId: speakerId,
+        },
+      );
     });
   }
 
@@ -366,26 +412,54 @@ export class MeetingNotificationsService {
     return delivery ? { ...delivery } : null;
   }
 
-  /** Runs the lookup in the background — the triggering request never waits
-   * on it or sees its errors. Skipped outright while neither WhatsApp nor
-   * native push is set up. */
+  /** Runs a notification in the background — the request that caused it
+   * never waits on it or sees its errors. Always runs: the in-app row is
+   * written even when neither WhatsApp nor native push is set up, and each
+   * external channel checks its own configuration. */
   private run(label: string, work: () => Promise<void>): void {
-    if (!this.whatsapp.isConfigured && !this.push.isConfigured) return;
     void work().catch((error: unknown) => {
       this.logger.error(`Meeting ${label} notification failed: ${errorMessage(error)}`);
     });
   }
 
-  /** WhatsApp when there's a number and the sender is linked; app push to
-   * every install of their account. */
+  /** In-app and app push for an account; WhatsApp when there's a number and
+   * the sender is linked. */
   private async notify(
     recipient: Recipient,
     whatsappText: string,
     push: NativePushMessage,
+    inApp: InAppTarget,
   ): Promise<void> {
     if (recipient.number && this.whatsapp.isConfigured)
       this.enqueue(recipient.number, whatsappText);
-    if (recipient.userId) await this.push.send([recipient.userId], push);
+    if (recipient.userId) {
+      await this.saveInApp([recipient.userId], push, inApp);
+      await this.push.send([recipient.userId], push);
+    }
+  }
+
+  /** The in-app copy of a send, sharing the push's title, body and route. A
+   * failed insert is logged and doesn't stop the WhatsApp/push sends. */
+  private async saveInApp(
+    userIds: string[],
+    push: NativePushMessage,
+    target: InAppTarget,
+  ): Promise<void> {
+    try {
+      await this.inApp.create({
+        userIds,
+        clubId: target.clubId,
+        type: target.type,
+        title: push.title,
+        body: push.body,
+        link: target.link,
+        appRoute: push.data?.route ?? null,
+        entityType: target.entityType,
+        entityId: target.entityId,
+      });
+    } catch (error) {
+      this.logger.error(`In-app ${target.type} notification failed: ${errorMessage(error)}`);
+    }
   }
 
   private enqueue(
@@ -441,7 +515,7 @@ export class MeetingNotificationsService {
    * gets the public agenda, which needs no login. */
   private meetingLink(meeting: MeetingSummary, recipient: Recipient, tab?: string): string {
     if (!recipient.inApp) return `${this.webUrl}/meetings/${meeting.id}/agenda`;
-    return `${this.webUrl}/meetings/${meeting.id}${tab ? `?tab=${tab}` : ''}`;
+    return `${this.webUrl}${meetingPath(meeting.id, tab)}`;
   }
 
   /** Null for a missing meeting or one that's already over. */
@@ -476,7 +550,8 @@ export class MeetingNotificationsService {
       });
       if (!member) return null;
       const recipient = toMemberRecipient(member);
-      if (!recipient?.number) this.logger.warn(`No WhatsApp number for member ${member.firstName}`);
+      if (!recipient?.number && this.whatsapp.isConfigured)
+        this.logger.warn(`No WhatsApp number for member ${member.firstName}`);
       return recipient;
     }
     if (holder.guestId) {
@@ -486,7 +561,8 @@ export class MeetingNotificationsService {
       });
       if (!guest) return null;
       const number = firstWhatsappNumber(guest.whatsapp, guest.phone);
-      if (!number) this.logger.warn(`No WhatsApp number for guest ${guest.firstName}`);
+      if (!number && this.whatsapp.isConfigured)
+        this.logger.warn(`No WhatsApp number for guest ${guest.firstName}`);
       return number ? { firstName: guest.firstName, number, userId: null, inApp: false } : null;
     }
     return null;
@@ -540,6 +616,11 @@ function firstWhatsappNumber(...candidates: (string | null | undefined)[]): stri
     }
   }
   return null;
+}
+
+/** The signed-in web path for a meeting, on `tab` when given. */
+function meetingPath(meetingId: string, tab?: string): string {
+  return `/meetings/${meetingId}${tab ? `?tab=${tab}` : ''}`;
 }
 
 function sameHolder(a: SlotHolder, b: SlotHolder): boolean {
