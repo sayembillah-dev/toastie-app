@@ -7,6 +7,7 @@ import '../core/access/access.dart';
 import '../core/api/api_client.dart';
 import '../data/models.dart';
 import '../data/toastie_api.dart';
+import 'push.dart';
 
 final tokenStoreProvider = Provider<TokenStore>((ref) => throw UnimplementedError('overridden in main'));
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient(ref.watch(tokenStoreProvider)));
@@ -206,6 +207,8 @@ class AuthController extends Notifier<AuthState> {
   }
 
   Future<void> signOut() async {
+    // Before logout: removing this phone's push token needs the session.
+    await ref.read(pushProvider)?.unregister();
     await _api.logout();
     await _clearLocal();
     state = const SignedOut();

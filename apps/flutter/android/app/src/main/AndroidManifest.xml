@@ -2,6 +2,8 @@
     <!-- Flutter's template only grants this in the debug/profile manifests;
          without it a release build can't reach the API at all. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Android 13+ asks before showing notifications; the app requests it at runtime. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="Openfloor"
         android:name="${applicationName}"
@@ -39,6 +41,15 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Push notifications (FCM). The server sends on the `meetings`
+             channel, created in MainActivity; the status-bar icon must be a
+             white-on-transparent silhouette, so it uses the monochrome one. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="meetings" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_launcher_monochrome" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

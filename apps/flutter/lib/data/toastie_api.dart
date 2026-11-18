@@ -209,4 +209,11 @@ class ToastieApi {
 
   Future<void> markNotificationRead(String id) => http.post('notifications/$id/read');
   Future<void> markAllNotificationsRead() => http.post('notifications/read-all');
+
+  // ── Push devices ──
+  /// This install's FCM token, so the API can push to it. [platform] is
+  /// `ios` or `android`.
+  Future<void> registerDevice({required String platform, required String token}) =>
+      http.post('devices', body: {'platform': platform, 'token': token});
+  Future<void> unregisterDevice(String token) => http.delete('devices/${Uri.encodeComponent(token)}');
 }

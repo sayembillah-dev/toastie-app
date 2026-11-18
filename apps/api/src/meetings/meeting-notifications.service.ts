@@ -186,7 +186,7 @@ export class MeetingNotificationsService {
       const message: NativePushMessage = {
         title: 'New meeting scheduled 📅',
         body: `${meeting.clubName} — Meeting #${meeting.meetingNumber}: ${meeting.theme} · ${formatDate(meeting.dateTime)}`,
-        data: { route: `/meetings/${meeting.id}` },
+        data: { route: `/meetings/${meeting.id}`, clubId: meeting.clubId },
       };
       await this.saveInApp(pushUsers, message, {
         clubId: meeting.clubId,
@@ -231,7 +231,7 @@ export class MeetingNotificationsService {
           {
             title: `You're no longer ${role}`,
             body: `Meeting #${meeting.meetingNumber} · ${meeting.theme} · ${formatDate(meeting.dateTime)}`,
-            data: { route: `/meetings/${meeting.id}/roles` },
+            data: { route: `/meetings/${meeting.id}/roles`, clubId: meeting.clubId },
           },
           {
             clubId: meeting.clubId,
@@ -254,7 +254,7 @@ export class MeetingNotificationsService {
           {
             title: `You're ${role} 🎤`,
             body: `Meeting #${meeting.meetingNumber} · ${meeting.theme} · ${formatDate(meeting.dateTime)}`,
-            data: { route: `/meetings/${meeting.id}/roles` },
+            data: { route: `/meetings/${meeting.id}/roles`, clubId: meeting.clubId },
           },
           {
             clubId: meeting.clubId,
@@ -316,7 +316,7 @@ export class MeetingNotificationsService {
           body: [`Meeting #${meeting.meetingNumber}`, speaker.title, formatDate(meeting.dateTime)]
             .filter(Boolean)
             .join(' · '),
-          data: { route: `/meetings/${meeting.id}/speakers/${speakerId}` },
+          data: { route: `/meetings/${meeting.id}/speakers/${speakerId}`, clubId: meeting.clubId },
         },
         {
           clubId: meeting.clubId,

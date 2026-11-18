@@ -6,6 +6,7 @@ import '../ui/icons.dart';
 
 import '../core/access/access.dart';
 import '../data/models.dart';
+import '../features/notifications/push_permission_prompt.dart';
 import '../ui/widgets.dart';
 import 'session.dart';
 
@@ -56,6 +57,7 @@ class AppShell extends ConsumerWidget {
     return Scaffold(
       body: Column(children: [
         OfflineBanner(offline: client.offline),
+        const PushPermissionPrompt(),
         Expanded(child: shell),
       ]),
       bottomNavigationBar: NavigationBar(

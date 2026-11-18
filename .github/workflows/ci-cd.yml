@@ -294,6 +294,10 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           # Optional. Set → the WhatsApp worker runs (see ecosystem.config.cjs).
           WHATSAPP_API_KEY: ${{ secrets.WHATSAPP_API_KEY }}
+          # Optional. Set → native app push (FCM) is on. Base64 of the Firebase
+          # service-account JSON: the raw JSON spans lines, which the .env
+          # format (and ecosystem.config.cjs's parser) can't hold.
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           # Outgoing email (see apps/api/src/mail). Configuration, not secrets:
           # SES reuses the AWS key pair above. MAIL_PROVIDER defaults to
           # console, which in production logs that a send was skipped and
@@ -337,6 +341,9 @@ jobs:
               echo "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY"
             fi
             if [ -n "${WHATSAPP_API_KEY:-}" ]; then echo "WHATSAPP_API_KEY=$WHATSAPP_API_KEY"; fi
+            if [ -n "${FIREBASE_SERVICE_ACCOUNT:-}" ]; then
+              echo "FIREBASE_SERVICE_ACCOUNT=$FIREBASE_SERVICE_ACCOUNT"
+            fi
             echo "MAIL_PROVIDER=$MAIL_PROVIDER"
             if [ -n "${SES_REGION:-}" ]; then echo "SES_REGION=$SES_REGION"; fi
             # Quoted: the value carries a space and angle brackets

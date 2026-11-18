@@ -9,7 +9,7 @@ import { can, type PermissionSubject } from '@toastly/access';
 import { ActivityService } from '@/activity';
 import { NotificationsService } from '@/notifications';
 import { PrismaService } from '@/prisma';
-import { PushService } from '@/push';
+import { NativePushService, PushService } from '@/push';
 
 import type { CreateTaskDto, CreateTaskNoteDto, UpdateTaskDto } from './dto/tasks.dto';
 import { type TaskRow, type TaskWire, taskInclude, toTaskWire } from './serializers';
@@ -26,6 +26,7 @@ export class TasksService {
     private readonly prisma: PrismaService,
     private readonly activity: ActivityService,
     private readonly push: PushService,
+    private readonly nativePush: NativePushService,
     private readonly notifications: NotificationsService,
   ) {}
 
@@ -388,8 +389,9 @@ export class TasksService {
     void this.push.send(userId, message);
   }
 
-  /** The in-app copy of a task push. The app has no tasks screen yet, so
-   * there's no `appRoute` — it opens from the web only. */
+  /** The in-app copy of a task push, plus the app push. The app has no
+   * tasks screen yet, so there's no `appRoute` on the in-app row, and tapping
+   * the app push opens the notifications list instead. */
   private notifyInApp(
     userId: string,
     row: TaskRow,
@@ -405,6 +407,11 @@ export class TasksService {
       link: message.url,
       entityType: 'task',
       entityId: row.id,
+    });
+    void this.nativePush.send([userId], {
+      title: message.title,
+      body: message.body,
+      data: { route: '/notifications', clubId: row.clubId },
     });
   }
 }

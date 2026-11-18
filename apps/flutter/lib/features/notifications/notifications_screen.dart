@@ -92,7 +92,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         if (i >= 0) _items[i] = n.copyWith(read: true);
       });
     }
-    unawaited(openNotification(context, ref, n));
+    unawaited(openNotification(ProviderScope.containerOf(context, listen: false), n));
   }
 
   @override

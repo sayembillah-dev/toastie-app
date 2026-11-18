@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'app/email_gate.dart';
+import 'app/messenger.dart';
+import 'app/push.dart';
 import 'app/router.dart';
 import 'app/splash.dart';
 import 'app/session.dart';
@@ -29,8 +31,13 @@ Future<void> main() async {
   final themeMode = await loadThemeMode();
   final onboardingSeen = await loadOnboardingSeen();
 
-  runApp(ProviderScope(
+  final push = await PushNotifications.create();
+
+  // A plain container (not ProviderScope) so push handlers, which run with
+  // no widget, can read and navigate through it.
+  final container = ProviderContainer(
     overrides: [
+      pushProvider.overrideWithValue(push),
       tokenStoreProvider.overrideWithValue(tokens),
       apiClientProvider.overrideWithValue(client),
       initialAuthProvider.overrideWithValue(initial),
@@ -39,8 +46,11 @@ Future<void> main() async {
     ],
     // API errors are shown with a Retry button; never retry silently.
     retry: (_, _) => null,
-    child: const ToastieApp(),
-  ));
+  );
+
+  runApp(UncontrolledProviderScope(container: container, child: const ToastieApp()));
+  // After the first frame, so a tap that launched the app can navigate.
+  WidgetsBinding.instance.addPostFrameCallback((_) => push?.start(container));
 }
 
 class ToastieApp extends ConsumerWidget {
@@ -56,6 +66,7 @@ class ToastieApp extends ConsumerWidget {
       darkTheme: AppTheme.dark(),
       themeMode: ref.watch(themeModeProvider),
       routerConfig: router,
+      scaffoldMessengerKey: scaffoldMessengerKey,
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       supportedLocales: const [Locale('en', 'GB'), Locale('en', 'US')],
       builder: (context, child) {
