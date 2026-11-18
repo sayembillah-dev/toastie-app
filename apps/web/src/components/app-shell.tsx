@@ -31,7 +31,7 @@ import { Avatar, Badge, Button, Drawer, Input, Layout, Menu } from 'antd';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Fragment, useMemo } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 
 import { useSignOut } from '@/lib/auth/use-sign-out';
 import { useCan } from '@/lib/permissions/use-can';
@@ -76,6 +76,16 @@ interface NavEntry {
    * always shown — used for `/`, `/records` and `/me`, which have no
    * resource of their own. */
   access?: { resource: ResourceKey; action: Action };
+  /** Sub-pages shown as an expandable group under this entry. The parent then
+   * acts only as the group toggle — its own route is reached through a child
+   * (e.g. Club Admin → Overview). */
+  children?: NavEntry[];
+}
+
+/** Menu key for a group header. Distinct from the overview child's href so
+ * the header and that child never share a selected/open state. */
+function groupKey(entry: NavEntry): string {
+  return `group:${entry.href}`;
 }
 
 /** Single source of truth for the sidebar — add a route here and the nav,
@@ -138,41 +148,42 @@ const primaryNav: NavEntry[] = [
     title: 'Club Admin',
     Icon: Gear,
     access: { resource: 'memberRole', action: 'read' },
+    /* Admin pages live inside the main nav as an expandable group, so moving
+     * between them and the rest of the club never needs the back button. */
+    children: [
+      {
+        href: '/club-admin',
+        title: 'Overview',
+        Icon: SquaresFour,
+        access: { resource: 'memberRole', action: 'read' },
+      },
+      {
+        href: '/club-admin/members',
+        title: 'Members',
+        Icon: Users,
+        access: { resource: 'memberRole', action: 'read' },
+      },
+      {
+        href: '/club-admin/permissions',
+        title: 'Permissions',
+        Icon: ShieldCheck,
+        access: { resource: 'memberPermission', action: 'read' },
+      },
+      {
+        href: '/club-admin/audit-trail',
+        title: 'Audit Trail',
+        Icon: ClockCounterClockwise,
+        access: { resource: 'activityLog', action: 'read' },
+      },
+      {
+        href: '/club-admin/profile',
+        title: 'Club Profile',
+        Icon: Buildings,
+        access: { resource: 'club', action: 'update' },
+      },
+    ],
   },
   { href: '/me', title: 'Me', Icon: UserCircle },
-];
-
-const clubAdminNav: NavEntry[] = [
-  {
-    href: '/club-admin',
-    title: 'Dashboard',
-    Icon: SquaresFour,
-    access: { resource: 'memberRole', action: 'read' },
-  },
-  {
-    href: '/club-admin/members',
-    title: 'Members',
-    Icon: Users,
-    access: { resource: 'memberRole', action: 'read' },
-  },
-  {
-    href: '/club-admin/permissions',
-    title: 'Permissions',
-    Icon: ShieldCheck,
-    access: { resource: 'memberPermission', action: 'read' },
-  },
-  {
-    href: '/club-admin/audit-trail',
-    title: 'Audit Trail',
-    Icon: ClockCounterClockwise,
-    access: { resource: 'activityLog', action: 'read' },
-  },
-  {
-    href: '/club-admin/profile',
-    title: 'Club Profile',
-    Icon: Buildings,
-    access: { resource: 'club', action: 'update' },
-  },
 ];
 
 /** Super Admin's entries — the org-tree dashboard, the platform-wide user
@@ -219,9 +230,21 @@ function CrumbSkeleton() {
  * (regression seen on the people/education detail pages). Crumbs are
  * text-only — the icon lives on the sidebar entry instead. */
 function buildTrail(pathname: string): TrailCrumb[] {
-  const allNav = [...primaryNav, ...clubAdminNav, ...superAdminNav];
+  const allNav = [...primaryNav, ...superAdminNav];
   const matched = allNav.find((entry) => entry.href === pathname);
   if (matched) return [{ href: matched.href, title: matched.title }];
+
+  /* A group's sub-page reads as "Club Admin › Members", so the parent crumb
+   * links back to the group's overview. */
+  for (const parent of allNav) {
+    const child = parent.children?.find((entry) => entry.href === pathname);
+    if (child) {
+      return [
+        { href: parent.href, title: parent.title },
+        { href: child.href, title: child.title },
+      ];
+    }
+  }
 
   const segments = pathname.split('/').filter(Boolean);
   return segments.map((segment, index) => {
@@ -292,6 +315,24 @@ interface SidebarBodyProps {
   onLogout: () => void;
 }
 
+/** True when `pathname` is `href` or one of its sub-routes. */
+function isWithin(pathname: string, href: string): boolean {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function navLink(entry: NavEntry, onNavigate?: () => void): React.ReactNode {
+  return (
+    <Link
+      href={entry.href}
+      onClick={onNavigate}
+      className="flex items-center justify-between gap-2"
+    >
+      <span className="truncate">{entry.title}</span>
+      {entry.meta ? <span className="text-xs text-ink-muted">{entry.meta}</span> : null}
+    </Link>
+  );
+}
+
 /** The sidebar's contents, independent of what is holding them — the desktop
  * Sider and the mobile Drawer both render this so the nav can never drift. */
 function SidebarBody({
@@ -306,6 +347,24 @@ function SidebarBody({
   showSearch = true,
   onLogout,
 }: SidebarBodyProps) {
+  /* Groups open themselves when you land on one of their pages (deep link,
+   * breadcrumb, card click) and otherwise stay however the user left them.
+   * Adjusted during render rather than in an effect so the group is already
+   * open on the first paint of the new route. */
+  const activeGroup = navEntries?.find((entry) =>
+    entry.children?.some((child) => isWithin(pathname, child.href)),
+  );
+  const [openKeys, setOpenKeys] = useState<string[]>(() =>
+    activeGroup ? [groupKey(activeGroup)] : [],
+  );
+  const [seenGroup, setSeenGroup] = useState(activeGroup?.href);
+  if (activeGroup?.href !== seenGroup) {
+    setSeenGroup(activeGroup?.href);
+    if (activeGroup && !openKeys.includes(groupKey(activeGroup))) {
+      setOpenKeys([...openKeys, groupKey(activeGroup)]);
+    }
+  }
+
   return (
     /* pt-2 matches the content panel's inset so the brand row and the
      * breadcrumb sit on the same baseline. */
@@ -356,21 +415,24 @@ function SidebarBody({
           <Menu
             mode="inline"
             selectedKeys={[pathname]}
+            openKeys={openKeys}
+            onOpenChange={setOpenKeys}
             style={{ borderInlineEnd: 'none', background: 'transparent' }}
-            items={navEntries.map((entry) => ({
-              key: entry.href,
-              icon: <entry.Icon size={18} />,
-              label: (
-                <Link
-                  href={entry.href}
-                  onClick={onNavigate}
-                  className="flex items-center justify-between gap-2"
-                >
-                  <span className="truncate">{entry.title}</span>
-                  {entry.meta ? <span className="text-xs text-ink-muted">{entry.meta}</span> : null}
-                </Link>
-              ),
-            }))}
+            items={navEntries.map((entry) => {
+              const icon = <entry.Icon key={entry.href} size={18} />;
+              if (entry.children?.length) {
+                return {
+                  key: groupKey(entry),
+                  icon,
+                  label: <span className="truncate">{entry.title}</span>,
+                  children: entry.children.map((child) => ({
+                    key: child.href,
+                    label: navLink(child, onNavigate),
+                  })),
+                };
+              }
+              return { key: entry.href, icon, label: navLink(entry, onNavigate) };
+            })}
           />
         </>
       ) : null}
@@ -428,10 +490,6 @@ function isOrgRoute(pathname: string): boolean {
   );
 }
 
-function isClubAdminRoute(pathname: string): boolean {
-  return pathname === '/club-admin' || pathname.startsWith('/club-admin/');
-}
-
 function isSuperAdminNavRoute(pathname: string): boolean {
   return (
     pathname === '/super-admin' ||
@@ -467,21 +525,20 @@ export function AppShell({ children, actions, notificationCount = 0 }: AppShellP
   const handleLogout = useSignOut();
 
   /* District/Division/Area drill-downs navigate by breadcrumb and card
-   * drill-down — no sidebar nav needed. Club Admin has its own three-entry
-   * nav, Super Admin its own Dashboard/Users pair, and the primary nav is
-   * club-specific for everything else. A Super Admin in `global` context on
-   * an org drill-down route gets `null` here (blank rail) rather than the
-   * stale-default club nav they used to see on first paint. */
+   * drill-down — no sidebar nav needed. Super Admin has its own
+   * Dashboard/Users pair, and the primary nav is club-specific for everything
+   * else — Club Admin's pages included, as an expandable group inside it. A
+   * Super Admin in `global` context on an org drill-down route gets `null`
+   * here (blank rail) rather than the stale-default club nav they used to see
+   * on first paint. */
   const onOrgRoute = isOrgRoute(pathname);
-  const onClubAdminRoute = isClubAdminRoute(pathname);
+  const onClubAdminRoute = isWithin(pathname, '/club-admin');
   const onSuperAdminNavRoute = isSuperAdminNavRoute(pathname);
-  const rawNavEntries: NavEntry[] | null = onClubAdminRoute
-    ? clubAdminNav
-    : onSuperAdminNavRoute
-      ? superAdminNav
-      : activeUnit === 'club' && !onOrgRoute
-        ? primaryNav
-        : null;
+  const rawNavEntries: NavEntry[] | null = onSuperAdminNavRoute
+    ? superAdminNav
+    : onClubAdminRoute || (activeUnit === 'club' && !onOrgRoute)
+      ? primaryNav
+      : null;
 
   /* Drop entries the current member can't read. `useCan` returns `false`
    * while loading, so entries with an `access` clause stay hidden until the
@@ -492,10 +549,15 @@ export function AppShell({ children, actions, notificationCount = 0 }: AppShellP
   const { can, isLoading: canLoading } = useCan();
   const navEntries = useMemo<NavEntry[] | null>(() => {
     if (!rawNavEntries) return null;
-    if (canLoading) return rawNavEntries.filter((entry) => !entry.access);
-    return rawNavEntries.filter((entry) =>
-      entry.access ? can(entry.access.action, entry.access.resource) : true,
-    );
+    const allowed = (entry: NavEntry) =>
+      !entry.access || (!canLoading && can(entry.access.action, entry.access.resource));
+    /* Children are gated one by one; a group with nothing left to show is
+     * dropped rather than rendered as an empty toggle. */
+    return rawNavEntries.filter(allowed).flatMap((entry) => {
+      if (!entry.children) return [entry];
+      const children = entry.children.filter(allowed);
+      return children.length ? [{ ...entry, children }] : [];
+    });
   }, [rawNavEntries, can, canLoading]);
 
   const rawTrail: TrailCrumb[] = breadcrumbSlot.trail ?? buildTrail(pathname);
