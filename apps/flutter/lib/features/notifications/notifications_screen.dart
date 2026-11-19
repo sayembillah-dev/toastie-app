@@ -29,18 +29,33 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   Object? _error;
   bool _unreadOnly = false;
 
+  /// False until the first page arrives, so the screen shows the skeleton
+  /// rather than "No notifications yet" while it's still loading.
+  bool _loaded = false;
+
+  /// Bumped on every reload. A response that comes back after the list was
+  /// reset (filter switched, pulled to refresh) is from the old list and is
+  /// dropped instead of being mixed into the new one.
+  int _generation = 0;
+
   @override
   void initState() {
     super.initState();
-    _reload();
+    // After the first frame: _reload refreshes the badge provider, and
+    // Riverpod forbids touching providers while the tree is still building.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _reload();
+    });
   }
 
   Future<void> _reload() async {
+    _generation++;
     setState(() {
       _items.clear();
       _cursor = null;
       _hasMore = true;
       _error = null;
+      _loading = false;
     });
     ref.invalidate(unreadNotificationsProvider);
     await _loadMore();
@@ -48,20 +63,22 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
   Future<void> _loadMore() async {
     if (_loading || !_hasMore) return;
+    final generation = _generation;
     setState(() => _loading = true);
     try {
       final page = await ref.read(apiProvider).notifications(cursor: _cursor, unreadOnly: _unreadOnly);
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       setState(() {
+        _loaded = true;
         _items.addAll(page.items);
         _cursor = page.nextCursor;
         _hasMore = page.nextCursor != null;
         _error = null;
       });
     } catch (e) {
-      if (mounted) setState(() => _error = e);
+      if (mounted && generation == _generation) setState(() => _error = e);
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && generation == _generation) setState(() => _loading = false);
     }
   }
 
@@ -105,7 +122,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       body = ListView(
         children: [ErrorState(error: _error!, onRetry: _reload)],
       );
-    } else if (_items.isEmpty && _loading) {
+    } else if (_items.isEmpty && (_loading || !_loaded)) {
       body = const SingleChildScrollView(child: SkeletonList(height: 76));
     } else if (_items.isEmpty) {
       body = ListView(
