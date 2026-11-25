@@ -94,7 +94,6 @@ class _AgendaPdfScreenState extends ConsumerState<AgendaPdfScreen> {
           padding: const EdgeInsets.fromLTRB(Space.gutter, 8, Space.gutter, 8),
           child: Row(children: [
             Expanded(
-              flex: 2,
               child: FilledButton.icon(
                 onPressed: _saving ? null : _download,
                 icon: _saving
@@ -104,12 +103,10 @@ class _AgendaPdfScreenState extends ConsumerState<AgendaPdfScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _share,
-                icon: const Icon(PhosphorIconsRegular.shareNetwork, size: 18),
-                label: const Text('Share'),
-              ),
+            IconButton.outlined(
+              tooltip: 'Share',
+              onPressed: _share,
+              icon: const Icon(PhosphorIconsRegular.shareNetwork, size: 18),
             ),
             const SizedBox(width: 8),
             IconButton.outlined(
