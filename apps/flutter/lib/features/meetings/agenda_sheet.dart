@@ -25,6 +25,11 @@ const _defaultBannerColor = '#772432';
 const _a4WidthMm = 210.0;
 const _a4HeightMm = 297.0;
 
+/// The printed box is a hair under A4: at exactly 297mm iOS WebKit rounds the
+/// sheet past the page edge and spills a blank second page, which the fit
+/// step then reads as overflow and shrinks the agenda for.
+const _sheetBoxMm = _a4HeightMm - 0.5;
+
 /// The standard Toastmasters club mission — `CLUB.mission` on the web.
 const clubMission =
     'We provide a supportive and positive learning experience in which members are empowered to develop communication and leadership skills, resulting in greater self-confidence and personal growth.';
@@ -312,11 +317,11 @@ String agendaSheetHtml(AgendaData a, List<SheetRow> rows, SheetAssets assets, {d
     ..write('.agenda-a4,.agenda-a4 *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}')
     ..write(measure
         ? '@page{size:${_num(_a4WidthMm)}mm ${_num(_a4HeightMm * 6)}mm;margin:0}html,body{margin:0;background:#fff;width:210mm}'
-        : '@page{size:A4 portrait;margin:0}html,body{width:210mm;height:297mm;margin:0;padding:0;overflow:hidden;background:#fff}')
+        : '@page{size:A4 portrait;margin:0}html,body{width:210mm;height:${_num(_sheetBoxMm)}mm;margin:0;padding:0;overflow:hidden;background:#fff}')
     ..write('</style></head><body>')
     ..write(measure
         ? '<div class="agenda-a4" style="position:relative;width:210mm;background:white">'
-        : '<div class="agenda-a4" style="position:relative;width:210mm;height:297mm;overflow:hidden;background:white">')
+        : '<div class="agenda-a4" style="position:relative;width:210mm;height:${_num(_sheetBoxMm)}mm;overflow:hidden;background:white">')
     ..write('<div style="${measure ? 'position:relative' : 'position:absolute;top:0;left:0'};'
         'width:${_num(_a4WidthMm / scale)}mm;min-height:${measure ? '0' : '${_num(_a4HeightMm / scale)}mm'};'
         '${scale < 1 ? 'transform:scale(${_num(scale)});' : ''}transform-origin:0 0;display:flex;flex-direction:column;'
@@ -497,6 +502,9 @@ Future<double?> _contentHeightMm(AgendaData a, List<SheetRow> rows, SheetAssets 
       final rowStart = y * page.width * 4;
       for (var x = 0; x < page.width; x++) {
         final i = rowStart + x * 4;
+        // iOS rasters onto a transparent canvas, so unpainted paper reads as
+        // (0,0,0,0) — skip it, or the whole tall page counts as content.
+        if (px[i + 3] == 0) continue;
         if (px[i] < 245 || px[i + 1] < 245 || px[i + 2] < 245) return (y + 1) / dpi * 25.4;
       }
     }
