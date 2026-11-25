@@ -98,8 +98,10 @@ class _RolesScreenState extends ConsumerState<RolesScreen> {
                                     icon: Icon(PhosphorIconsRegular.info, size: 18, color: c.inkMuted),
                                     onPressed: () => showModalBottomSheet<void>(
                                       context: context,
+                                      useSafeArea: true,
+                                      isScrollControlled: true,
                                       builder: (ctx) => SafeArea(
-                                        child: Padding(
+                                        child: SingleChildScrollView(
                                           padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
                                           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
                                             Text(d.label, style: Theme.of(ctx).textTheme.titleLarge),

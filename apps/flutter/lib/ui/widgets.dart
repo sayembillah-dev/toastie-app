@@ -78,10 +78,13 @@ Future<void> showActionSheet(BuildContext context, {String? title, required List
   return showModalBottomSheet<void>(
     context: context,
     useSafeArea: true,
+    // Without this the sheet is capped at 9/16 of the screen and a long
+    // action list overflows; size to content and scroll when it can't fit.
+    isScrollControlled: true,
     builder: (ctx) {
       final c = AppColors.of(ctx);
       return SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
           child: Column(
             mainAxisSize: MainAxisSize.min,

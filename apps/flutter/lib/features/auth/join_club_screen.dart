@@ -169,10 +169,12 @@ class _JoinClubScreenState extends ConsumerState<JoinClubScreen> {
   void _showClub(DirectoryClub club) {
     showModalBottomSheet<void>(
       context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
       builder: (ctx) {
         final t = Theme.of(ctx).textTheme;
         return SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(club.name, style: t.titleLarge),

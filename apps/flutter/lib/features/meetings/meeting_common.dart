@@ -70,7 +70,9 @@ Future<void> showQrSheet(BuildContext context, {required String title, required 
       final t = Theme.of(ctx).textTheme;
       final c = AppColors.of(ctx);
       return SafeArea(
-        child: Padding(
+        // The 240px QR plus link and buttons don't fit short or landscape
+        // screens; scroll rather than overflow.
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Text(title, style: t.titleLarge),

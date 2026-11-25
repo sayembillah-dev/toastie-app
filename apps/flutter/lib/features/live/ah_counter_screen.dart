@@ -384,7 +384,9 @@ class _WordsEditorState extends State<_WordsEditor> {
   Widget build(BuildContext context) {
     final cats = widget.controller.state.categories;
     return SafeArea(
-      child: Padding(
+      // The chip list grows with every word added and the keyboard takes half
+      // the screen, so scroll rather than overflow.
+      child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('Filler words', style: Theme.of(context).textTheme.titleLarge),
